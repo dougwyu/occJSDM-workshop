@@ -35,3 +35,13 @@ test_that("site covariates do not depend on the row order of the input", {
   expect_true("Human_modification_1km" %in% names(a))
   expect_false(anyNA(a$Human_modification_1km))
 })
+
+test_that("dhole_input is the mammal data reduced to the dhole's column", {
+  m <- load_mammal()
+  d <- dhole_input(m)
+  expect_equal(dim(d$OTU), c(1818, 1))
+  expect_equal(nrow(d$info), 1818)
+  expect_equal(sum(d$OTU), sum(m$OTU[, grep("Cuon_alpinus", colnames(m$OTU))]))
+  expect_true(file.exists(derived_path("dhole_input.rds")))
+  expect_identical(readRDS(derived_path("dhole_input.rds")), d)
+})

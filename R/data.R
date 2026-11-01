@@ -50,3 +50,10 @@ site_presence <- function(m = load_mammal()) {
   storage.mode(y) <- "integer"
   y
 }
+
+# The mammal data reduced to the dhole alone, in the layout runOccJSDM and the MCP accept.
+dhole_input <- function(m = load_mammal()) {
+  col <- grep("Cuon_alpinus", colnames(m$OTU), value = TRUE)
+  stopifnot(length(col) == 1)
+  list(info = m$info, OTU = m$OTU[, col, drop = FALSE])
+}
