@@ -56,19 +56,19 @@ Nine days remain. Work in this order, each gate reported to Doug: Tasks 1 and 2 
 
 Verify: `git -C ~/src/occJSDM-workshop status --short` is empty and `git -C ~/src/occJSDM status --short | grep WORKSHOP` prints nothing.
 
-### Task 2: Posit Assistant and MCP feasibility (Doug runs)
+### Task 2: MCP feasibility in the workshop project (Doug runs)
 
 **Files:**
-- Create: `docs/mcp-feasibility.md`
+- Create: `docs/mcp-feasibility.md` (written)
 
 **Interfaces:**
-- Produces: a go or no-go on the MCP route, and the exact client settings every later session quotes.
+- Produces: a go or no-go on the MCP route inside the template project, and the exact client settings every later session quotes. The Posit Cloud check of 5 October 2026 shows the route can work, so this task confirms it in the workshop's own project.
 
-- [ ] **Step 1:** Write a checklist for Doug to run on a real Posit Cloud project: can Posit Assistant register an MCP server, can it use an OpenRouter key, which cheap model calls the occJSDM tools correctly, what the server needs installed, and the cost of one test conversation.
-- [ ] **Step 2:** Doug fills in the results. If it fails, record the fallback client, or that the MCP becomes an instructor demo (needs Doug's decision).
-- [ ] **Step 3:** Check whether the MCP runtime's pinned occJSDM version accepts the workshop's input data. Record any difference. Rebuilding the runtime on current main is a separate project and not in this plan.
+- [x] **Step 1:** Write what is already known and the remaining checklist (done).
+- [ ] **Step 2:** Doug runs the five checks in `docs/mcp-feasibility.md` and records the results. If the template copy fails, record the fallback.
+- [ ] **Step 3:** Check that the pre-beta MCP runtime accepts the workshop's input data. Rebuilding that runtime on current main is a separate project and not in this plan.
 
-Verify: `docs/mcp-feasibility.md` has no unanswered checklist item.
+The MCP has four operations only. Task 8 uses it for validate, a one-species fit and diagnostics. Tasks 9 and 10 use Posit Assistant as an ordinary R helper, not the MCP.
 
 ### Task 3: Environment and setup scripts
 
