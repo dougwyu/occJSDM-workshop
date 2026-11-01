@@ -1,7 +1,10 @@
 # Install everything the workshop needs. Safe to re-run.
 source("setup/pins.R")
 use_workshop_lib()
-options(repos = c(CRAN = "https://cloud.r-project.org"))
+# Keep a repository that is already set: Posit Cloud points at Posit Package Manager, which
+# serves Linux binaries. Overriding it with CRAN would compile every package from source.
+cran <- getOption("repos")["CRAN"]
+if (is.na(cran) || !nzchar(cran) || cran == "@CRAN@") options(repos = c(CRAN = "https://cloud.r-project.org"))
 
 missing <- setdiff(CRAN_PACKAGES, rownames(installed.packages()))
 if (length(missing)) install.packages(missing)

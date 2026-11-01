@@ -18,4 +18,5 @@ fetch_data <- function(dest = "data-raw", copy_from = Sys.getenv("WORKSHOP_DATA_
   invisible(dest)
 }
 
-if (sys.nframe() == 0) fetch_data()
+# Run with `Rscript setup/01-download-data.R`. Sourcing the file only defines fetch_data().
+if (sys.nframe() == 0) fetch_data() else message("fetch_data() is defined. Call it to download the archive.")

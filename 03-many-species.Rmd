@@ -19,7 +19,7 @@ mcp_off <- Sys.getenv("WORKSHOP_NO_MCP") == "1"
 
 ## From one species to a community
 
-A conservation plan needs an answer for every species, not one. We could fit 108 separate models, but a joint model does better: it fits all species together, lets rare species borrow strength from common ones, and estimates how species go together after the environment is accounted for.
+A conservation plan needs an answer for every species, not one. We could fit 108 separate models, but a joint model does better: it fits all species together, shares information between them through hidden site effects that act on many species at once, and estimates how species go together after the environment is accounted for.
 
 Fitting this model for 108 mammals takes several minutes on a fast laptop, so we use a fit prepared earlier (5,000 burn-in and 5,000 kept iterations, two chains). The summaries below come from it. If you want to run the occJSDM output functions on the full fit, your instructor can share the file.
 
@@ -31,23 +31,36 @@ sites <- site_covariates()
 
 ## Can we trust the computation?
 
-With 108 species there are hundreds of parameters. We check R-hat for each species' detection and false-positive parameters.
+With 108 species there are hundreds of parameters. For each species we take the largest R-hat in two groups: its detection parameters (the true- and false-positive rates and the effects of the collection covariates), and its covariate effects on occupancy. As in Session 2, R-hat near 1 means the chains agree. Here we call a group settled if its largest R-hat is at most 1.1.
 
 ```{r convergence}
-fit$diagnostics |> count(converged)
-fit$diagnostics |> filter(!converged) |> select(species, rhat_p, rhat_q, rhat_theta0, max_rhat)
+sites_detected <- colSums(site_presence(load_mammal()))
+conv <- fit$diagnostics |>
+  mutate(sites_detected = sites_detected[otu_id],
+         detection_settled = rhat_detection <= 1.1,
+         effects_settled = rhat_effects <= 1.1)
+conv |> count(detection_settled, effects_settled)
+conv |>
+  filter(!detection_settled | !effects_settled) |>
+  arrange(sites_detected) |>
+  select(species, sites_detected, rhat_detection, rhat_effects)
 ```
 
 ```{r rhat-plot}
-ggplot(fit$diagnostics, aes(max_rhat)) +
+conv |>
+  pivot_longer(c(rhat_detection, rhat_effects), names_to = "parameters", values_to = "rhat") |>
+  ggplot(aes(rhat)) +
   geom_histogram(binwidth = 0.02, fill = "grey40") +
   geom_vline(xintercept = 1.1, linetype = 2, colour = "firebrick") +
+  facet_wrap(~ parameters, ncol = 1) +
   labs(x = "Largest R-hat per species", y = "Number of species",
-       title = "Almost every species passes; a few do not") +
+       title = "Detection has settled for almost every species; the covariate effects have not") +
   theme_minimal()
 ```
 
-Four species have not settled. Each was detected at only 3 to 16 of the 101 sites, so they are among the less common species. Treat their results with care, but do not drop the whole analysis.
+Detection has settled for all but four species. The covariate effects are worse: for 29 species at least one effect has not settled, and 30 species fail one check or the other. Half of those 30 were detected at six sites or fewer, where there is little information, but the list also includes common species such as *Rattus tanezumi*, detected at 84 sites. The dhole passes both checks.
+
+The cure is a longer run, which takes too long for class. Until then, do not read the covariate effects of these 30 species, and treat their probabilities of presence with care, because those probabilities are built from the same effects. This is a limit of this fit, not a reason to drop the whole analysis.
 
 ## How reliable is each species' detection?
 
@@ -72,7 +85,7 @@ profile |>
   head(10)
 ```
 
-The highest false-positive rates belong to species detected at almost every site. They include the pig and cattle, whose DNA probably reaches rivers from farms and settlements, but also several common small mammals. The model cannot say why a species has a high rate, only that its raw detections overstate where it lives.
+The highest false-positive rates belong to species detected at most sites. They include the pig and cattle, whose DNA probably reaches rivers from farms and settlements, but also several common small mammals. The model cannot say why a species has a high rate, only that its raw detections overstate where it lives.
 
 ## Probability of presence at every site
 
@@ -83,7 +96,7 @@ occ <- occupancy_long()
 occ |> select(Site, species, cond_mean, psi_mean) |> head()
 ```
 
-`cond_mean` is the probability of presence given the detections. `psi_mean` is the probability predicted from the site's covariates alone. The first is the one for asking "is species X at site 12?". The second is the one to use for sites you have not surveyed. Both are posterior means. The package does not yet return intervals for these, which we come back to in Session 4.
+`cond_mean` is the probability of presence given the detections: the one for asking "is species X at site 12?". `psi_mean` is the probability of presence before this species' own detections at the site are weighed. It comes from the site's covariates plus the hidden site effects, and those hidden effects were estimated from what all the species detected at the site have in common. So `psi_mean` is not a prediction for a site nobody surveyed. That would need the covariates alone, which this workshop does not cover. Both are posterior means. The package does not yet return intervals for these, which we come back to in Session 4.
 
 ```{r certainty}
 ggplot(occ, aes(cond_mean)) +

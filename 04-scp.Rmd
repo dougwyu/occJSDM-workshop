@@ -98,7 +98,7 @@ How much did the choice of sites change, and who gained?
 shared <- sum(plan_equal$selected & plan_redlist$selected)
 c(only_plan_1 = sum(plan_equal$selected) - shared, shared = shared, only_plan_2 = sum(plan_redlist$selected) - shared)
 
-threatened <- status$species[status$iucn %in% c("CR", "EN", "VU")]
+threatened <- w_redlist$species[w_redlist$weight >= 3]   # Vulnerable or worse, on either Red List
 bind_rows(
   scp_coverage(plan_equal, occ_in) |> mutate(plan = "Plan 1: equal weights"),
   scp_coverage(plan_redlist, occ_in) |> mutate(plan = "Plan 2: Red List weights")
@@ -163,7 +163,7 @@ c(species_in_plan = length(attr(plan_wild, "features")),
 ## What this plan cannot tell you
 
 - It uses the probability of presence as if it were exact. The package does not yet carry the uncertainty through, so a site whose probability is 0.6 plus or minus 0.3 counts the same as one at 0.6 plus or minus 0.05.
-- Four species did not converge in the model (Session 3). Their probabilities are less reliable.
+- For 30 species the model's chains had not settled (Session 3). Their probabilities are less reliable.
 - The 101 sites are the planning units. A real plan would predict across the whole landscape.
 - The 50% target, the 20% budget, the weights and the cost stand-in are all choices. Change them and the plan changes.
 

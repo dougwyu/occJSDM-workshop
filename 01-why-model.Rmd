@@ -97,7 +97,7 @@ share <- function(axis) {
 rbind(LV1 = share("LV1"), LV2 = share("LV2"))
 ```
 
-Order explains only a modest share of the spread, and the evidence is weak. Rodents fan out in many directions. The ordination describes how detections co-occur at these sites. It does not recover the taxonomy, and it still cannot say where a species is.
+Order explains about a fifth of the spread along the first axis, and the evidence for even that is borderline (p close to 0.05). Along the second axis it explains less, with no real evidence at all. Rodents fan out in many directions. The ordination describes how detections co-occur at these sites. It does not recover the taxonomy, and it still cannot say where a species is.
 
 ## The wall: where is the dhole?
 

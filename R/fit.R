@@ -6,7 +6,8 @@ read_fit_summary <- function() {
 
 # Occupancy for every site and species with the species' taxonomy and status attached.
 # cond_mean is the probability of presence given the detections; psi_mean is the probability
-# predicted from the covariates. Both are posterior means (the package returns no intervals).
+# from the covariates plus the hidden site effects (estimated from the survey, so not a
+# covariate-only prediction). Both are posterior means (the package returns no intervals).
 occupancy_long <- function() {
   f <- read_fit_summary()
   status <- species_status()

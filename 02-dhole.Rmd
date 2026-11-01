@@ -50,28 +50,31 @@ Two covariate sets matter. Occupancy covariates describe the site (climate, fore
 
 ## Fit the model
 
-A fit for one species is fast, so we run it live.
+A fit for one species is fast, so we run it live. If the fit fails for any reason, the chunk says so and loads a saved copy of exactly the same fit, so you can carry on.
 
-```{r fit}
-fit_file <- derived_path("dhole_fit.rds")
-if (live_fit || !file.exists(fit_file)) {
-  set.seed(2026)
-  fit <- runOccJSDM(
-    data = d,
-    listParams = list(n_factors = 0),            # one species, so no shared hidden factors
-    threshold = 1,                               # a replicate is positive if its value is at least 1
-    occCovariates = c("annual_precipitation", "mean_temperature", "Human_modification_1km",
-                      "Percent_of_forest_cover_1km", "Patch_density_1km", "Edge_density_1km",
-                      "streamOrigin", "Regional_Division"),
-    collCovariates = c("Filter_vol", "PrevDayRain"),
-    spatCovariates = character(),
-    MCMCparams = list(nchain = 2, nburn = 5000, niter = 5000, nthin = 1),
-    summarisedLatentPresences = TRUE
-  )
-  if (!file.exists(fit_file)) saveRDS(fit, fit_file)
-} else {
-  fit <- readRDS(fit_file)
+```{r fit, message = TRUE}
+fit <- NULL
+if (live_fit) {
+  fit <- tryCatch({                              # try the live fit; on an error, run the second part
+    set.seed(2026)
+    runOccJSDM(
+      data = d,
+      listParams = list(n_factors = 0),          # one species, so no shared hidden factors
+      threshold = 1,                             # a replicate is positive if its value is at least 1
+      occCovariates = c("annual_precipitation", "mean_temperature", "Human_modification_1km",
+                        "Percent_of_forest_cover_1km", "Patch_density_1km", "Edge_density_1km",
+                        "streamOrigin", "Regional_Division"),
+      collCovariates = c("Filter_vol", "PrevDayRain"),
+      spatCovariates = character(),
+      MCMCparams = list(nchain = 2, nburn = 5000, niter = 5000, nthin = 1),
+      summarisedLatentPresences = TRUE
+    )
+  }, error = function(e) {
+    message("The live fit failed: ", conditionMessage(e), "\nUsing the saved copy of the same fit instead.")
+    NULL
+  })
 }
+if (is.null(fit)) fit <- readRDS(derived_path("dhole_fit.rds"))
 ```
 
 ## Can we trust the computation?
@@ -116,7 +119,7 @@ rates |> mutate(across(where(is.numeric), ~ round(.x, 3)))
 
 A PCR catches the dhole's DNA about six times in ten when it is there, and a stray positive is rare but not zero. That is why one positive PCR at a site is weak evidence on its own.
 
-The convergence table above flagged the detection rates themselves, because their effective sample size is below 400. So these intervals are approximate. A longer run (raise `nburn` and `niter`) would tighten them, and the conclusion that a single positive PCR is weak evidence does not depend on the exact numbers.
+The convergence table above flagged the detection rates themselves: their R-hat is a little above 1.01 and their effective sample size is below 400. So the ends of these intervals rest on fewer effective draws than we would like. A longer run (raise `nburn` and `niter`) would pin them down more precisely. It would not make the intervals much narrower, because their width reflects how much the data say, not how long the chains ran. The conclusion that a single positive PCR is weak evidence does not depend on the exact numbers.
 
 ## Is the dhole at each site?
 
@@ -155,22 +158,19 @@ map_data |>
 The harder question is why. We look at the effect of each site covariate on the chance the dhole is present.
 
 ```{r effects}
-check <- readRDS(derived_path("dhole_check.rds"))$effects      # the same effects from the earlier mammal-wide fit
 effects <- diag |>
   filter(param == "beta_psi") |>
-  transmute(covariate = label1, model = "This one-species fit", mean, lower = q2.5, upper = q97.5)
-effects <- bind_rows(effects,
-  check |> transmute(covariate, model = "Mammal-wide fit (108 species)", mean, lower = lo, upper = hi))
+  transmute(covariate = label1, mean, lower = q2.5, upper = q97.5)
 
-ggplot(effects, aes(mean, covariate, colour = model)) +
+ggplot(effects, aes(mean, covariate)) +
   geom_vline(xintercept = 0, linetype = 2, colour = "grey50") +
-  geom_pointrange(aes(xmin = lower, xmax = upper), position = position_dodge(width = 0.5)) +
-  labs(x = "Effect on the log-odds of presence", y = NULL, colour = NULL,
+  geom_pointrange(aes(xmin = lower, xmax = upper)) +
+  labs(x = "Effect on the log-odds of presence", y = NULL,
        title = "Where the data are weak, intervals are wide") +
-  theme_minimal() + theme(legend.position = "bottom")
+  theme_minimal()
 ```
 
-An interval that crosses the dashed line means we cannot tell whether the covariate matters. With one species and 41 detecting sites, most effects are uncertain. The mammal-wide fit, which shares information across species, is more definite about the Southwest region. Being sure where the dhole is does not require being sure why.
+An interval that crosses the dashed line means we cannot tell whether the covariate matters. With one species and 41 detecting sites, every interval here crosses it. The mammal-wide fit of Session 3 does put the dhole's Southwest effect clearly below zero, but do not set its numbers beside these: its effects are measured after allowing for hidden site effects shared by all species, so they are on a different scale, and its intervals are mostly wider, not narrower. Being sure where the dhole is does not require being sure why.
 
 ```{r agreement}
 joint <- read_fit_summary()$occ |>

@@ -24,7 +24,10 @@ test_that("detection parameters and diagnostics cover every species", {
   expect_equal(nrow(f$params), 108)
   expect_true(all(c("p_mean", "p_lo", "p_hi", "q_mean", "q_lo", "q_hi") %in% names(f$params)))
   expect_equal(nrow(f$diagnostics), 108)
-  expect_equal(sum(f$diagnostics$converged), 104)
+  expect_setequal(f$diagnostics$otu_id, f$params$otu_id)
+  expect_true(all(c("rhat_detection", "rhat_effects") %in% names(f$diagnostics)))
+  expect_false(anyNA(f$diagnostics[, c("species", "rhat_detection", "rhat_effects")]))
+  expect_true(all(f$diagnostics$rhat_effects > 0.99))
 })
 
 test_that("species associations cover every pair once, with ordered quantiles", {
