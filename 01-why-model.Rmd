@@ -67,6 +67,7 @@ An ordination puts sites and species on a map where similar ones sit close toget
 
 ```{r ordination}
 y <- site_presence(m)
+set.seed(2026)   # the ordination starts from random values, so fix them to get the same picture
 ord <- fit_ordination(y, min_sites = 5)
 c(kept = ord$n_kept, dropped = length(ord$dropped))
 ```
@@ -79,8 +80,8 @@ plot_biplot(ord, site_data = sites, site_var = "Human_modification_1km",
 
 ```{r biplot-region, fig.height = 6.5}
 plot_biplot(ord, site_data = sites, site_var = "Regional_Division",
-            species_data = species, species_var = "class") +
-  labs(title = "Sites coloured by regional division")
+            species_data = species, species_var = "local_status") +
+  labs(title = "Sites coloured by regional division, species arrows by wild or domestic")
 ```
 
 **Exercise.** Look at the two biplots. Which sites sit together? Which groups of species point the same way? Write down one thing you could tell a park manager from this figure.

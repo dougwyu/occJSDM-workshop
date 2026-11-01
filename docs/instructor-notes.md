@@ -17,7 +17,7 @@ Checked on the build laptop (macOS, R 4.6.1): all sessions render with the MCP s
 
 ## Things to say aloud
 
-- The ecoCopula biplot shows only a weak taxonomic pattern. Order explains about a fifth of the spread on axis 1 (p about 0.07). The session teaches students to check an impression instead of trusting colour.
+- The ecoCopula biplot shows only a weak taxonomic pattern. Order explains about a fifth of the spread on axis 1 (p about 0.075 with the seed set in the session; the ordination starts from random values, so another seed gives a slightly different p). The session teaches students to check an impression instead of trusting colour.
 - The dhole is a case where the model is confident about where the animal is, but not about why. The covariate effects are mostly uncertain. See `docs/dhole-check.md`.
 - Four species did not converge in the mammal-wide fit (Session 3). They were detected at only 3 to 16 sites.
 - The SCP uses posterior means. The package does not yet return per-site intervals, so the plan cannot carry uncertainty through.

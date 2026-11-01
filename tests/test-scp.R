@@ -26,15 +26,16 @@ test_that("the selection stays within budget and covers every site once", {
 })
 
 test_that("raising a species' weight never lowers its coverage up to the target", {
-  # Above the target the objective does not reward more coverage, so compare capped coverage.
+  # Above the target the objective does not reward more coverage, so compare capped coverage,
+  # and pick a species that starts below its target so the comparison means something.
   base <- species_weights(status, "equal")
+  cv0 <- scp_coverage(build_scp(occ, base, cost, budget, target = 0.5), occ)
+  sp <- cv0$species[which.min(cv0$held)]
+  expect_lt(min(cv0$held), 0.5)
   boosted <- base
-  boosted$weight[boosted$species == "Cuon alpinus"] <- 100
-  held <- function(w) {
-    cv <- scp_coverage(build_scp(occ, w, cost, budget, target = 0.5), occ)
-    min(cv$held[cv$species == "Cuon alpinus"], 0.5)
-  }
-  expect_gte(held(boosted), held(base) - 1e-9)
+  boosted$weight[boosted$species == sp] <- 100
+  cv1 <- scp_coverage(build_scp(occ, boosted, cost, budget, target = 0.5), occ)
+  expect_gte(min(cv1$held[cv1$species == sp], 0.5), min(cv0$held[cv0$species == sp], 0.5) - 1e-9)
 })
 
 test_that("species with weight zero are left out of the objective", {

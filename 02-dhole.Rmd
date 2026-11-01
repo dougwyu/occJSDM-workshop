@@ -116,6 +116,8 @@ rates |> mutate(across(where(is.numeric), ~ round(.x, 3)))
 
 A PCR catches the dhole's DNA about six times in ten when it is there, and a stray positive is rare but not zero. That is why one positive PCR at a site is weak evidence on its own.
 
+The convergence table above flagged the detection rates themselves, because their effective sample size is below 400. So these intervals are approximate. A longer run (raise `nburn` and `niter`) would tighten them, and the conclusion that a single positive PCR is weak evidence does not depend on the exact numbers.
+
 ## Is the dhole at each site?
 
 ```{r probability}

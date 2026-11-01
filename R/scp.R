@@ -13,7 +13,7 @@ species_weights <- function(status, scheme = c("equal", "redlist")) {
   weight <- unname(w_cat[cat_used])
   missing <- is.na(weight)
   if (any(missing)) {
-    warning(sum(missing), " species have no Red List status and get weight 1.", call. = FALSE)
+    warning(sum(missing), " species have no Red List status (or one that cannot be weighted) and get weight 1.", call. = FALSE)
     weight[missing] <- 1
   }
   tibble::tibble(species = status$species, weight = weight)

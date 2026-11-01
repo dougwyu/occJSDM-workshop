@@ -37,3 +37,9 @@ test_that("plot_biplot returns a ggplot that builds", {
   expect_s3_class(p, "ggplot")
   expect_no_error(ggplot2::ggplot_build(p))
 })
+
+test_that("the same seed gives the same ordination", {
+  set.seed(2026); a <- fit_ordination(y)
+  set.seed(2026); b <- fit_ordination(y)
+  expect_equal(a$site_scores, b$site_scores)
+})

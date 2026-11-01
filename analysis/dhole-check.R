@@ -13,7 +13,6 @@ n_draw <- nit * nch
 # Rebuild site occupancy draws: link(B0 + X B + U L), then test the link against the stored psi.
 b0 <- as.vector(j$B0_output[sp, , ])
 B <- matrix(j$B_output[, sp, , ], nrow = ncol(X))           # 9 x draws
-U <- matrix(aperm(j$U_output, c(1, 3, 2, 4)), nrow = nrow(X) * 1)  # placeholder, rebuilt below
 eta <- matrix(0, nrow(X), n_draw)
 for (k in seq_len(n_draw)) {
   it <- ((k - 1) %% nit) + 1; ch <- ((k - 1) %/% nit) + 1

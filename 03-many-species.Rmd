@@ -136,19 +136,18 @@ The saved table `data-derived/occupancy_long.csv` has one row per site and speci
 
 ## Which species go together?
 
-After the environment is accounted for, some species still occur together more or less than expected. The model estimates these residual associations. Here are the strongest, keeping only pairs whose 95% interval excludes zero.
+After the environment is accounted for, some species still occur together more than chance would suggest. The model estimates these residual associations as correlations. We keep only pairs whose 95% interval excludes zero.
 
 ```{r associations}
 assoc <- fit$assoc |>
   filter(lo > 0 | hi < 0) |>
   left_join(status[, c("otu_id", "species")], by = c("otu_a" = "otu_id")) |> rename(species_a = species) |>
   left_join(status[, c("otu_id", "species")], by = c("otu_b" = "otu_id")) |> rename(species_b = species)
-nrow(assoc)
-assoc |> arrange(desc(median)) |> transmute(species_a, species_b, correlation = round(median, 2)) |> head(8)
-assoc |> arrange(median) |> transmute(species_a, species_b, correlation = round(median, 2)) |> head(8)
+c(credible_pairs = nrow(assoc), positive = sum(assoc$median > 0), negative = sum(assoc$median < 0))
+assoc |> arrange(desc(median)) |> transmute(species_a, species_b, correlation = round(median, 2)) |> head(10)
 ```
 
-The strongest associations are between close relatives (the two *Rattus* species), between livestock (cattle and buffalo), and between the dhole and *Canis lupus*, a name that also covers domestic dogs. An association is not an interaction. Two species can co-occur because they share an unmeasured habitat, because DNA from both is washed into the same water, or because they really do interact. The table is a place to start asking, not an answer.
+Every association that survives is positive: no pair is credibly less likely to co-occur than chance. The strongest are between close relatives (the *Rattus* species), between livestock (cattle and buffalo), and between the dhole and *Canis lupus*, a name that also covers domestic dogs. An association is not an interaction. Two species can co-occur because they share an unmeasured habitat, because DNA from both is washed into the same water, or because they really do interact. The table is a place to start asking, not an answer.
 
 ```{r mcp, echo = FALSE, results = "asis", eval = !mcp_off}
 cat('**Ask the assistant.** Posit Assistant can help you write R against the tables above. Try these, and read the code it writes before you run it.
