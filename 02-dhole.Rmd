@@ -114,7 +114,7 @@ rates <- tibble(
 rates |> mutate(across(where(is.numeric), ~ round(.x, 3)))
 ```
 
-A PCR catches the dhole's DNA about half the time, and a stray positive is rare but not zero. That is why one positive PCR at a site is weak evidence on its own.
+A PCR catches the dhole's DNA about six times in ten when it is there, and a stray positive is rare but not zero. That is why one positive PCR at a site is weak evidence on its own.
 
 ## Is the dhole at each site?
 
