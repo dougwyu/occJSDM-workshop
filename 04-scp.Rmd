@@ -1,0 +1,191 @@
+---
+title: "Session 4: Where should we protect?"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    df_print: paged
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE, fig.width = 8, fig.height = 5.5)
+source("setup/pins.R")
+use_workshop_lib()
+source("R/data.R")
+source("R/fit.R")
+source("R/scp.R")
+library(tidyverse)
+mcp_off <- Sys.getenv("WORKSHOP_NO_MCP") == "1"
+```
+
+## From probabilities to a plan
+
+Session 3 gave us the probability that each of 108 mammals is present at each of 101 sites. A manager has a different question: which sites should we protect, given that we cannot protect them all?
+
+Systematic conservation planning answers that with three ingredients.
+
+- Features: what we want to protect. Here, each species, with its probability of presence at each site.
+- Targets: how much of each feature is enough. Here, 50% of a species' total probability of presence.
+- Costs and a budget: what protecting a site costs, and how much we can spend.
+
+The plan is the set of sites that comes closest to meeting every target within the budget. Technically, it minimises the weighted shortfall. We use the `prioritizr` package. Our planning units are the 101 surveyed sites, because that is where we have data.
+
+```{r inputs}
+occ <- read.csv(derived_path("occupancy_long.csv"))
+status <- species_status()
+sites <- site_covariates()
+occ_in <- occ[, c("Site", "species", "cond_mean")]
+cost_equal <- tibble(Site = sites$Site, cost = 1)
+cost_human <- tibble(Site = sites$Site, cost = sites$Human_modification_1km)
+budget_frac <- 0.2
+target <- 0.5
+```
+
+We start by treating every site as equally expensive and allowing 20% of them. Costs come later.
+
+## A first plan: every species counts equally
+
+```{r baseline}
+w_equal <- species_weights(status, "equal")
+plan_equal <- build_scp(occ_in, w_equal, cost_equal, budget = budget_frac * nrow(cost_equal), target = target)
+sum(plan_equal$selected)
+```
+
+```{r plot-helper}
+plot_plan <- function(plan, title) {
+  sites |>
+    left_join(plan, by = "Site") |>
+    ggplot(aes(Xs.1, Xs.2, colour = selected, size = selected)) +
+    geom_point() +
+    scale_colour_manual(values = c(`TRUE` = "firebrick", `FALSE` = "grey75"), name = "Protected") +
+    scale_size_manual(values = c(`TRUE` = 4, `FALSE` = 1.8), guide = "none") +
+    coord_equal() + labs(x = "Longitude", y = "Latitude", title = title) +
+    theme_minimal()
+}
+plot_plan(plan_equal, "Plan 1: equal weights, equal costs")
+```
+
+How well does it do? For each species, `held` is the share of its total probability of presence inside the protected sites. The target is 0.5.
+
+```{r coverage-equal}
+cov_equal <- scp_coverage(plan_equal, occ_in)
+ggplot(cov_equal, aes(held)) +
+  geom_histogram(binwidth = 0.05, fill = "grey40") +
+  geom_vline(xintercept = target, linetype = 2, colour = "firebrick") +
+  labs(x = "Share of the species' presence held in protected sites", y = "Number of species",
+       title = "Within this budget, many species fall short of the target") +
+  theme_minimal()
+c(met = sum(cov_equal$held >= target - 1e-9), of = nrow(cov_equal))
+```
+
+## Some species matter more
+
+The Red List says that some species are closer to extinction. We can ask the plan to care more about them. Species are weighted by their IUCN category: Critically Endangered 5, Endangered 4, Vulnerable 3, Near Threatened 2, Least Concern and Data Deficient 1. Where IUCN has no entry we use the China Red List, and where neither has one we give weight 1.
+
+```{r weights, warning = TRUE}
+w_redlist <- species_weights(status, "redlist")
+table(w_redlist$weight)
+```
+
+```{r weighted-plan}
+plan_redlist <- build_scp(occ_in, w_redlist, cost_equal, budget = budget_frac * nrow(cost_equal), target = target)
+plot_plan(plan_redlist, "Plan 2: Red List weights, equal costs")
+```
+
+How much did the choice of sites change, and who gained?
+
+```{r compare-weights}
+shared <- sum(plan_equal$selected & plan_redlist$selected)
+c(only_plan_1 = sum(plan_equal$selected) - shared, shared = shared, only_plan_2 = sum(plan_redlist$selected) - shared)
+
+threatened <- status$species[status$iucn %in% c("CR", "EN", "VU")]
+bind_rows(
+  scp_coverage(plan_equal, occ_in) |> mutate(plan = "Plan 1: equal weights"),
+  scp_coverage(plan_redlist, occ_in) |> mutate(plan = "Plan 2: Red List weights")
+) |>
+  filter(species %in% threatened) |>
+  group_by(plan) |>
+  summarise(threatened_species = n(), targets_met = sum(held >= target - 1e-9),
+            mean_held = round(mean(held), 2), .groups = "drop")
+```
+
+**Discuss.** Weighting moved some sites. Did it help the species we care about most? What did it cost the others? There is no right answer, only a trade-off that a manager has to choose.
+
+## Sites cost different amounts
+
+Protecting a heavily modified site is usually more expensive: land is more costly, and conflicts are likelier. We use the human modification of each site as a stand-in for cost.
+
+```{r cost-plan}
+budget_human <- budget_frac * sum(cost_human$cost)
+plan_cost <- build_scp(occ_in, w_redlist, cost_human, budget = budget_human, target = target)
+plot_plan(plan_cost, "Plan 3: Red List weights, cost = human modification")
+```
+
+```{r cost-compare}
+site_costs <- sites |> select(Site, Human_modification_1km)
+bind_rows(
+  plan_redlist |> mutate(plan = "Plan 2: equal costs"),
+  plan_cost |> mutate(plan = "Plan 3: cost = human modification")
+) |>
+  filter(selected) |>
+  left_join(site_costs, by = "Site") |>
+  group_by(plan) |>
+  summarise(sites = n(), mean_human_modification = round(mean(Human_modification_1km), 2),
+            total_cost = round(sum(Human_modification_1km), 1), .groups = "drop")
+```
+
+The plan now picks less modified sites and can afford more of them. Notice where it ended up, and whether the threatened species still do as well.
+
+```{r cost-coverage}
+bind_rows(
+  scp_coverage(plan_redlist, occ_in) |> mutate(plan = "Plan 2"),
+  scp_coverage(plan_cost, occ_in) |> mutate(plan = "Plan 3")
+) |>
+  filter(species %in% threatened) |>
+  group_by(plan) |>
+  summarise(targets_met = sum(held >= target - 1e-9), mean_held = round(mean(held), 2), .groups = "drop")
+```
+
+## Should livestock count?
+
+Cattle, buffalo and goats are in the data, and they are not conservation targets. We can leave domestic species out by giving them weight 0.
+
+```{r wild-plan}
+w_wild <- w_redlist |>
+  left_join(status[, c("species", "local_status")], by = "species") |>
+  mutate(weight = if_else(local_status == "dom", 0, weight)) |>
+  select(species, weight)
+plan_wild <- build_scp(occ_in, w_wild, cost_human, budget = budget_human, target = target)
+c(species_in_plan = length(attr(plan_wild, "features")),
+  sites_changed_from_plan_3 = sum(plan_wild$selected != plan_cost$selected))
+```
+
+## What this plan cannot tell you
+
+- It uses the probability of presence as if it were exact. The package does not yet carry the uncertainty through, so a site whose probability is 0.6 plus or minus 0.3 counts the same as one at 0.6 plus or minus 0.05.
+- Four species did not converge in the model (Session 3). Their probabilities are less reliable.
+- The 101 sites are the planning units. A real plan would predict across the whole landscape.
+- The 50% target, the 20% budget, the weights and the cost stand-in are all choices. Change them and the plan changes.
+
+## Group exercise
+
+In groups, choose one change and report how the plan responds.
+
+- Raise or lower the target (`target`) or the budget (`budget_frac`), then rerun the plans.
+- Weight a group of species, such as all carnivores, more heavily.
+- Use a different cost, such as forest cover.
+
+For each, say which sites move, and whether the answer would change what you tell a park manager.
+
+```{r mcp, echo = FALSE, results = "asis", eval = !mcp_off}
+cat('**Ask the assistant.** Posit Assistant can help you change the code above. Try: *Weight carnivores three times higher than other species and show me which sites move.* Read the code it writes before you run it, and check the result against the plan you already have.
+
+The occJSDM tools are not used in this session, because the plan is built from the finished fit, not from new data.
+')
+```
+
+## What you take away
+
+- A model of presence and detection turns eDNA into numbers a plan can use.
+- Targets, weights and costs are choices, and each one changes the answer.
+- Be honest about what the plan leaves out.
