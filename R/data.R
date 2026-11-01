@@ -43,3 +43,10 @@ site_covariates <- function() {
   m <- load_mammal()
   site_covariates_from(m$info, m$occCovariates)
 }
+
+# Site by species presence: 1 if any PCR replicate at the site was positive.
+site_presence <- function(m = load_mammal()) {
+  y <- rowsum(m$OTU, m$info$Site) > 0
+  storage.mode(y) <- "integer"
+  y
+}

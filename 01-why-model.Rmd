@@ -1,0 +1,170 @@
+---
+title: "Session 1: Why model? From eDNA summaries to a decision"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    df_print: paged
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE, fig.width = 8, fig.height = 5.5)
+source("setup/pins.R")
+use_workshop_lib()
+source("R/data.R")
+source("R/fit.R")
+source("R/ordination.R")
+library(tidyverse)
+library(ecoCopula)
+mcp_off <- Sys.getenv("WORKSHOP_NO_MCP") == "1"
+```
+
+## The survey and the decision
+
+In 2023 a team sampled water at 101 river sites across the Gaoligongshan protected area complex in Yunnan and sequenced the eDNA for vertebrates (Ji et al. 2025, *Ecology Letters*). We use the mammals: 108 species.
+
+Two questions matter to a manager.
+
+- Where is a species? This matters for rare species we want to protect and for invasive ones we want to control.
+- Where should we protect? Which sites hold the most conservation value for the cost?
+
+Most eDNA papers stop at summaries of what was detected. This session builds those summaries first, because you will be asked for them. Then it shows why they cannot answer the two questions.
+
+## The data
+
+Each site was sampled three times (field samples), and each sample was amplified in six PCR replicates. So each site has 18 PCR results per species.
+
+```{r data}
+m <- load_mammal()
+species <- species_status()
+sites <- site_covariates()
+dim(m$OTU)
+head(m$info[, c("Site", "Sample", "Primer", "Human_modification_1km", "Filter_vol")])
+```
+
+`m$OTU` has one row per PCR replicate (1,818 rows) and one column per species. A 1 means that PCR was positive for that species.
+
+## Summary 1: what was detected, by taxonomic order
+
+```{r composition}
+n_sites_detected <- colSums(site_presence(m))
+composition <- species |>
+  mutate(sites_detected = n_sites_detected[otu_id]) |>
+  group_by(order) |>
+  summarise(species = n(), detections = sum(sites_detected), .groups = "drop") |>
+  arrange(desc(species))
+
+ggplot(composition, aes(x = reorder(order, species), y = species)) +
+  geom_col(fill = "grey40") +
+  coord_flip() +
+  labs(x = NULL, y = "Number of species detected", title = "Rodents dominate the mammal list") +
+  theme_minimal()
+```
+
+## Summary 2: an ordination
+
+An ordination puts sites and species on a map where similar ones sit close together. We use `ecoCopula`, a model-based ordination, on site-by-species presence and absence. A species counts as present at a site if any of its 18 PCRs was positive. Species detected at fewer than 5 sites are dropped, because there is too little information to place them.
+
+```{r ordination}
+y <- site_presence(m)
+ord <- fit_ordination(y, min_sites = 5)
+c(kept = ord$n_kept, dropped = length(ord$dropped))
+```
+
+```{r biplot-human, fig.height = 6.5}
+plot_biplot(ord, site_data = sites, site_var = "Human_modification_1km",
+            species_data = species, species_var = "order") +
+  labs(title = "Sites coloured by human modification, species arrows by order")
+```
+
+```{r biplot-region, fig.height = 6.5}
+plot_biplot(ord, site_data = sites, site_var = "Regional_Division",
+            species_data = species, species_var = "class") +
+  labs(title = "Sites coloured by regional division")
+```
+
+**Exercise.** Look at the two biplots. Which sites sit together? Which groups of species point the same way? Write down one thing you could tell a park manager from this figure.
+
+Colours can suggest a pattern that is not there, so check it. How much of the spread of species along each axis is explained by their taxonomic order?
+
+```{r order-check}
+loadings <- ord$species_scores |> left_join(species[, c("otu_id", "order")], by = "otu_id")
+share <- function(axis) {
+  a <- anova(lm(reformulate("order", axis), data = loadings))
+  c(share_explained = round(a$`Sum Sq`[1] / sum(a$`Sum Sq`), 2), p_value = round(a$`Pr(>F)`[1], 3))
+}
+rbind(LV1 = share("LV1"), LV2 = share("LV2"))
+```
+
+Order explains only a modest share of the spread, and the evidence is weak. Rodents fan out in many directions. The ordination describes how detections co-occur at these sites. It does not recover the taxonomy, and it still cannot say where a species is.
+
+## The wall: where is the dhole?
+
+The dhole (*Cuon alpinus*) is an Endangered wild dog. Here is where it was detected.
+
+```{r dhole-map}
+dhole <- species$otu_id[species$species == "Cuon alpinus"]
+dhole_pcr <- tapply(m$OTU[, dhole], m$info$Site, sum)
+dhole_sites <- sites |> mutate(positive_pcrs = as.numeric(dhole_pcr[Site]))
+
+ggplot(dhole_sites, aes(Xs.1, Xs.2, colour = positive_pcrs > 0, size = positive_pcrs)) +
+  geom_point(alpha = 0.8) +
+  scale_colour_manual(values = c(`TRUE` = "firebrick", `FALSE` = "grey70"), name = "Any positive PCR") +
+  scale_size_continuous(range = c(1.5, 7), name = "Positive PCRs (of 18)") +
+  coord_equal() +
+  labs(x = "Longitude", y = "Latitude", title = "Raw dhole detections") +
+  theme_minimal()
+```
+
+Neither the composition chart nor the ordination can say where the dhole is, or how sure we are. The map above looks like an answer, but is it?
+
+```{r dhole-counts}
+table(positive_pcrs = dhole_pcr[dhole_pcr > 0])
+```
+
+Of the sites with a detection, many have only one or two positive PCRs out of 18. Is that a dhole in the river, or a stray positive from contamination or the lab? A detection is not the same as a presence.
+
+## Detection is not presence
+
+An occupancy model separates two things the raw data mix together. Whether the species is at the site (occupancy), and whether the survey would detect it if it were there. It also allows for false positives. Session 2 builds it. Here we only compare the answer with the raw count, using a model already fitted to the mammal data.
+
+```{r naive-vs-model}
+fit <- read_fit_summary()
+naive <- tibble(otu_id = names(n_sites_detected), naive = as.numeric(n_sites_detected) / 101)
+model <- fit$occ |>
+  group_by(otu_id) |>
+  summarise(model = mean(cond_mean), .groups = "drop")
+compare <- species |>
+  left_join(naive, by = "otu_id") |>
+  left_join(model, by = "otu_id") |>
+  left_join(fit$params[, c("otu_id", "q_mean")], by = "otu_id")
+
+compare |>
+  filter(species %in% c("Sus scrofa", "Bos taurus", "Cuon alpinus")) |>
+  transmute(species, status = local_status,
+            `share of sites with a detection` = round(naive, 2),
+            `model: share of sites occupied` = round(model, 2),
+            `false-positive rate` = round(q_mean, 3))
+```
+
+```{r naive-model-plot}
+ggplot(compare, aes(naive, model, colour = q_mean)) +
+  geom_abline(slope = 1, intercept = 0, colour = "grey60") +
+  geom_point(size = 2.5, alpha = 0.85) +
+  scale_colour_viridis_c(name = "False-positive\nrate", option = "C") +
+  labs(x = "Share of sites with a detection", y = "Model: share of sites occupied",
+       title = "The model says many detections are not presence") +
+  theme_minimal() + coord_equal(xlim = c(0, 1), ylim = c(0, 1))
+```
+
+Species above the line gain sites. Species below it lose them. The wild pig and cattle are detected at almost every site, yet the model puts them at about half. Their DNA is washed down the river from farms. The dhole is detected at 41 of 101 sites, and the model says it is at far fewer.
+
+## What you take away
+
+- Composition charts and ordinations summarise what was detected. They cannot tell you where a species is, and they cannot separate presence from detection.
+- A model of occupancy and detection can say where a species is, and how sure we are.
+- Session 2 builds that model for the dhole and maps it. Session 4 turns the answer for all species into a conservation plan.
+
+```{r mcp-note, echo = FALSE, results = "asis", eval = !mcp_off}
+cat("**Optional: ask the assistant.** In Posit Assistant, try: *Using the objects in my session, which three species have the biggest gap between naive and model occupancy?* The assistant helps you write R here. It does not use the occJSDM tools yet.\n")
+```
