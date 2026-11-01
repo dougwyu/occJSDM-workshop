@@ -5,3 +5,4 @@ data-raw/
 fits/
 *.html
 *_files/
+Rlib/
