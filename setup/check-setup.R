@@ -9,9 +9,15 @@ check_setup <- function(quiet = FALSE) {
   have <- function(p) requireNamespace(p, quietly = TRUE)
   pkgs <- setdiff(CRAN_PACKAGES, "tidyverse")
   results <- vapply(c(pkgs, "tidyverse", "occJSDM"), function(p) say(have(p), paste("package", p)), logical(1))
-  sha <- if (have("occJSDM")) utils::packageDescription("occJSDM")$RemoteSha else NA_character_
+  sha <- installed_sha()
   pinned <- say(identical(sha, PIN_OCCJSDM), "occJSDM is at the pinned commit")
   solver <- say(have("highs") && have("prioritizr"), "an SCP solver is available")
   all(results, pinned, solver)
 }
 `%||%` <- function(a, b) if (is.null(a)) b else a
+
+# Read the commit from the library path, not from a namespace that may already be loaded.
+installed_sha <- function() {
+  d <- suppressWarnings(utils::packageDescription("occJSDM", lib.loc = .libPaths()))
+  if (is.list(d) && !is.null(d$RemoteSha)) d$RemoteSha else NA_character_
+}

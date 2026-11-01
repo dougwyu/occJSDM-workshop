@@ -4,7 +4,7 @@ use_workshop_lib()
 
 test_that("every required package is installed and occJSDM is at the pinned commit", {
   expect_true(check_setup(quiet = TRUE))
-  expect_equal(utils::packageDescription("occJSDM")$RemoteSha, PIN_OCCJSDM)
+  expect_equal(installed_sha(), PIN_OCCJSDM)
 })
 
 test_that("the data fallback copies a local archive instead of downloading", {
