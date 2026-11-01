@@ -157,7 +157,7 @@ ggplot(compare, aes(naive, model, colour = q_mean)) +
   theme_minimal() + coord_equal(xlim = c(0, 1), ylim = c(0, 1))
 ```
 
-Species above the line gain sites. Species below it lose them. The wild pig and cattle are detected at almost every site, yet the model puts them at about half. Their DNA is washed down the river from farms. The dhole is detected at 41 of 101 sites, and the model says it is at far fewer.
+Species above the line gain sites. Species below it lose them. The pig and cattle are detected at almost every site, yet the model puts them at about half. Part of the reason is likely DNA washed into the rivers from farms. The dhole is detected at 41 of 101 sites, and the model says it is at far fewer.
 
 ## What you take away
 

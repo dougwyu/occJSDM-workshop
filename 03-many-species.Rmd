@@ -1,0 +1,169 @@
+---
+title: "Session 3: Many species at once"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    df_print: paged
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE, fig.width = 8, fig.height = 5.5)
+source("setup/pins.R")
+use_workshop_lib()
+source("R/data.R")
+source("R/fit.R")
+library(tidyverse)
+mcp_off <- Sys.getenv("WORKSHOP_NO_MCP") == "1"
+```
+
+## From one species to a community
+
+A conservation plan needs an answer for every species, not one. We could fit 108 separate models, but a joint model does better: it fits all species together, lets rare species borrow strength from common ones, and estimates how species go together after the environment is accounted for.
+
+Fitting this model for 108 mammals takes several minutes on a fast laptop, so we use a fit prepared earlier (5,000 burn-in and 5,000 kept iterations, two chains). The summaries below come from it. If you want to run the occJSDM output functions on the full fit, your instructor can share the file.
+
+```{r load}
+fit <- read_fit_summary()
+status <- species_status()
+sites <- site_covariates()
+```
+
+## Can we trust the computation?
+
+With 108 species there are hundreds of parameters. We check R-hat for each species' detection and false-positive parameters.
+
+```{r convergence}
+fit$diagnostics |> count(converged)
+fit$diagnostics |> filter(!converged) |> select(species, rhat_p, rhat_q, rhat_theta0, max_rhat)
+```
+
+```{r rhat-plot}
+ggplot(fit$diagnostics, aes(max_rhat)) +
+  geom_histogram(binwidth = 0.02, fill = "grey40") +
+  geom_vline(xintercept = 1.1, linetype = 2, colour = "firebrick") +
+  labs(x = "Largest R-hat per species", y = "Number of species",
+       title = "Almost every species passes; a few do not") +
+  theme_minimal()
+```
+
+Four species have not settled. Each was detected at only 3 to 16 of the 101 sites, so they are among the less common species. Treat their results with care, but do not drop the whole analysis.
+
+## How reliable is each species' detection?
+
+The model gives each species its own true-positive and false-positive rates.
+
+```{r detection-profile}
+profile <- fit$params |> left_join(status[, c("otu_id", "local_status", "order")], by = "otu_id")
+ggplot(profile, aes(q_mean, p_mean, colour = local_status)) +
+  geom_linerange(aes(xmin = q_lo, xmax = q_hi), alpha = 0.3) +
+  geom_linerange(aes(ymin = p_lo, ymax = p_hi), alpha = 0.3) +
+  geom_point(size = 2) +
+  scale_colour_manual(values = c(wild = "grey30", dom = "firebrick", wild_or_dom = "darkorange"), name = NULL) +
+  labs(x = "False-positive rate per PCR", y = "True-positive rate per PCR",
+       title = "Detection quality varies a lot between species") +
+  theme_minimal()
+```
+
+```{r worst-fp}
+profile |>
+  arrange(desc(q_mean)) |>
+  transmute(species, local_status, false_positive = round(q_mean, 3), true_positive = round(p_mean, 2)) |>
+  head(10)
+```
+
+The highest false-positive rates belong to species detected at almost every site. They include the pig and cattle, whose DNA probably reaches rivers from farms and settlements, but also several common small mammals. The model cannot say why a species has a high rate, only that its raw detections overstate where it lives.
+
+## Probability of presence at every site
+
+For each site and each species, the model gives the probability that the species is present given what was detected. These are the numbers the conservation plan will use.
+
+```{r occupancy}
+occ <- occupancy_long()
+occ |> select(Site, species, cond_mean, psi_mean) |> head()
+```
+
+`cond_mean` is the probability of presence given the detections. `psi_mean` is the probability predicted from the site's covariates alone. The first is the one for asking "is species X at site 12?". The second is the one to use for sites you have not surveyed. Both are posterior means. The package does not yet return intervals for these, which we come back to in Session 4.
+
+```{r certainty}
+ggplot(occ, aes(cond_mean)) +
+  geom_histogram(binwidth = 0.05, fill = "grey40") +
+  scale_y_log10() +
+  labs(x = "Probability of presence given the detections", y = "Site-species pairs (log scale)",
+       title = "Most site-species pairs are settled; a minority are uncertain") +
+  theme_minimal()
+```
+
+## How many species are at each site?
+
+The raw count of species detected at a site and the model's expected number of species are different things. The expected number is the sum of the probabilities of presence.
+
+```{r richness}
+detected <- site_presence(load_mammal())
+richness <- occ |>
+  group_by(Site) |>
+  summarise(expected = sum(cond_mean), .groups = "drop") |>
+  mutate(detected = rowSums(detected)[Site]) |>
+  left_join(sites, by = "Site")
+
+richness |>
+  summarise(detected = mean(detected), expected = mean(expected))
+```
+
+```{r richness-map, fig.width = 10}
+richness |>
+  pivot_longer(c(detected, expected), names_to = "measure", values_to = "species") |>
+  ggplot(aes(Xs.1, Xs.2, colour = species)) +
+  geom_point(size = 3) +
+  facet_wrap(~ measure) +
+  scale_colour_viridis_c(option = "C", name = "Species") +
+  coord_equal() + labs(x = "Longitude", y = "Latitude") +
+  theme_minimal()
+```
+
+Richness can be split by taxonomic order, to see which groups drive the pattern.
+
+```{r richness-order}
+occ |>
+  group_by(order, Site) |>
+  summarise(expected = sum(cond_mean), .groups = "drop") |>
+  group_by(order) |>
+  summarise(mean_per_site = round(mean(expected), 2), .groups = "drop") |>
+  arrange(desc(mean_per_site))
+```
+
+The saved table `data-derived/occupancy_long.csv` has one row per site and species, with taxonomy and conservation status attached. Session 4 reads it.
+
+## Which species go together?
+
+After the environment is accounted for, some species still occur together more or less than expected. The model estimates these residual associations. Here are the strongest, keeping only pairs whose 95% interval excludes zero.
+
+```{r associations}
+assoc <- fit$assoc |>
+  filter(lo > 0 | hi < 0) |>
+  left_join(status[, c("otu_id", "species")], by = c("otu_a" = "otu_id")) |> rename(species_a = species) |>
+  left_join(status[, c("otu_id", "species")], by = c("otu_b" = "otu_id")) |> rename(species_b = species)
+nrow(assoc)
+assoc |> arrange(desc(median)) |> transmute(species_a, species_b, correlation = round(median, 2)) |> head(8)
+assoc |> arrange(median) |> transmute(species_a, species_b, correlation = round(median, 2)) |> head(8)
+```
+
+The strongest associations are between close relatives (the two *Rattus* species), between livestock (cattle and buffalo), and between the dhole and *Canis lupus*, a name that also covers domestic dogs. An association is not an interaction. Two species can co-occur because they share an unmeasured habitat, because DNA from both is washed into the same water, or because they really do interact. The table is a place to start asking, not an answer.
+
+```{r mcp, echo = FALSE, results = "asis", eval = !mcp_off}
+cat('**Ask the assistant.** Posit Assistant can help you write R against the tables above. Try these, and read the code it writes before you run it.
+
+- Which species have a false-positive rate above 0.1, and what share of them are domestic?
+- Map the expected richness of carnivores only.
+- Which five species are most likely to be present at the site with the highest expected richness?
+
+The assistant is a helper for R here. The occJSDM tools it used on Wednesday need data and a new fit, which we do not do today.
+')
+```
+
+## What you take away
+
+- A joint model gives a probability of presence for every species at every site, with the false positives accounted for.
+- Check convergence for every species, and know which ones are flagged.
+- Expected richness and raw richness tell different stories.
+- Session 4 uses `occupancy_long.csv` to ask where to protect.

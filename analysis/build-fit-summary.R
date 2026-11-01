@@ -30,8 +30,17 @@ conv <- read.csv(conv_path, stringsAsFactors = FALSE)
 diagnostics <- data.frame(otu_id = status$otu_id, species = status$species)
 diagnostics <- merge(diagnostics, conv[, c("species", "rhat_p", "rhat_q", "rhat_theta0", "max_rhat", "converged")], by = "species")
 
+# Residual species associations: quantiles of the correlation left after the covariates.
+suppressPackageStartupMessages(library(occJSDM))
+sig <- returnResidualCorrelationMatrix(f)               # 3 x species x species: lower, median, upper
+nm <- f$infos$speciesNames
+up <- which(upper.tri(matrix(0, length(nm), length(nm))), arr.ind = TRUE)
+assoc <- data.frame(otu_a = nm[up[, 1]], otu_b = nm[up[, 2]],
+                    lo = sig[cbind(1, up[, 1], up[, 2])], median = sig[cbind(2, up[, 1], up[, 2])],
+                    hi = sig[cbind(3, up[, 1], up[, 2])], stringsAsFactors = FALSE)
+
 stopifnot(nrow(occ) == 101 * 108, nrow(params) == 108, nrow(diagnostics) == 108)
 saveRDS(list(occ = tibble::as_tibble(occ), params = tibble::as_tibble(params),
-             diagnostics = tibble::as_tibble(diagnostics),
+             diagnostics = tibble::as_tibble(diagnostics), assoc = tibble::as_tibble(assoc),
              source = list(fit = basename(fit_path), occjsdm = "6256791", b0_prior = "fixed")),
         "data-derived/fit_summary.rds")
