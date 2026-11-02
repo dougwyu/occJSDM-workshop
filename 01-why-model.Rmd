@@ -440,45 +440,21 @@ ggplot() +
 
 A few sites are dark all the way across: the dhole's DNA was detected in almost every PCR of every sample (e.g. GLG28). Many more are pale, resting on one or two positive PCRs out of 18.
 
-Two kinds of error are present in this figure.
+The figure points to two kinds of error.
 
-```{r dhole-errors}
-# only sites with a detection
-(detected <- filter(dhole_samples, site_total > 0))   
+**There are probably false negatives.** Look at GLG40 in the table. Field sample 3 had 4 positive PCRs out of 6, so the dhole's DNA was in the water there. But samples 1 and 2, taken at the same place, had none. If one sample can miss the dhole, then sometimes all three will.
 
-# sites with any positive PCR
-(n_detecting <- n_distinct(detected$Site))         
+> Thus, we think that some of the empty circles on the map are **false negatives**: sites where the dhole was present and we missed it in all 3 samples: (0, 0, 0).
 
-# their field samples
-(n_samples <- nrow(detected))                    
+**There are probably false positives.** The arrows point to sites with just 1 positive PCR out of 18. That could be a trace of real dhole DNA, or contamination in the field or the lab. From one site alone, we cannot tell. Ji et al. (2025) found the same pattern for the takin (*Budorcas taxicolor*): a few weak detections in the south, where the takin is known not to live.
 
-# samples with no positive PCR
-(n_empty <- sum(detected$positive == 0))           
+> Thus, we think that some of the red circles on the map are **false positives**: sites where we detected dhole DNA, but the DNA was from contamination, like (0, 0, 1).
 
-# sites with 1 or 2 of 18
-(n_weak <- n_distinct(detected$Site[detected$site_total <= 2]))   
-
-# A site where one sample is strongly positive and another is empty
-example <- detected |>
-  group_by(Site) |>
-  filter(min(positive) == 0) |>
-  ungroup() |>
-  slice_max(positive, n = 1, with_ties = FALSE)
-
-c(detecting_sites = n_detecting, samples = n_samples, empty_samples = n_empty, weak_sites = n_weak)
-
-example
-```
-
-**False negatives are certain.** At site `r example$Site`, one field sample had `r example$positive` positive PCRs out of 6, so the dhole's DNA was in the water there. Yet at least one other sample, taken at the same place, had none. Across the `r n_detecting` sites with a detection, `r n_empty` of their `r n_samples` field samples had no positive PCR at all, and inside the positive samples most PCRs were negative too. If one sample can miss the dhole at a site where it is present, then sometimes all three will. So among the `r 101 - n_detecting` sites with no detection, there are probably some where the dhole was present and all 18 PCRs missed it. These are some of the empty circles in the map, but we do not know which ones (yet).
-
-**False positives are possible.** `r n_weak` of the `r n_detecting` sites rest on only one or two positive PCRs out of 18. A signal that weak could be a little real DNA, or DNA that reached the sample by another route: contamination in the field or the lab, or a sequencing read assigned to the wrong sample. Looking at one site alone, we cannot tell which. Ji et al. (2025, Figure 1) found the same pattern for the takin (*Budorcas taxicolor*): a few weak detections in the south of the study area, where the takin is known not to live.
-
-So the raw map is wrong in both directions. Some empty circles should probably be filled, and some pale circles may be wrong. Neither error can be fixed by staring harder at one site. What fixes them is to use all the sites together. The dark sites tell us how often a PCR detects dhole DNA when it is there, and the scattered weak positives tell us how often a PCR is positive when it is not. With those two rates, each site's pattern of 18 PCRs can be weighed: is three samples with a single positive between them more likely to come from a dhole that is there and hard to detect, or from a dhole that is absent and a stray positive? **A detection is not the same as a presence, and a non-detection is not the same as an absence.**
+In total, the raw map can be wrong in both directions. **A detection is not the same as a presence, and a non-detection (0, 0, 0) is not the same as an absence.**
 
 ## What an occupancy model does
 
-An occupancy model does that weighing. It separates whether the species is at the site (occupancy) from whether the survey detects it if it is there, and it estimates the false-positive rate: the chance that a single PCR is positive for a species that is not at the site. Session 2 builds it for the dhole. Here we only look at what it gives, using a model already fitted to all the mammals.
+An occupancy model deals with both errors by using all the sites together. It separates whether the species is at a site (occupancy) from whether the survey detects it when it is there, and it estimates the false-positive rate: the chance that a single PCR is positive for a species that is not at the site. Session 2 builds it for the dhole. Here we only look at what it gives, using a model already fitted to all the mammals.
 
 ```{r naive-vs-model}
 fit <- read_fit_summary()
