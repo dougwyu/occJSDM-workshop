@@ -457,6 +457,121 @@ map_data |>
   write.csv("dhole_by_site.csv", row.names = FALSE)
 ```
 
+## Hands-on exercises
+
+Each exercise refits the model with one change and compares the answer with the fit above. A fit takes under a minute. The chunks below are not run when this page is built, so run them yourself, one at a time.
+
+First, store the covariates in two vectors, so each exercise can reuse them.
+
+```{r exercise-setup}
+occ_covs <- c("annual_precipitation", "mean_temperature", "Human_modification_1km",
+              "Percent_of_forest_cover_1km", "Patch_density_1km", "Edge_density_1km",
+              "streamOrigin", "Regional_Division")
+coll_covs <- c("Filter_vol", "PrevDayRain")
+```
+
+### Exercise 1: a species whose range we know
+
+The takin (*Budorcas taxicolor*) lives only in the north of the study area. Ji et al. (2025) found a few weak takin detections in the south, where it is known not to live. Fit the same model to the takin.
+
+```{r exercise-takin, eval = FALSE}
+takin_col <- grep("Budorcas_taxicolor", colnames(OTU), value = TRUE)
+d_takin <- list(info = info, OTU = OTU[, takin_col, drop = FALSE])
+
+set.seed(2026)
+fit_takin <- runOccJSDM(data = d_takin, listParams = list(n_factors = 0), threshold = 1,
+                        occCovariates = occ_covs, collCovariates = coll_covs,
+                        spatCovariates = character(),
+                        MCMCparams = list(nchain = 2, nburn = 5000, niter = 5000, nthin = 1, ncores = 2),
+                        summarisedLatentPresences = TRUE)
+
+takin_positive <- tapply(d_takin$OTU[, 1], info$Site, sum)
+takin_probability <- computeConditionalOccupancyProbs(fit_takin)[, 1]
+
+takin <- sites |>
+  mutate(positive_pcrs = as.numeric(takin_positive[Site]),
+         probability = round(as.numeric(takin_probability[Site]), 3))
+
+takin |>
+  filter(positive_pcrs > 0) |>
+  arrange(Xs.2) |>                                  # south to north
+  select(Site, latitude = Xs.2, positive_pcrs, probability)
+```
+
+- Where are the weak takin detections, and what probability does the model give them?
+- Does the model agree with what is known about the takin's range?
+- Check the fit with `returnConvergenceDiagnostics(fit_takin)`. Are any parameters flagged?
+
+### Exercise 2: fewer field samples
+
+What if the survey had taken only two field samples at each site, not three? Keep the first two samples of each site and refit.
+
+```{r exercise-two-samples, eval = FALSE}
+first_two <- info |>
+  group_by(Site) |>
+  mutate(keep = Sample %in% unique(Sample)[1:2]) |>   # the first two samples of each site
+  pull(keep)
+
+d_two <- list(info = info[first_two, ],
+              OTU = d$OTU[first_two, , drop = FALSE])
+
+set.seed(2026)
+fit_two <- runOccJSDM(data = d_two, listParams = list(n_factors = 0), threshold = 1,
+                      occCovariates = occ_covs, collCovariates = coll_covs,
+                      spatCovariates = character(),
+                      MCMCparams = list(nchain = 2, nburn = 5000, niter = 5000, nthin = 1, ncores = 2),
+                      summarisedLatentPresences = TRUE)
+
+two_probability <- computeConditionalOccupancyProbs(fit_two)[, 1]
+
+compare_two <- map_data |>
+  select(Site, pattern, three_samples = model) |>
+  mutate(two_samples = as.numeric(two_probability[Site]))
+
+ggplot(compare_two, aes(three_samples, two_samples)) +
+  geom_abline(colour = "grey60") +
+  geom_point() +
+  labs(x = "Probability present, three samples", y = "Probability present, two samples") +
+  theme_minimal()
+
+compare_two |>
+  filter(abs(three_samples - two_samples) > 0.2) |>   # the sites that moved most
+  mutate(across(c(three_samples, two_samples), ~ round(.x, 2)))
+```
+
+- Which sites moved most? Look at their `pattern`: which sample was dropped, and what did it contain?
+- With less data, do the probabilities move towards 0 and 1, or towards the middle?
+- What does this tell you about how many field samples to take in your next survey?
+
+### Exercise 3: leave out a collection covariate
+
+Rain on the previous day lowered the chance that a sample caught the dhole's DNA. Refit without it.
+
+```{r exercise-no-rain, eval = FALSE}
+set.seed(2026)
+fit_no_rain <- runOccJSDM(data = d, listParams = list(n_factors = 0), threshold = 1,
+                          occCovariates = occ_covs, collCovariates = "Filter_vol",   # no PrevDayRain
+                          spatCovariates = character(),
+                          MCMCparams = list(nchain = 2, nburn = 5000, niter = 5000, nthin = 1, ncores = 2),
+                          summarisedLatentPresences = TRUE)
+
+no_rain_probability <- computeConditionalOccupancyProbs(fit_no_rain)[, 1]
+rain <- tapply(info$PrevDayRain, info$Site, mean)        # rain the day before sampling, per site
+
+compare_rain <- map_data |>
+  select(Site, pattern, with_rain = model) |>
+  mutate(without_rain = as.numeric(no_rain_probability[Site]),
+         rain_mm = as.numeric(rain[Site]))
+
+compare_rain |>
+  filter(abs(with_rain - without_rain) > 0.1) |>     # the sites that moved most
+  mutate(across(c(with_rain, without_rain), ~ round(.x, 2)))
+```
+
+- Which sites changed most? How much rain fell before they were sampled, and how many PCRs were positive there?
+- Why would leaving out rain change the probability at a site where the dhole was never detected?
+- A collection covariate is not about where the dhole lives. Why does it still matter for the map?
+
 ## Do it with the assistant (using the occJSDM tools)
 
 ```{r mcp, echo = FALSE, results = "asis", eval = !mcp_off}
