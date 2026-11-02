@@ -9,87 +9,160 @@ output:
 
 ```{r setup, include = FALSE}
 knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE, fig.width = 8, fig.height = 5.5)
+```
+
+Two chunks start every session. The first is only for this workshop. It points R at the workshop's package library and loads small helper functions that read the prepared data. You would not need it in a project of your own.
+
+```{r workshop-setup}
 source("setup/pins.R")
-use_workshop_lib()
-source("R/data.R")
-source("R/fit.R")
-source("R/ordination.R")
-library(tidyverse)
-library(ecoCopula)
+use_workshop_lib()                  # use the packages installed for the workshop
+source("R/data.R")                  # load_mammal(), species_status(), site_covariates()
+source("R/fit.R")                   # read_fit_summary(): saved results of the model fitted to all mammals
 mcp_off <- Sys.getenv("WORKSHOP_NO_MCP") == "1"
+```
+
+The second loads the packages, as you would in any analysis of your own.
+
+```{r packages}
+library(tidyverse)
+library(ecoCopula)    # model-based ordination
+library(treemapify)   # treemaps drawn with ggplot2
 ```
 
 ## The survey and the questions
 
 In 2023 a team sampled water at 101 river sites across the Gaoligongshan protected area complex in Yunnan and sequenced the eDNA for vertebrates (Ji et al. 2025, *Ecology Letters*). For this workshop, we use the mammals from the survey: 108 species.
 
-Two questions matter to a manager.
+Three questions matter to a manager.
 
-- Where are the species located? This matters for wild species that we want to protect and for invasive ones we want to control.
+- **Where are the species located?** This matters for wild species that we want to protect and for invasive ones we want to control.
 
-- Where should we protect? Which sites hold the most conservation value for the cost?
+- **Why are they there (or not there)?** For example, does human modification of the land keep a species away? Session 2 asks this for the dhole.
 
-  <!--# can we add a third question:  why are the species located where they are? e.g. effects of protected areas and hmi -->
+- **Where should we protect?** Which sites hold the most conservation value for the cost?
 
-Most eDNA papers stop at summaries of what was detected. This session builds those summaries first, because you will be asked for them. Then it shows why they cannot answer the two questions.
+Most eDNA papers stop at summaries of what was detected. This session builds those summaries first, because you will be asked for them. Then it shows why they cannot answer these questions.
 
 ## The data
 
 Each site was sampled three times (field samples), and each sample was amplified in six PCR replicates. So each site has 18 PCR results per species.
 
-<!--# students need to see the study design clearly, probably visually, and the students need to know very clearly the tables that they need to produce: info, OTU, traits. Does species taxonomy need to be a table separate from traits since we don't necessarily use taxonomy as traits? Also, commands in data are opaque. It needs to be explained that we are loading simulated dataset for teaching purposes.  -->
+These are the real survey data, not a simulation. The archive on Zenodo records, for each field sample, how many of its six PCRs were positive for each species. occJSDM wants one row per PCR, so we turned each count into that many 1s followed by 0s. The order of the PCRs within a sample therefore means nothing; only the count does. The prepared copy is in `data-derived/`, and `analysis/build-derived.R` shows how it was made.
 
-<!--# I think what i would do is create two kinds of setup chunks. The first is stuff specific to this workshop (all the source() commands, for example) and the second is stuff that an occJSDM would normally run (the library() commands). -->
+occJSDM needs two tables from you, and accepts a third.
 
-<!--# then there's a chunk to display the input data so that the students can learn the study design -->
+- `info`: one row per PCR replicate. `Site` and `Sample` say where the replicate belongs, and the other columns are covariates.
+- `OTU`: the detections. It has the same rows as `info` and one column per species, with a 1 where the PCR was positive.
+- `traits` (optional): one row per species, with characteristics such as body mass that may explain why species respond differently. This workshop does not use traits.
+
+The species list with taxonomy and Red List status (`species` below) is not a model input. We use it only to summarise and label results, so it stays a separate table.
 
 ```{r data}
-m <- load_mammal()
-species <- species_status()
-sites <- site_covariates()
-dim(m$OTU)
+m <- load_mammal()             # a list holding info and OTU, plus the names of the covariates
+species <- species_status()    # one row per species: taxonomy and Red List status
+sites <- site_covariates()     # one row per site: its covariates and coordinates
+dim(m$OTU)                     # PCR replicates by species
 head(m$info[, c("Site", "Sample", "Human_modification_1km", "Filter_vol")])
 ```
 
 `m$OTU` has one row per PCR replicate (1,818 rows) and one column per species. A 1 means that PCR was positive for that species. In `m$info`, `Human_modification_1km` describes the site (how much people have changed the land within 1 km), and `Filter_vol` describes each field sample (how much water was filtered, which can change how much DNA was caught).
 
+To see the design, look at one site and six species. Each panel is one field sample, and each row in a panel is one PCR replicate.
+
+```{r design, fig.height = 4}
+show <- c("Cuon alpinus", "Sus scrofa", "Bos taurus", "Rattus tanezumi", "Nectogale elegans", "Dacnomys millardi")
+show_cols <- species$otu_id[match(show, species$species)]
+
+one_site <- tibble(Site = m$info$Site, Sample = m$info$Sample) |>
+  bind_cols(setNames(as_tibble(m$OTU[, show_cols]), show)) |>
+  filter(Site == "GLG13") |>
+  group_by(Sample) |>
+  mutate(PCR = row_number()) |>
+  ungroup() |>
+  pivot_longer(all_of(show), names_to = "species", values_to = "positive")
+
+ggplot(one_site, aes(species, factor(PCR), fill = factor(positive))) +
+  geom_tile(colour = "white") +
+  facet_wrap(~ Sample) +
+  scale_fill_manual(values = c(`0` = "grey90", `1` = "firebrick"), labels = c("negative", "positive"), name = NULL) +
+  labs(x = NULL, y = "PCR replicate", title = "Site GLG13: three field samples, six PCRs each") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, face = "italic"))
+```
+
+The dhole was positive in one PCR of the 18 at this site. Keep that in mind; we come back to it below.
+
 ## Summary 1: what was detected, by taxonomic order
 
 ```{r composition}
 composition <- species |>
-  count(order, name = "species") |>
-  arrange(desc(species))
+  count(order, family, name = "species")
 
-ggplot(composition, aes(x = reorder(order, species), y = species)) +
-  geom_col(fill = "grey40") +
-  coord_flip() +
-  labs(x = NULL, y = "Number of species detected", title = "Rodents dominate the mammal list") +
-  theme_minimal()
+ggplot(composition, aes(area = species, fill = order, subgroup = order)) +
+  geom_treemap(colour = "white") +
+  geom_treemap_subgroup_border(colour = "white", size = 4) +
+  geom_treemap_subgroup_text(place = "centre", colour = "white", grow = TRUE, alpha = 0.85) +
+  guides(fill = "none") +
+  labs(title = "Rodents dominate the mammal list")
+
+count(species, order, sort = TRUE)
 ```
 
-<!--# how about treemapify to show the taxonomic composition? -->
+Each box is a taxonomic order, its area set by the number of species detected. The small boxes inside are families.
 
 ## Summary 2: an ordination
 
 An ordination puts sites and species on a map where similar ones sit close together. We use `ecoCopula`, a model-based ordination, on site-by-species presence and absence. A species counts as present at a site if any of its 18 PCRs was positive. Species detected at fewer than 5 sites are dropped, because there is too little information to place them.
 
-```{r ordination}
-y <- site_presence(m)
-set.seed(2026)   # the ordination starts from random values, so fix them to get the same picture
-ord <- fit_ordination(y, min_sites = 5)
-c(kept = ord$n_kept, dropped = length(ord$dropped))
+First, turn the PCR rows into one row per site.
+
+```{r presence}
+presence <- rowsum(m$OTU, m$info$Site) > 0    # TRUE if any of a site's 18 PCRs was positive
+presence <- presence * 1                       # as 1 and 0: sites in rows, species in columns
+keep <- colSums(presence) >= 5                 # species detected at 5 or more sites
+y <- as.data.frame(presence[, keep])
+c(kept = sum(keep), dropped = sum(!keep))
 ```
 
+`stackedsdm()` fits a simple model to each species on its own, here with no covariates (`~ 1`). `cord()` then finds two latent variables, hidden axes that best explain which species turn up together at the same sites.
+
+```{r ordination}
+set.seed(2026)   # the ordination starts from random values. In this class, we use set.seed() so that all students will get the same output
+sdm <- stackedsdm(y, formula_X = ~ 1, data = data.frame(site = rownames(y)), family = "binomial", ncores = 1)
+ord <- cord(sdm, nlv = 2)
+
+site_scores <- tibble(Site = rownames(y), LV1 = ord$scores[, 1], LV2 = ord$scores[, 2]) |>
+  left_join(sites, by = "Site")
+species_scores <- tibble(otu_id = colnames(y), LV1 = ord$loadings[, 1], LV2 = ord$loadings[, 2]) |>
+  left_join(species, by = "otu_id")
+
+# Stretch the species arrows to the scale of the sites, so both show on one plot.
+k <- 0.9 * max(abs(c(site_scores$LV1, site_scores$LV2))) / max(abs(c(species_scores$LV1, species_scores$LV2)))
+```
+
+The biplot draws sites as filled circles and species as arrows, so each can carry its own colour.
+
 ```{r biplot-human, fig.height = 6.5}
-plot_biplot(ord, site_data = sites, site_var = "Human_modification_1km",
-            species_data = species, species_var = "order") +
-  labs(title = "Sites coloured by human modification, species arrows by order")
+ggplot() +
+  geom_point(data = site_scores, aes(LV1, LV2, fill = Human_modification_1km), shape = 21, colour = "white", size = 3) +
+  geom_segment(data = species_scores, aes(x = 0, y = 0, xend = LV1 * k, yend = LV2 * k, colour = order),
+               alpha = 0.8, arrow = arrow(length = unit(0.12, "cm"))) +
+  scale_fill_viridis_c(option = "C") +
+  coord_equal() +
+  labs(x = "Latent variable 1", y = "Latent variable 2", fill = "Human\nmodification", colour = "Order",
+       title = "Sites coloured by human modification, species arrows by order") +
+  theme_minimal()
 ```
 
 ```{r biplot-region, fig.height = 6.5}
-plot_biplot(ord, site_data = sites, site_var = "Regional_Division",
-            species_data = species, species_var = "local_status") +
-  labs(title = "Sites coloured by regional division, species arrows by wild or domestic")
+ggplot() +
+  geom_point(data = site_scores, aes(LV1, LV2, fill = Regional_Division), shape = 21, colour = "white", size = 3) +
+  geom_segment(data = species_scores, aes(x = 0, y = 0, xend = LV1 * k, yend = LV2 * k, colour = local_status),
+               alpha = 0.8, arrow = arrow(length = unit(0.12, "cm"))) +
+  coord_equal() +
+  labs(x = "Latent variable 1", y = "Latent variable 2", fill = "Region", colour = "Status",
+       title = "Sites coloured by regional division, species arrows by wild or domestic") +
+  theme_minimal()
 ```
 
 **Exercise.** Look at the two biplots. Which sites sit together? Which groups of species point the same way? Write down one thing you could tell a park manager from this figure.
@@ -97,11 +170,8 @@ plot_biplot(ord, site_data = sites, site_var = "Regional_Division",
 Colours can suggest a pattern that is not there, so check it. How much of the spread of species along each axis is explained by their taxonomic order?
 
 ```{r order-check}
-loadings <- ord$species_scores |> 
-  left_join(species[, c("otu_id", "order")], by = "otu_id")
-
 share <- function(axis) {
-  a <- anova(lm(reformulate("order", axis), data = loadings))
+  a <- anova(lm(reformulate("order", axis), data = species_scores))
   c(share_explained = round(a$`Sum Sq`[1] / sum(a$`Sum Sq`), 2), 
     p_value = round(a$`Pr(>F)`[1], 3))
 }
@@ -143,7 +213,7 @@ An occupancy model separates two things the raw data mix together. Whether the s
 
 ```{r naive-vs-model}
 fit <- read_fit_summary()
-n_sites_detected <- colSums(site_presence(m))
+n_sites_detected <- colSums(presence)
 naive <- tibble(otu_id = names(n_sites_detected), naive = as.numeric(n_sites_detected) / 101)
 model <- fit$occ |>
   group_by(otu_id) |>

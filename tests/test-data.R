@@ -45,3 +45,12 @@ test_that("dhole_input is the mammal data reduced to the dhole's column", {
   expect_true(file.exists(derived_path("dhole_input.rds")))
   expect_identical(readRDS(derived_path("dhole_input.rds")), d)
 })
+
+test_that("site_presence is a 0/1 site by species matrix named by site and species", {
+  m <- load_mammal()
+  y <- site_presence(m)
+  expect_equal(dim(y), c(101, 108))
+  expect_true(all(y %in% c(0L, 1L)))
+  expect_setequal(rownames(y), unique(m$info$Site))
+  expect_equal(colnames(y), colnames(m$OTU))
+})

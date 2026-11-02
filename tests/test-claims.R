@@ -2,7 +2,6 @@
 # If one of these fails, the sentence that quotes it needs rewriting, not just the test.
 source(testthat::test_path("..", "R", "data.R"))
 source(testthat::test_path("..", "R", "fit.R"))
-source(testthat::test_path("..", "R", "ordination.R"))
 source(testthat::test_path("..", "R", "scp.R"))
 .libPaths(c(file.path(workshop_root(), "Rlib"), .libPaths()))
 suppressPackageStartupMessages(library(dplyr))
@@ -28,9 +27,13 @@ test_that("Session 1: dhole detections and naive against model occupancy", {
 })
 
 test_that("Session 1: order explains about a fifth of axis 1, with borderline evidence", {
+  presence <- site_presence(m)                      # the same steps as the session's chunks
+  y <- as.data.frame(presence[, colSums(presence) >= 5])
   set.seed(2026)
-  ord <- fit_ordination(site_presence(m), min_sites = 5)
-  loadings <- left_join(ord$species_scores, status[, c("otu_id", "order")], by = "otu_id")
+  sdm <- ecoCopula::stackedsdm(y, formula_X = ~ 1, data = data.frame(site = rownames(y)), family = "binomial", ncores = 1)
+  ord <- ecoCopula::cord(sdm, nlv = 2)
+  loadings <- data.frame(otu_id = colnames(y), LV1 = ord$loadings[, 1]) |>
+    left_join(status[, c("otu_id", "order")], by = "otu_id")
   a <- anova(lm(LV1 ~ order, data = loadings))
   expect_equal(a$`Sum Sq`[1] / sum(a$`Sum Sq`), 0.2, tolerance = 0.05 / 0.2)
   expect_gt(a$`Pr(>F)`[1], 0.02)
