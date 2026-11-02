@@ -11,13 +11,11 @@ output:
 knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE, fig.width = 8, fig.height = 5.5)
 ```
 
-The first code chunk is only for the workshop. It points R at the workshop's package library and loads a small helper that reads the saved model results. You would not need it in a project of your own.
+The first code chunk is only for the workshop. It points R at the workshop's package library. You would not need it in a project of your own.
 
 ```{r workshop-setup}
 source("setup/pins.R")
 use_workshop_lib()              # use the packages installed for the workshop
-source("R/data.R")              # derived_path(), used by read_fit_summary()
-source("R/fit.R")               # read_fit_summary(): saved results of the model fitted to all mammals
 mcp_off <- Sys.getenv("WORKSHOP_NO_MCP") == "1"
 ```
 
@@ -452,51 +450,16 @@ The figure points to two kinds of error.
 
 In total, the raw map can be wrong in both directions. **A detection is not the same as a presence, and a non-detection (0, 0, 0) is not the same as an absence.**
 
-## What an occupancy model does
+## Next: an occupancy model
 
-An occupancy model deals with both errors by using all the sites together. It separates whether the species is at a site (occupancy) from whether the survey detects it when it is there, and it estimates the false-positive rate: the chance that a single PCR is positive for a species that is not at the site. Session 2 builds it for the dhole. Here we only look at what it gives, using a model already fitted to all the mammals.
-
-```{r naive-vs-model}
-fit <- read_fit_summary()
-n_sites_detected <- colSums(presence)
-naive <- tibble(otu_id = names(n_sites_detected), 
-                naive = as.numeric(n_sites_detected) / 101)
-
-model <- fit$occ |>
-  group_by(otu_id) |>
-  summarise(model = mean(cond_mean), .groups = "drop")
-
-compare <- species |>
-  left_join(naive, by = "otu_id") |>
-  left_join(model, by = "otu_id") |>
-  left_join(fit$params[, c("otu_id", "q_mean")], by = "otu_id")
-
-compare |>
-  filter(species %in% c("Sus scrofa", "Bos taurus", "Cuon alpinus")) |>
-  transmute(species, status = local_status,
-            `share of sites with a detection` = round(naive, 2),
-            `model: share of sites occupied` = round(model, 2),
-            `false-positive rate` = round(q_mean, 3))
-```
-
-```{r naive-model-plot}
-ggplot(compare, aes(naive, model, colour = q_mean)) +
-  geom_abline(slope = 1, intercept = 0, colour = "grey60") +
-  geom_point(size = 2.5, alpha = 0.85) +
-  scale_colour_viridis_c(name = "False-positive\nrate", option = "C") +
-  labs(x = "Share of sites with a detection", y = "Model: share of sites occupied",
-       title = "The model puts most species at fewer sites than they were detected at") +
-  theme_minimal() + coord_equal(xlim = c(0, 1), ylim = c(0, 1))
-```
-
-Species above the line gain sites. Species below it lose them. The pig and cattle are detected at almost every site, yet the model puts them at about half. Part of the reason is likely DNA washed into the rivers from farms. But most species fall below the line, including wild ones that no farm explains, such as the water shrew *Nectogale elegans* and the rat *Dacnomys millardi*. The model cannot say why a species has a high false-positive rate, only that its detections are more widespread than its occupancy appears to be. That is a conclusion of the model, not an observation, and Session 3 comes back to it. The dhole is detected at 41 of 101 sites, and the model says it is at far fewer.
+In Session 2 we fit an occupancy model to the dhole data. It uses all the sites together to estimate how often false negatives and false positives happen, and corrects for both, to give the probability that the dhole is really present at each site.
 
 ## What you take away
 
 - Composition charts and ordinations summarise what was detected, and can show interesting patterns. But they cannot tell you where a species is, they cannot separate presence from detection, and so we do not know how reliable their patterns are.
-- A model of occupancy and detection can say where a species is. Session 2 shows how sure it is.
+- Raw eDNA detections contain errors in both directions: false positives and false negatives. An occupancy model corrects for both.
 - Session 2 builds that model for the dhole and maps it. Session 4 turns the answer for all species into a conservation plan.
 
 ```{r mcp-note, echo = FALSE, results = "asis", eval = !mcp_off}
-cat("**Optional: ask the assistant.** In Posit Assistant, try: *Using the objects in my session, which three species have the biggest gap between naive and model occupancy?* The assistant helps you write R here. It does not use the occJSDM tools yet.\n")
+cat("**Optional: ask the assistant.** In Posit Assistant, try: *Using the objects in my session, make the same map and table for the takin, Budorcas taxicolor.* The assistant helps you write R here. It does not use the occJSDM tools yet.\n")
 ```

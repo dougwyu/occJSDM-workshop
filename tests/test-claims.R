@@ -11,18 +11,14 @@ f <- read_fit_summary()
 sites_detected <- colSums(site_presence(m))
 by_name <- function(x, sp) unname(x[status$otu_id[match(sp, status$species)]])
 
-test_that("Session 1: dhole detections and naive against model occupancy", {
+test_that("Session 1: the dhole figure supports the text", {
   expect_equal(by_name(sites_detected, "Cuon alpinus"), 41)
   dhole <- status$otu_id[status$species == "Cuon alpinus"]
+  per_sample <- tapply(m$OTU[, dhole], m$info$Sample, sum)
+  glg40 <- per_sample[unique(m$info$Sample[m$info$Site == "GLG40"])]
+  expect_equal(sort(unname(glg40)), c(0, 0, 4))      # "sample 3 had 4 of 6 ... samples 1 and 2 had none"
   pcr <- tapply(m$OTU[, dhole], m$info$Site, sum)
-  expect_gte(sum(pcr %in% 1:2), 15)                 # "many have only one or two positive PCRs"
-  model <- tapply(f$occ$cond_mean, f$occ$otu_id, mean)
-  for (sp in c("Sus scrofa", "Bos taurus")) {       # "detected at almost every site ... about half"
-    expect_gt(by_name(sites_detected, sp) / 101, 0.95)
-    expect_gt(by_name(model, sp), 0.4)
-    expect_lt(by_name(model, sp), 0.6)
-  }
-  expect_lt(by_name(model, "Cuon alpinus"), 0.25)   # "far fewer" than 41 of 101
+  expect_gte(sum(pcr == 1), 4)                       # the four arrowed sites have 1 positive PCR of 18
 })
 
 test_that("Session 1: taxonomic orders use current names", {
