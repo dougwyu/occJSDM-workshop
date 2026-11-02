@@ -19,14 +19,17 @@ library(ecoCopula)
 mcp_off <- Sys.getenv("WORKSHOP_NO_MCP") == "1"
 ```
 
-## The survey and the decision
+## The survey and the questions
 
-In 2023 a team sampled water at 101 river sites across the Gaoligongshan protected area complex in Yunnan and sequenced the eDNA for vertebrates (Ji et al. 2025, *Ecology Letters*). We use the mammals: 108 species.
+In 2023 a team sampled water at 101 river sites across the Gaoligongshan protected area complex in Yunnan and sequenced the eDNA for vertebrates (Ji et al. 2025, *Ecology Letters*). For this workshop, we use the mammals from the survey: 108 species.
 
 Two questions matter to a manager.
 
-- Where is a species? This matters for rare species we want to protect and for invasive ones we want to control.
+- Where are the species located? This matters for wild species that we want to protect and for invasive ones we want to control.
+
 - Where should we protect? Which sites hold the most conservation value for the cost?
+
+  <!--# can we add a third question:  why are the species located where they are? e.g. effects of protected areas and hmi -->
 
 Most eDNA papers stop at summaries of what was detected. This session builds those summaries first, because you will be asked for them. Then it shows why they cannot answer the two questions.
 
@@ -34,24 +37,27 @@ Most eDNA papers stop at summaries of what was detected. This session builds tho
 
 Each site was sampled three times (field samples), and each sample was amplified in six PCR replicates. So each site has 18 PCR results per species.
 
+<!--# students need to see the study design clearly, probably visually, and the students need to know very clearly the tables that they need to produce: info, OTU, traits. Does species taxonomy need to be a table separate from traits since we don't necessarily use taxonomy as traits? Also, commands in data are opaque. It needs to be explained that we are loading simulated dataset for teaching purposes.  -->
+
+<!--# I think what i would do is create two kinds of setup chunks. The first is stuff specific to this workshop (all the source() commands, for example) and the second is stuff that an occJSDM would normally run (the library() commands). -->
+
+<!--# then there's a chunk to display the input data so that the students can learn the study design -->
+
 ```{r data}
 m <- load_mammal()
 species <- species_status()
 sites <- site_covariates()
 dim(m$OTU)
-head(m$info[, c("Site", "Sample", "Primer", "Human_modification_1km", "Filter_vol")])
+head(m$info[, c("Site", "Sample", "Human_modification_1km", "Filter_vol")])
 ```
 
-`m$OTU` has one row per PCR replicate (1,818 rows) and one column per species. A 1 means that PCR was positive for that species.
+`m$OTU` has one row per PCR replicate (1,818 rows) and one column per species. A 1 means that PCR was positive for that species. In `m$info`, `Human_modification_1km` describes the site (how much people have changed the land within 1 km), and `Filter_vol` describes each field sample (how much water was filtered, which can change how much DNA was caught).
 
 ## Summary 1: what was detected, by taxonomic order
 
 ```{r composition}
-n_sites_detected <- colSums(site_presence(m))
 composition <- species |>
-  mutate(sites_detected = n_sites_detected[otu_id]) |>
-  group_by(order) |>
-  summarise(species = n(), detections = sum(sites_detected), .groups = "drop") |>
+  count(order, name = "species") |>
   arrange(desc(species))
 
 ggplot(composition, aes(x = reorder(order, species), y = species)) +
@@ -60,6 +66,8 @@ ggplot(composition, aes(x = reorder(order, species), y = species)) +
   labs(x = NULL, y = "Number of species detected", title = "Rodents dominate the mammal list") +
   theme_minimal()
 ```
+
+<!--# how about treemapify to show the taxonomic composition? -->
 
 ## Summary 2: an ordination
 
@@ -89,11 +97,15 @@ plot_biplot(ord, site_data = sites, site_var = "Regional_Division",
 Colours can suggest a pattern that is not there, so check it. How much of the spread of species along each axis is explained by their taxonomic order?
 
 ```{r order-check}
-loadings <- ord$species_scores |> left_join(species[, c("otu_id", "order")], by = "otu_id")
+loadings <- ord$species_scores |> 
+  left_join(species[, c("otu_id", "order")], by = "otu_id")
+
 share <- function(axis) {
   a <- anova(lm(reformulate("order", axis), data = loadings))
-  c(share_explained = round(a$`Sum Sq`[1] / sum(a$`Sum Sq`), 2), p_value = round(a$`Pr(>F)`[1], 3))
+  c(share_explained = round(a$`Sum Sq`[1] / sum(a$`Sum Sq`), 2), 
+    p_value = round(a$`Pr(>F)`[1], 3))
 }
+
 rbind(LV1 = share("LV1"), LV2 = share("LV2"))
 ```
 
@@ -112,7 +124,7 @@ ggplot(dhole_sites, aes(Xs.1, Xs.2, colour = positive_pcrs > 0, size = positive_
   geom_point(alpha = 0.8) +
   scale_colour_manual(values = c(`TRUE` = "firebrick", `FALSE` = "grey70"), name = "Any positive PCR") +
   scale_size_continuous(range = c(1.5, 7), name = "Positive PCRs (of 18)") +
-  coord_equal() +
+  coord_quickmap() +
   labs(x = "Longitude", y = "Latitude", title = "Raw dhole detections") +
   theme_minimal()
 ```
@@ -127,10 +139,11 @@ Of the sites with a detection, many have only one or two positive PCRs out of 18
 
 ## Detection is not presence
 
-An occupancy model separates two things the raw data mix together. Whether the species is at the site (occupancy), and whether the survey would detect it if it were there. It also allows for false positives. Session 2 builds it. Here we only compare the answer with the raw count, using a model already fitted to the mammal data.
+An occupancy model separates two things the raw data mix together. Whether the species is at the site (occupancy), and whether the survey would detect it if it were there. It also allows for false positives: the false-positive rate below is the chance that a single PCR is positive for a species that is not at the site. Session 2 builds it. Here we only compare the answer with the raw count, using a model already fitted to the mammal data.
 
 ```{r naive-vs-model}
 fit <- read_fit_summary()
+n_sites_detected <- colSums(site_presence(m))
 naive <- tibble(otu_id = names(n_sites_detected), naive = as.numeric(n_sites_detected) / 101)
 model <- fit$occ |>
   group_by(otu_id) |>
@@ -154,16 +167,16 @@ ggplot(compare, aes(naive, model, colour = q_mean)) +
   geom_point(size = 2.5, alpha = 0.85) +
   scale_colour_viridis_c(name = "False-positive\nrate", option = "C") +
   labs(x = "Share of sites with a detection", y = "Model: share of sites occupied",
-       title = "The model says many detections are not presence") +
+       title = "The model puts most species at fewer sites than they were detected at") +
   theme_minimal() + coord_equal(xlim = c(0, 1), ylim = c(0, 1))
 ```
 
-Species above the line gain sites. Species below it lose them. The pig and cattle are detected at almost every site, yet the model puts them at about half. Part of the reason is likely DNA washed into the rivers from farms. The dhole is detected at 41 of 101 sites, and the model says it is at far fewer.
+Species above the line gain sites. Species below it lose them. The pig and cattle are detected at almost every site, yet the model puts them at about half. Part of the reason is likely DNA washed into the rivers from farms. But most species fall below the line, including wild ones that no farm explains, such as the water shrew *Nectogale elegans* and the rat *Dacnomys millardi*. The model cannot say why a species has a high false-positive rate, only that its detections are more widespread than its occupancy appears to be. That is a conclusion of the model, not an observation, and Session 3 comes back to it. The dhole is detected at 41 of 101 sites, and the model says it is at far fewer.
 
 ## What you take away
 
 - Composition charts and ordinations summarise what was detected. They cannot tell you where a species is, and they cannot separate presence from detection.
-- A model of occupancy and detection can say where a species is, and how sure we are.
+- A model of occupancy and detection can say where a species is. Session 2 shows how sure it is.
 - Session 2 builds that model for the dhole and maps it. Session 4 turns the answer for all species into a conservation plan.
 
 ```{r mcp-note, echo = FALSE, results = "asis", eval = !mcp_off}
