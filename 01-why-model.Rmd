@@ -178,7 +178,7 @@ How to read a biplot:
 - A species' arrow points toward the sites where it was detected more often. Sites far out in the direction of an arrow are where that species usually turned up; sites on the opposite side are where it rarely did.
 - Two species whose arrows point the same way tend to be detected at the same sites. Arrows pointing in opposite directions belong to species that seldom turn up together.
 - A long arrow means the species' detections follow the pattern in the plot closely. A short arrow, near the centre, means the ordination has little to say about that species.
-- The axes have no units and no meaning of their own. We give them meaning by colouring the sites by a covariate and seeing where the colours fall.
+- The axes have no units and no meaning of their own. We give them meaning by colouring the sites by a covariate and seeing where the colours fall. Unlike a PCA, the first axis is not more important than the second, and a pattern that runs diagonally across the plot is just as real as one along an axis.
 
 ### Which species go with human modification?
 
@@ -270,7 +270,6 @@ The next chunk prepares the second biplot, in the same way as the first.
 
 - It puts each species in one of three Red List groups (`red_list`), as described above.
 - It makes the dashed arrow for the reserve. `inside` is `TRUE` for sites whose stream rises inside the reserve, and the arrow's coordinates are the correlations of `inside` with each latent variable. R treats `TRUE` as 1 and `FALSE` as 0, so this works just as it did for human modification.
-- It gives every species a score, `toward_reserve`, with the same ruler method as before: high for species whose arrows point toward the reserve sites.
 - It keeps the threatened species in their own table (`threatened`), so that we can label them.
 
 ```{r reserve-direction}
@@ -284,9 +283,6 @@ species_scores <- species_scores |>
 inside <- site_scores$streamOrigin == "insideGLGS"
 reserve <- c(LV1 = cor(inside, site_scores$LV1), 
              LV2 = cor(inside, site_scores$LV2))
-
-species_scores <- species_scores |>
-  mutate(toward_reserve = (LV1 * reserve["LV1"] + LV2 * reserve["LV2"]) / sqrt(sum(reserve^2)))
 
 threatened <- species_scores |> filter(red_list == "threatened (VU, EN, CR)")
 ```
@@ -332,128 +328,153 @@ ggplot() +
   theme_minimal()
 ```
 
-Most threatened species, including the dhole (*Cuon alpinus*), point up, toward the reserve sites. But so do many common species, so we compare the groups, and also ask whether large species point toward the reserve more than small ones.
-
-```{r reserve-check}
-species_scores |>
-  group_by(red_list) |>
-  summarise(species = n(), mean_toward_reserve = round(mean(toward_reserve), 2))
-
-round(cor(species_scores$toward_reserve, log10(species_scores$body_mass)), 2)   # body mass, on a log scale
-```
-
-Threatened species point toward the reserve sites only slightly more than common ones on average, and body size is unrelated to it (the correlation is small and slightly negative). Notice too that the reserve arrow points almost opposite to the human-modification arrow: sites inside the reserve are also the less modified sites. So even where a species does point toward the reserve, this figure cannot say whether it is responding to protection or simply to less disturbance. Separating the two needs a model that includes both covariates, which is what occJSDM does.
+Most threatened species, including the dhole (*Cuon alpinus*), point up, toward the reserve sites. **But so do many common species.**
 
 **Exercise.** Look at the two biplots. Which sites sit together? Which groups of species point the same way? Write down one thing you could tell a park manager from these figures, and one thing you could not.
 
-Colours can suggest a pattern that is not there, so check it. How much of the spread of species along each axis is explained by their taxonomic order?
+### What the ordination shows, and why we cannot trust it yet
 
-```{r order-check}
-share <- function(axis) {
-  a <- anova(lm(reformulate("order", axis), data = species_scores))
-  c(share_explained = round(a$`Sum Sq`[1] / sum(a$`Sum Sq`), 2), 
-    p_value = round(a$`Pr(>F)`[1], 3))
-}
+Patterns we can see:
 
-rbind(LV1 = share("LV1"), LV2 = share("LV2"))
-```
+- The clearest pattern runs from the top to the bottom of the plot. At the top are the Northwest and the less modified, more forested sites, most of them with streams rising inside the reserve. At the bottom are the more modified sites of the Southwest, most of them outside it.
+- Species sort along that pattern. Shrews, the takin, the muntjac and the pika of little-disturbed forest point up. Livestock, the rats that live with people and the palm civet point down.
 
-Order explains about a fifth of the spread along the first axis, and the evidence for even that is borderline (p close to 0.05). Along the second axis it explains less, with no real evidence at all. Rodents fan out in many directions. The ordination describes how detections co-occur at these sites. It does not recover the taxonomy, and it still cannot say where a species is.
+Why we do not know how reliable these patterns are:
 
-### What the ordination tells us, and what it does not
+- The plot is built from raw detections: a species counts as present at a site if any one of its 18 PCRs was positive. Every arrow therefore includes false positives (detections where the species is absent) and false negatives (missed detections where it is present). The next section shows how common those errors can be.
+- Many site features change together from the top of the plot to the bottom: latitude, temperature, forest cover, human modification, region and the reserve. So we cannot tell which of them the species are responding to.
 
-What it shows clearly:
-
-- The strongest pattern runs from top to bottom of the plot (latent variable 2). At the top are the Northwest and the less modified, more forested sites, most of them with streams rising inside the reserve. At the bottom are the more modified sites of the Southwest, most of them outside it.
-- Species sort along that gradient. Shrews, the takin, the muntjac and the pika of little-disturbed forest point up. Livestock, the rats that live with people and the palm civet point down.
-
-What it leaves ambiguous:
-
-- Several covariates change together along the same gradient: latitude, temperature, forest cover, human modification, region and the reserve. Most Southwest sites are outside the reserve, and most Northwest sites are inside it. The ordination cannot say which of these the species respond to, because it never looks at the covariates. We only laid them over the plot afterwards.
-- Latent variable 1 has no clear meaning. It follows temperature and latitude to some extent, with the cold Northwest sites on the left, but nothing we measured explains most of it.
-- Threatened species do not stand out from common ones, and taxonomic order explains little of where species sit.
-- The plot is built from raw detections: a species counts as present at a site if any one of its 18 PCRs was positive. False positives and false negatives are built into every arrow. The next section shows how large those errors can be.
-
+So treat these patterns as ideas to test, not as results. Session 3 tests them with a model that allows for both kinds of error.
 
 ## A single species: Where is the dhole?
 
-The dhole (*Cuon alpinus*) is an Endangered wild dog. Here is where it was detected.
+The dhole (*Cuon alpinus*) is an Endangered wild dog. Neither the composition chart nor the ordination can say where it is. Its raw detections look as if they might.
 
-```{r dhole-map}
-dhole <- species$otu_id[species$species == "Cuon alpinus"]
-dhole_pcr <- tapply(OTU[, dhole], info$Site, sum)
-dhole_sites <- sites |> mutate(positive_pcrs = as.numeric(dhole_pcr[Site]))
-
-ggplot(dhole_sites, 
-       aes(Xs.1, Xs.2, colour = positive_pcrs > 0, size = positive_pcrs)) +
-  geom_point(alpha = 0.8) +
-  scale_colour_manual(values = c(`TRUE` = "firebrick", `FALSE` = "grey70"), 
-                      name = "Any positive PCR") +
-  scale_size_continuous(range = c(1.5, 7), 
-                        name = "Positive PCRs (of 18)") +
-  coord_quickmap() +
-  labs(x = "Longitude", y = "Latitude", title = "Raw dhole detections") +
-  theme_minimal()
-```
-
-Neither the composition chart nor the ordination can say where the dhole is. The map above looks like an answer, but it treats a site with one positive PCR out of 18 the same as a site with 18 out of 18, and every grey point as an absence.
-
-To see what lies behind each point, we lay out the detections the way they were collected, as in Figure 1 of Ji et al. ([2025](https://doi.org/10.1111/ele.70302){.uri}). There is one column for each site where the dhole was detected, one row for each of the site's three field samples, and in each cell the number of that sample's six PCRs that were positive.
+To see what lies behind each detection, we lay out the data the way they were collected, as in Figure 1 of Ji et al. ([2025](https://doi.org/10.1111/ele.70302){.uri}). First we count the positive PCRs in each field sample (out of 6), and then in each site (out of 18).
 
 ```{r dhole-samples}
+dhole <- species$otu_id[species$species == "Cuon alpinus"]
+
 dhole_samples <- info |>
   mutate(positive = OTU[, dhole]) |>
   group_by(Site, Sample) |>
   summarise(positive = sum(positive), .groups = "drop") |>   # positive PCRs, out of 6, per field sample
   group_by(Site) |>
-  mutate(sample = paste("Sample", row_number()),             # 1 to 3 within each site
+  mutate(sample = row_number(),                              # 1 to 3 within each site
          site_total = sum(positive)) |>                      # positive PCRs, out of 18, per site
-  ungroup() |>
-  filter(site_total > 0)                                     # only sites where the dhole was detected
+  ungroup()
+
+dhole_sites <- dhole_samples |>
+  distinct(Site, site_total) |>                              # one row per site
+  left_join(sites |> select(Site, Xs.1, Xs.2), by = "Site")
 ```
 
-```{r dhole-grid, fig.width = 10, fig.height = 3.5}
-dhole_samples |>
-  mutate(Site = fct_reorder(Site, site_total, .desc = TRUE)) |>   # most positive PCRs on the left
-  ggplot(aes(Site, fct_rev(sample), fill = positive)) +
-  geom_tile(colour = "white", linewidth = 0.8) +
-  geom_text(aes(label = positive, colour = positive > 3), size = 3) +
-  scale_fill_gradient(low = "grey92", high = "firebrick", 
-                      limits = c(0, 6), breaks = 0:6, 
-                      name = "Positive PCRs\n(of 6)") +
+The figure puts a map and a table in one picture, with north at the top.
+
+- The map on the left shows every site. Empty circles are sites with no positive PCR. Filled circles are sites with at least one, shaded from pale (1 of 18) to dark red (18 of 18).
+- The table on the right has one row for each site where the dhole was detected, ordered from north to south, and one column for each of its three field samples. Each cell is the number of that sample's six PCRs that were positive, shaded by the share that were positive, on the same scale as the map.
+- The blue arrows join four rows of the table to their sites on the map. Each of these sites has a single positive PCR out of 18: they are possible false positives.
+
+To draw the table on the same plot as the map, we give each cell a position in map units: the three sample columns sit just east of the map, and the rows are spread evenly from the northernmost site to the southernmost.
+
+```{r dhole-figure, fig.width = 8, fig.height = 10}
+# Rows of the table: detecting sites from north to south, spread over the map's latitudes
+rows <- dhole_sites |>
+  filter(site_total > 0) |>
+  arrange(desc(Xs.2)) |>
+  mutate(row_y = seq(max(dhole_sites$Xs.2), 
+                     min(dhole_sites$Xs.2), length.out = n()))
+
+row_gap <- abs(rows$row_y[2] - rows$row_y[1])     # distance between rows
+
+col_x <- c(99.4, 99.65, 99.9)     # positions of the three sample columns
+
+cells <- dhole_samples |>
+  inner_join(rows |> select(Site, row_y), by = "Site") |>
+  mutate(cell_x = col_x[sample],
+         share = if_else(positive == 0, NA, positive / 6))   # 0 positive: a white cell
+
+# Four possible false positives: the southernmost sites with 1 positive PCR out of 18
+flagged <- rows |>
+  filter(site_total == 1) |>
+  slice_min(Xs.2, n = 4)
+
+ggplot() +
+  # the map
+  geom_point(data = filter(dhole_sites, site_total == 0), # no detection: empty circle
+             aes(Xs.1, Xs.2), 
+             shape = 21, size = 2.5, colour = "grey55", fill = NA) +
+  geom_point(data = filter(dhole_sites, site_total > 0),              # detection: shaded by strength
+             aes(Xs.1, Xs.2, fill = site_total / 18), 
+             shape = 21, size = 3.5, colour = "grey25", stroke = 0.3) +
+  # the table
+  geom_tile(data = cells, 
+            aes(cell_x, row_y, fill = share), 
+            width = 0.24, height = row_gap * 0.92, colour = "grey80", linewidth = 0.3) +
+  geom_text(data = cells, 
+            aes(cell_x, row_y, label = positive, colour = !is.na(share) & share > 0.5), 
+            size = 2.4) +
+  annotate("text", x = col_x, y = max(rows$row_y) + row_gap * 1.3, 
+           label = 1:3, size = 2.6) +                                 # column headings
+  annotate("text", x = col_x[2], y = max(rows$row_y) + row_gap * 2.5, 
+           label = "Field sample", size = 2.8) +
+  geom_text(data = rows, 
+            aes(max(col_x) + 0.16, row_y, label = Site), 
+            hjust = 0, size = 2.3) +
+  # arrows from the table to the map
+  geom_curve(data = flagged, 
+             aes(x = min(col_x) - 0.13, y = row_y, xend = Xs.1 + 0.03, yend = Xs.2), 
+             colour = "steelblue", linewidth = 0.5, curvature = 0.2, 
+             arrow = arrow(length = unit(0.15, "cm"))) +
+  scale_fill_gradient(low = "#fee0d2", high = "#67000d",           # pale to dark red
+                      limits = c(0, 1), na.value = "white",
+                      name = "Share of PCRs positive") +
   scale_colour_manual(values = c(`TRUE` = "white", `FALSE` = "grey20"), guide = "none") +
-  labs(x = NULL, y = NULL, 
-       title = "Every site where the dhole was detected, one column per site") +
+  scale_x_continuous(breaks = c(97.5, 98, 98.5)) +                 # longitude ticks under the map only
+  coord_quickmap(clip = "off") +
+  labs(x = "Longitude", y = "Latitude", 
+       title = "Dhole detections, and positive PCRs in each field sample (of 6)") +
   theme_minimal() +
-  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1, size = 7), 
-        panel.grid = element_blank(), 
-        legend.position = "bottom")
+  theme(panel.grid.minor = element_blank(), legend.position = "bottom")
 ```
 
-The sites on the left are the clearest: the dhole's DNA turned up in almost every PCR. Moving right, the signal fades until, at the far right, a whole site rests on a single positive PCR. Two kinds of error are hidden in this table.
+A few sites are dark all the way across: the dhole's DNA was detected in almost every PCR of every sample (e.g. GLG28). Many more are pale, resting on one or two positive PCRs out of 18.
+
+Two kinds of error are present in this figure.
 
 ```{r dhole-errors}
-n_detecting <- n_distinct(dhole_samples$Site)                       # sites with any positive PCR
-n_samples <- nrow(dhole_samples)                                    # their field samples
-n_empty <- sum(dhole_samples$positive == 0)                         # samples with no positive PCR
-n_weak <- n_distinct(dhole_samples$Site[dhole_samples$site_total <= 2])   # sites with 1 or 2 of 18
+# only sites with a detection
+(detected <- filter(dhole_samples, site_total > 0))   
+
+# sites with any positive PCR
+(n_detecting <- n_distinct(detected$Site))         
+
+# their field samples
+(n_samples <- nrow(detected))                    
+
+# samples with no positive PCR
+(n_empty <- sum(detected$positive == 0))           
+
+# sites with 1 or 2 of 18
+(n_weak <- n_distinct(detected$Site[detected$site_total <= 2]))   
 
 # A site where one sample is strongly positive and another is empty
-example <- dhole_samples |>
+example <- detected |>
   group_by(Site) |>
   filter(min(positive) == 0) |>
   ungroup() |>
   slice_max(positive, n = 1, with_ties = FALSE)
 
 c(detecting_sites = n_detecting, samples = n_samples, empty_samples = n_empty, weak_sites = n_weak)
+
 example
 ```
 
-**False negatives are certain.** At site `r example$Site`, one field sample had `r example$positive` positive PCRs out of 6, so the dhole's DNA was in the water there. Yet at least one other sample, taken at the same place, had none. Across the `r n_detecting` sites with a detection, `r n_empty` of their `r n_samples` field samples had no positive PCR at all, and inside the positive samples most PCRs were negative too. If one sample can miss the dhole at a site where it is present, then sometimes all three will. So among the `r 101 - n_detecting` sites with no detection, there are probably some where the dhole was present and all 18 PCRs missed it. We cannot see those false negatives in the data. We can only infer that they exist.
+**False negatives are certain.** At site `r example$Site`, one field sample had `r example$positive` positive PCRs out of 6, so the dhole's DNA was in the water there. Yet at least one other sample, taken at the same place, had none. Across the `r n_detecting` sites with a detection, `r n_empty` of their `r n_samples` field samples had no positive PCR at all, and inside the positive samples most PCRs were negative too. If one sample can miss the dhole at a site where it is present, then sometimes all three will. So among the `r 101 - n_detecting` sites with no detection, there are probably some where the dhole was present and all 18 PCRs missed it. These are some of the empty circles in the map, but we do not know which ones (yet).
 
-**False positives are possible.** `r n_weak` of the `r n_detecting` sites rest on only one or two positive PCRs out of 18. A signal that weak could be a little real DNA, or DNA that reached the sample by another route: contamination in the field or the lab, or a sequencing read assigned to the wrong sample. Looking at one site alone, we cannot tell which. Ji et al. (2025, Figure 1) show the same pattern for the takin (*Budorcas taxicolor*): a handful of weak detections in the south of the study area, where the takin is known not to live.
+**False positives are possible.** `r n_weak` of the `r n_detecting` sites rest on only one or two positive PCRs out of 18. A signal that weak could be a little real DNA, or DNA that reached the sample by another route: contamination in the field or the lab, or a sequencing read assigned to the wrong sample. Looking at one site alone, we cannot tell which. Ji et al. (2025, Figure 1) found the same pattern for the takin (*Budorcas taxicolor*): a few weak detections in the south of the study area, where the takin is known not to live.
 
-So the raw map is wrong in both directions. Some grey points should probably be red, and some red points may be wrong. Neither error can be fixed by staring harder at one site. What fixes them is to use all the sites together. The strong sites on the left tell us how often a PCR detects dhole DNA when it is there, and the scattered weak positives tell us how often a PCR is positive when it is not. With those two rates, each site's pattern of 18 PCRs can be weighed: is three samples with a single positive between them more likely to come from a dhole that is there and hard to detect, or from a dhole that is absent and a stray positive? **A detection is not the same as a presence, and a non-detection is not the same as an absence.**
+So the raw map is wrong in both directions. Some empty circles should probably be filled, and some pale circles may be wrong. Neither error can be fixed by staring harder at one site. What fixes them is to use all the sites together. The dark sites tell us how often a PCR detects dhole DNA when it is there, and the scattered weak positives tell us how often a PCR is positive when it is not. With those two rates, each site's pattern of 18 PCRs can be weighed: is three samples with a single positive between them more likely to come from a dhole that is there and hard to detect, or from a dhole that is absent and a stray positive? **A detection is not the same as a presence, and a non-detection is not the same as an absence.**
 
 ## What an occupancy model does
 
@@ -496,7 +517,7 @@ Species above the line gain sites. Species below it lose them. The pig and cattl
 
 ## What you take away
 
-- Composition charts and ordinations summarise what was detected. They cannot tell you where a species is, and they cannot separate presence from detection.
+- Composition charts and ordinations summarise what was detected, and can show interesting patterns. But they cannot tell you where a species is, they cannot separate presence from detection, and so we do not know how reliable their patterns are.
 - A model of occupancy and detection can say where a species is. Session 2 shows how sure it is.
 - Session 2 builds that model for the dhole and maps it. Session 4 turns the answer for all species into a conservation plan.
 

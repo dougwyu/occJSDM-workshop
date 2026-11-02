@@ -25,18 +25,7 @@ test_that("Session 1: dhole detections and naive against model occupancy", {
   expect_lt(by_name(model, "Cuon alpinus"), 0.25)   # "far fewer" than 41 of 101
 })
 
-test_that("Session 1: order explains about a fifth of axis 1, with borderline evidence", {
-  presence <- site_presence(m)                      # the same steps as the session's chunks
-  y <- as.data.frame(presence[, colSums(presence) >= 5])
-  set.seed(2026)
-  sdm <- ecoCopula::stackedsdm(y, formula_X = ~ 1, data = data.frame(site = rownames(y)), family = "binomial", ncores = 1)
-  ord <- ecoCopula::cord(sdm, nlv = 2)
-  loadings <- data.frame(otu_id = colnames(y), LV1 = ord$loadings[, 1]) |>
-    left_join(status[, c("otu_id", "order")], by = "otu_id")
-  a <- anova(lm(LV1 ~ order, data = loadings))
-  expect_equal(a$`Sum Sq`[1] / sum(a$`Sum Sq`), 0.2, tolerance = 0.05 / 0.2)
-  expect_gt(a$`Pr(>F)`[1], 0.02)
-  expect_lt(a$`Pr(>F)`[1], 0.1)
+test_that("Session 1: taxonomic orders use current names", {
   expect_false("Soricomorpha" %in% status$order)
 })
 
