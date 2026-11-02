@@ -16,7 +16,6 @@ As before, the first code chunk is only for the workshop, and the second loads t
 ```{r workshop-setup}
 source("setup/pins.R")
 use_workshop_lib()                  # use the packages installed for the workshop
-source("R/data.R")                  # species_status(), site_covariates(), derived_path()
 mcp_off <- Sys.getenv("WORKSHOP_NO_MCP") == "1"
 ```
 
@@ -39,9 +38,13 @@ Systematic conservation planning answers that with three ingredients.
 The plan is the set of sites that comes closest to meeting every target within the budget. Technically, it minimises the weighted shortfall. We use the `prioritizr` package. Our planning units are the 101 surveyed sites, because that is where we have data.
 
 ```{r inputs}
-occ <- read.csv(derived_path("occupancy_long.csv"))
-status <- species_status()
-sites <- site_covariates()
+occ <- read.csv("data-derived/occupancy_long.csv")
+status <- read.csv("data-derived/species.csv")
+info <- read.csv("data-derived/info.csv")
+sites <- info |>
+  distinct(Site, .keep_all = TRUE) |>                  # one row per site, as in Session 1
+  select(-Sample, -Primer, -Filter_vol, -PrevDayRain) |>
+  arrange(Site)
 occ_in <- occ[, c("Site", "species", "cond_mean")]
 cost_equal <- tibble(Site = sites$Site, cost = 1)
 cost_human <- tibble(Site = sites$Site, cost = sites$Human_modification_1km)

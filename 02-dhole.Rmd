@@ -16,7 +16,7 @@ As in Session 1, the first code chunk is only for the workshop, and the second l
 ```{r workshop-setup}
 source("setup/pins.R")
 use_workshop_lib()                  # use the packages installed for the workshop
-source("R/data.R")                  # load_mammal(), site_covariates(), derived_path()
+source("R/data.R")                  # derived_path(), used by read_fit_summary()
 source("R/fit.R")                   # read_fit_summary(): saved results of the model fitted to all mammals
 mcp_off <- Sys.getenv("WORKSHOP_NO_MCP") == "1"
 live_fit <- Sys.getenv("WORKSHOP_LIVE_FIT", unset = "1") != "0"
@@ -38,9 +38,10 @@ A two-stage eDNA model needs to know the survey's structure: PCR replicates sit 
 We keep all of `info` and only the dhole's column of `OTU`.
 
 ```{r layout}
-m <- load_mammal()
-dhole_col <- grep("Cuon_alpinus", colnames(m$OTU), value = TRUE)   # the dhole's column name in OTU
-d <- list(info = m$info, OTU = m$OTU[, dhole_col, drop = FALSE])    # drop = FALSE keeps OTU a matrix
+info <- read.csv("data-derived/info.csv")
+OTU <- as.matrix(read.csv("data-derived/OTU.csv"))
+dhole_col <- grep("Cuon_alpinus", colnames(OTU), value = TRUE)   # the dhole's column name in OTU
+d <- list(info = info, OTU = OTU[, dhole_col, drop = FALSE])      # drop = FALSE keeps OTU a matrix
 head(d$info[, c("Site", "Sample", "annual_precipitation", "Filter_vol")], 8)
 dim(d$OTU)
 ```
@@ -86,7 +87,7 @@ if (live_fit) {
     NULL
   })
 }
-if (is.null(fit)) fit <- readRDS(derived_path("dhole_fit.rds"))
+if (is.null(fit)) fit <- readRDS("data-derived/dhole_fit.rds")
 ```
 
 ## Can we trust the computation?
@@ -137,7 +138,10 @@ The convergence table above flagged the detection rates themselves: their R-hat 
 
 ```{r probability}
 cond <- computeConditionalOccupancyProbs(fit)
-sites <- site_covariates()
+sites <- info |>
+  distinct(Site, .keep_all = TRUE) |>                  # one row per site, as in Session 1
+  select(-Sample, -Primer, -Filter_vol, -PrevDayRain) |>
+  arrange(Site)
 map_data <- sites |> mutate(probability = as.numeric(cond[Site, 1]))
 
 ggplot(map_data, aes(Xs.1, Xs.2, colour = probability)) +

@@ -54,3 +54,16 @@ test_that("site_presence is a 0/1 site by species matrix named by site and speci
   expect_setequal(rownames(y), unique(m$info$Site))
   expect_equal(colnames(y), colnames(m$OTU))
 })
+
+test_that("the CSV files the sessions read hold exactly the prepared data", {
+  m <- load_mammal()
+  info <- read.csv(derived_path("info.csv"))
+  OTU <- as.matrix(read.csv(derived_path("OTU.csv")))
+  expect_equal(info, m$info, ignore_attr = TRUE)
+  expect_type(info$Primer, "character")
+  expect_identical(OTU, m$OTU)
+  expect_equal(read.csv(derived_path("species.csv")), as.data.frame(species_status()), ignore_attr = TRUE)
+  d <- list(info = info, OTU = OTU[, grep("Cuon_alpinus", colnames(OTU), value = TRUE), drop = FALSE])
+  # Session 2's input matches the MCP's file (read.csv makes whole-number columns integer; values agree)
+  expect_equal(d, readRDS(derived_path("dhole_input.rds")), ignore_attr = TRUE)
+})

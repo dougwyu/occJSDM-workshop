@@ -16,7 +16,7 @@ As before, the first code chunk is only for the workshop, and the second loads t
 ```{r workshop-setup}
 source("setup/pins.R")
 use_workshop_lib()                  # use the packages installed for the workshop
-source("R/data.R")                  # load_mammal(), species_status(), site_covariates()
+source("R/data.R")                  # derived_path(), used by read_fit_summary()
 source("R/fit.R")                   # read_fit_summary(): saved results of the model fitted to all mammals
 mcp_off <- Sys.getenv("WORKSHOP_NO_MCP") == "1"
 ```
@@ -33,10 +33,14 @@ Fitting this model for 108 mammals takes several minutes on a fast laptop, so we
 
 ```{r load}
 fit <- read_fit_summary()      # a list of tables: occ, params, diagnostics and assoc
-status <- species_status()
-sites <- site_covariates()
-m <- load_mammal()
-presence <- (rowsum(m$OTU, m$info$Site) > 0) * 1   # as in Session 1: 1 if any PCR at the site was positive
+status <- read.csv("data-derived/species.csv")
+info <- read.csv("data-derived/info.csv")
+OTU <- as.matrix(read.csv("data-derived/OTU.csv"))
+sites <- info |>
+  distinct(Site, .keep_all = TRUE) |>                  # one row per site, as in Session 1
+  select(-Sample, -Primer, -Filter_vol, -PrevDayRain) |>
+  arrange(Site)
+presence <- (rowsum(OTU, info$Site) > 0) * 1   # as in Session 1: 1 if any PCR at the site was positive
 sites_detected <- colSums(presence)
 ```
 

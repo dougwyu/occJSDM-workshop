@@ -10,6 +10,13 @@ suppressPackageStartupMessages(library(occJSDM))
 d <- dhole_input()
 saveRDS(d, "data-derived/dhole_input.rds")
 
+# The model inputs and the species table as plain CSV files, the form a user's own data would
+# take. The sessions read these.
+m <- load_mammal()
+utils::write.csv(m$info, "data-derived/info.csv", row.names = FALSE)
+utils::write.csv(m$OTU, "data-derived/OTU.csv", row.names = FALSE)
+utils::write.csv(species_status(), "data-derived/species.csv", row.names = FALSE)
+
 # One row per site and species, for Session 4.
 utils::write.csv(occupancy_long(), "data-derived/occupancy_long.csv", row.names = FALSE)
 
