@@ -440,7 +440,7 @@ A few sites are dark all the way across: the dhole's DNA was detected in almost 
 
 The figure points to two kinds of error.
 
-**There are probably false negatives.** Look at GLG40 in the table. Field sample 3 had 4 positive PCRs out of 6, so the dhole's DNA was in the water there. But samples 1 and 2, taken at the same place, had none. If one sample can miss the dhole, then sometimes all three will.
+**There are probably false negatives.** Look at GLG39 in the table. Field samples 2 and 3 had 2 and 3 positive PCRs out of 6, so the dhole's DNA was in the water there. But sample 1, taken at the same place, had none. If one sample can miss the dhole, then sometimes all three will.
 
 > Thus, we think that some of the empty circles on the map are **false negatives**: sites where the dhole was present and we missed it in all 3 samples: (0, 0, 0).
 

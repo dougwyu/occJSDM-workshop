@@ -15,14 +15,34 @@ test_that("Session 1: the dhole figure supports the text", {
   expect_equal(by_name(sites_detected, "Cuon alpinus"), 41)
   dhole <- status$otu_id[status$species == "Cuon alpinus"]
   per_sample <- tapply(m$OTU[, dhole], m$info$Sample, sum)
-  glg40 <- per_sample[unique(m$info$Sample[m$info$Site == "GLG40"])]
-  expect_equal(sort(unname(glg40)), c(0, 0, 4))      # "sample 3 had 4 of 6 ... samples 1 and 2 had none"
+  glg39 <- per_sample[sort(unique(m$info$Sample[m$info$Site == "GLG39"]))]
+  expect_equal(as.vector(glg39), c(0, 2, 3))            # "samples 2 and 3 had 2 and 3 ... sample 1 had none"
   pcr <- tapply(m$OTU[, dhole], m$info$Site, sum)
   expect_gte(sum(pcr == 1), 4)                       # the four arrowed sites have 1 positive PCR of 18
 })
 
 test_that("Session 1: taxonomic orders use current names", {
   expect_false("Soricomorpha" %in% status$order)
+})
+
+test_that("Session 2: the results sections support the text", {
+  suppressPackageStartupMessages(library(occJSDM))
+  fit <- readRDS(derived_path("dhole_fit.rds"))
+  cond <- computeConditionalOccupancyProbs(fit)[, 1]
+  expect_true(all(cond[c("GLG23055", "GLG23052", "GLG23053", "GLG23064")] < 0.05))   # "a few percent at most"
+  expect_gt(cond[["GLG39"]], 0.7)                    # "gets a high probability"
+  expect_gt(cond[["GLG28"]], 0.99)                   # "is certain"
+  bt <- returnPosteriorDraws(fit, "beta_theta")
+  expect_equal(round(10 * mean(plogis(bt["(Intercept)", 1, , ]))), 7)   # "about seven times in ten"
+  expect_equal(round(10 * mean(returnPosteriorDraws(fit, "p")[1, 1, , ])), 6)   # "about six times in ten"
+  expect_lt(quantile(bt["PrevDayRain", 1, , ], 0.975), 0)               # rain clearly lowers collection
+  expect_lt(quantile(bt["Filter_vol", 1, , ], 0.025), 0)                # water volume crosses zero
+  c_draws <- plogis(bt["(Intercept)", 1, , ]); p_draws <- returnPosteriorDraws(fit, "p")[1, 1, , ]
+  expect_equal(round(mean(1 - (1 - c_draws * (1 - (1 - p_draws)^6))^3), 2), 0.96)   # "about 96%"
+  dg <- returnConvergenceDiagnostics(fit)
+  flagged <- dg[dg$rhat > 1.01 | dg$ess < 400, ]
+  expect_setequal(flagged$param, c("p", "q"))        # "the flagged parameters ... p and q"
+  expect_true(all(flagged$rhat < 1.05))              # "rhat of 1.03"
 })
 
 test_that("Session 2: the saved dhole fit supports the text", {
