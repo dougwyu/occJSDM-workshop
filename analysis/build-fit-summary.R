@@ -42,6 +42,13 @@ diagnostics <- data.frame(otu_id = nm, species = status$species[match(nm, status
                           rhat_effects = by_group[nm, "rhat_effects"],
                           row.names = NULL, stringsAsFactors = FALSE)
 
+# Occupancy covariate effects per species: posterior mean, 95% interval and R-hat, from the
+# same diagnostics table. Factor levels carry the level in the name, e.g. streamOriginoutsideGLGS.
+eff <- dg[dg$param == "beta_psi", ]
+effects <- data.frame(otu_id = eff$otu_id, species = status$species[match(eff$otu_id, status$otu_id)],
+                      covariate = eff$label1, mean = eff$mean, lo = eff$q2.5, hi = eff$q97.5,
+                      rhat = eff$rhat, row.names = NULL, stringsAsFactors = FALSE)
+
 # Residual species associations: quantiles of the correlation left after the covariates.
 sig <- returnResidualCorrelationMatrix(f)               # 3 x species x species: lower, median, upper
 up <- which(upper.tri(matrix(0, length(nm), length(nm))), arr.ind = TRUE)
@@ -49,8 +56,8 @@ assoc <- data.frame(otu_a = nm[up[, 1]], otu_b = nm[up[, 2]],
                     lo = sig[cbind(1, up[, 1], up[, 2])], median = sig[cbind(2, up[, 1], up[, 2])],
                     hi = sig[cbind(3, up[, 1], up[, 2])], stringsAsFactors = FALSE)
 
-stopifnot(nrow(occ) == 101 * 108, nrow(params) == 108, nrow(diagnostics) == 108, !anyNA(diagnostics))
+stopifnot(nrow(occ) == 101 * 108, nrow(params) == 108, nrow(diagnostics) == 108, !anyNA(diagnostics), nrow(effects) == 9 * 108)
 saveRDS(list(occ = tibble::as_tibble(occ), params = tibble::as_tibble(params),
-             diagnostics = tibble::as_tibble(diagnostics), assoc = tibble::as_tibble(assoc),
+             diagnostics = tibble::as_tibble(diagnostics), effects = tibble::as_tibble(effects), assoc = tibble::as_tibble(assoc),
              source = list(fit = basename(fit_path), occjsdm = "6256791", b0_prior = "fixed")),
         "data-derived/fit_summary.rds")

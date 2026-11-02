@@ -141,19 +141,28 @@ y <- as.data.frame(presence[, keep])
 c(kept = sum(keep), dropped = sum(!keep)) # we kept 80 species and dropped 28
 ```
 
-`ecoCopula::stackedsdm()` fits a simple model to each species on its own, here with no covariates (`~ 1`). `ecoCopula::cord()` then finds two latent variables, hidden axes that best explain which species turn up together at the same sites. ecoCopula requires a bit of R code to get the outputs into shape for plotting with `ggplot2`.
+View `presence` as a dataframe.
+
+`ecoCopula::stackedsdm()` fits a simple model to each species on its own, here with no covariates (`~ 1`). `ecoCopula::cord()` then finds two latent variables, which are chosen to best explain which species turn up together at the same sites. ecoCopula requires a bit of R code to get the outputs into shape for plotting with `ggplot2`.
 
 ```{r ordination}
-set.seed(2026)   # the ordination starts from random values. In this class, we use set.seed() so that all students will get the same output
-sdm <- stackedsdm(y, formula_X = ~ 1, data = data.frame(site = rownames(y)), family = "binomial", ncores = 1)
-ord <- cord(sdm, nlv = 2)
+set.seed(2026)   # an ordination normally starts from random values. In this class, we use set.seed() so that all students will get the same output
+sdm <- stackedsdm(y, 
+                  formula_X = ~ 1, 
+                  data = data.frame(site = rownames(y)), 
+                  family = "binomial", 
+                  ncores = 1
+                  )
+ord <- cord(sdm, nlv = 2) # this is how ecoCopula creates the ordination
 
+# extract site scores from ord
 site_scores <- tibble(Site = rownames(y), 
                       LV1 = ord$scores[, 1], 
                       LV2 = ord$scores[, 2]) |> 
   left_join(sites, by = "Site")
 
-species_scores <- tibble(otu_id = colnames(y), 
+# extract species scores from ord
+species_scores <- tibble(otu_id = colnames(y),
                          LV1 = ord$loadings[, 1], 
                          LV2 = ord$loadings[, 2]) |>
   left_join(species, by = "otu_id")
@@ -185,16 +194,29 @@ modification
 
 Human modification increases mostly downward, along latent variable 2. Next, we measure how far each species' arrow reaches along the dashed arrow. A positive value means the species turns up more at modified sites, a negative value at less modified ones. We label the eight species at each end.
 
+The next chunk does three things.
+
+- It gives every species a score, `toward_modification`. Think of the dashed arrow as a ruler laid across the plot from the centre. For each species, we drop a line from the tip of its arrow straight onto the ruler and read off where it lands. A species whose arrow points along the dashed arrow scores high, one pointing the opposite way scores low (negative), and one pointing across it scores near zero. The formula multiplies each arrow's two coordinates by the dashed arrow's two coordinates, adds them, and divides by the dashed arrow's length.
+- It picks the eight species with the lowest scores and the eight with the highest (`ends`), the ones we will label on the plot.
+- It sets the colours and legend labels for wild and domestic species, and `r`, a scale factor that stretches the dashed arrow so that it reaches the edge of the sites.
+
 ```{r toward-modification}
 species_scores <- species_scores |>
-  mutate(toward_modification = (LV1 * modification["LV1"] + LV2 * modification["LV2"]) /
-           sqrt(sum(modification^2)))
+  mutate(toward_modification = 
+           (LV1 * modification["LV1"] + 
+              LV2 * modification["LV2"]) / sqrt(sum(modification^2)))
 
 ends <- species_scores |>
   filter(rank(toward_modification) <= 8 | rank(-toward_modification) <= 8)
 
-status_colours <- c(wild = "grey35", dom = "firebrick", wild_or_dom = "darkorange")
-status_labels <- c(wild = "wild", dom = "domestic", wild_or_dom = "wild or domestic")
+status_colours <- c(wild = "grey35", 
+                    dom = "firebrick", 
+                    wild_or_dom = "darkorange")
+
+status_labels <- c(wild = "wild", 
+                   dom = "domestic", 
+                   wild_or_dom = "wild or domestic")
+
 r <- max(abs(c(site_scores$LV1, site_scores$LV2)))   # stretch the dashed arrow to the edge of the sites
 ```
 
@@ -208,14 +230,23 @@ ggplot() +
                    yend = LV2 * k, colour = local_status),
                alpha = 0.7, arrow = arrow(length = unit(0.12, "cm"))) +
   annotate("segment", x = 0, y = 0, 
-           xend = modification["LV1"] * r, yend = modification["LV2"] * r,
-           linetype = 2, linewidth = 0.8, arrow = arrow(length = unit(0.25, "cm"))) +
-  annotate("label", x = modification["LV1"] * r, y = modification["LV2"] * r, 
-           label = "more human\nmodification", hjust = -0.1, size = 3.2, label.size = 0) +
+           xend = modification["LV1"] * r, 
+           yend = modification["LV2"] * r,
+           linetype = 2, linewidth = 0.8, 
+           arrow = arrow(length = unit(0.25, "cm"))) +
+  annotate("label", x = modification["LV1"] * r, 
+           y = modification["LV2"] * r, 
+           label = "more human\nmodification", 
+           hjust = -0.1, size = 3.2, border.colour = NA) +   # NA: no box around the label
   geom_text_repel(data = ends, 
-                  aes(LV1 * k, LV2 * k, label = species, colour = local_status),
-                  size = 2.8, fontface = "italic", max.overlaps = Inf, 
-                  min.segment.length = 0, show.legend = FALSE, seed = 1) +
+                  aes(LV1 * k, LV2 * k, label = species, 
+                      colour = local_status),
+                  size = 2.8, 
+                  fontface = "italic", 
+                  max.overlaps = Inf, 
+                  min.segment.length = 0, 
+                  show.legend = FALSE, 
+                  seed = 1) +
   scale_fill_viridis_c(option = "C") +
   scale_colour_manual(values = status_colours, labels = status_labels) +
   coord_equal() +
@@ -227,41 +258,33 @@ ggplot() +
   theme_minimal()
 ```
 
-The same numbers, one row per taxonomic order, show which orders turn up near and far from human modification.
+Domestic buffalo (*Bubalus bubalis*), goats (*Capra hircus*) and sheep (*Ovis aries*) point toward modified sites, with two rats that live alongside people (*Rattus tanezumi* and *Rattus nitidus*) and the common palm civet (*Paradoxurus hermaphroditus*). Not every domestic animal does: yak (*Bos grunniens*), horse (*Equus caballus*) and cat (*Felis catus*) point the other way, toward the higher and less modified sites where they are kept or roam.
 
-```{r modification-by-order, fig.height = 5}
-species_scores |>
-  mutate(order = fct_reorder(order, toward_modification)) |>
-  ggplot(aes(toward_modification, order, colour = local_status)) +
-  geom_vline(xintercept = 0, colour = "grey60") +
-  geom_point(size = 2.5, alpha = 0.8) +
-  geom_text_repel(data = ends, aes(label = species), 
-                  size = 2.6, fontface = "italic", max.overlaps = Inf, 
-                  show.legend = FALSE, seed = 1) +
-  scale_colour_manual(values = status_colours, labels = status_labels) +
-  labs(x = "How far the species' arrow points toward more human modification", 
-       y = NULL, 
-       colour = "Species",
-       title = "Which species turn up at modified sites?") +
-  theme_minimal()
-```
-
-Domestic buffalo, goats and sheep point toward modified sites, with two rats (*Rattus*) and the common palm civet that live alongside people. Not every domestic animal does: yak, horse and cat point the other way, toward the higher and less modified sites where they are kept or roam. At the other end are species of high, little-disturbed forest: the *Episoriculus* shrews, the Gongshan muntjac, the takin and the Gaoligong pika. Orders do not sort neatly. Rodents and carnivores are found at both ends, so the story is about particular species, not whole orders. We check that more formally below.
+At the other end are species of little-disturbed forest: three shrews (*Episoriculus leucops*, *E. caudatus* and *E. macrurus*), the Gongshan muntjac (*Muntiacus gongshanensis*), the takin (*Budorcas taxicolor*) and the Gaoligong pika (*Ochotona gaoligongensis*).
 
 ### Are threatened species found in the nature reserve?
 
 Now we colour the sites by whether their stream rises inside the Gaoligongshan nature reserve (`streamOrigin`), and colour the arrows by Red List status. A species counts as threatened if it is Vulnerable, Endangered or Critically Endangered, taking the IUCN category and falling back on the China Red List where IUCN has none. We label the threatened species and add a dashed arrow for the direction of the reserve sites, made the same way as before.
 
+The next chunk prepares the second biplot, in the same way as the first.
+
+- It puts each species in one of three Red List groups (`red_list`), as described above.
+- It makes the dashed arrow for the reserve. `inside` is `TRUE` for sites whose stream rises inside the reserve, and the arrow's coordinates are the correlations of `inside` with each latent variable. R treats `TRUE` as 1 and `FALSE` as 0, so this works just as it did for human modification.
+- It gives every species a score, `toward_reserve`, with the same ruler method as before: high for species whose arrows point toward the reserve sites.
+- It keeps the threatened species in their own table (`threatened`), so that we can label them.
+
 ```{r reserve-direction}
 species_scores <- species_scores |>
   mutate(red_list = coalesce(iucn, china_red_list),
          red_list = case_when(red_list %in% c("VU", "EN", "CR") ~ "threatened (VU, EN, CR)",
-                              red_list %in% c("LC", "NT") ~ "not threatened (LC, NT)",
-                              .default = "not assessed, or data deficient"))
+          red_list %in% c("LC", "NT") ~ "not threatened (LC, NT)",
+          .default = "not assessed, or data deficient")
+         )
 
 inside <- site_scores$streamOrigin == "insideGLGS"
 reserve <- c(LV1 = cor(inside, site_scores$LV1), 
              LV2 = cor(inside, site_scores$LV2))
+
 species_scores <- species_scores |>
   mutate(toward_reserve = (LV1 * reserve["LV1"] + LV2 * reserve["LV2"]) / sqrt(sum(reserve^2)))
 
@@ -279,18 +302,27 @@ ggplot() +
                alpha = 0.8, arrow = arrow(length = unit(0.12, "cm"))) +
   annotate("segment", x = 0, y = 0, 
            xend = reserve["LV1"] * r, yend = reserve["LV2"] * r,
-           linetype = 2, linewidth = 0.8, arrow = arrow(length = unit(0.25, "cm"))) +
-  annotate("label", x = reserve["LV1"] * r, y = reserve["LV2"] * r, 
-           label = "reserve\nsites", hjust = -0.1, size = 3.2, label.size = 0) +
+           linetype = 2, linewidth = 0.8, 
+           arrow = arrow(length = unit(0.25, "cm"))) +
+  annotate("label", 
+           x = reserve["LV1"] * r, 
+           y = reserve["LV2"] * r, 
+           label = "reserve\nsites", 
+           hjust = -0.1, 
+           size = 3.2,
+           border.colour = NA) +   # NA: no box around the label
   geom_text_repel(data = threatened, 
-                  aes(LV1 * k, LV2 * k, label = species), colour = "firebrick",
-                  size = 2.8, fontface = "italic", max.overlaps = Inf, 
+                  aes(LV1 * k, LV2 * k, label = species), 
+                  colour = "firebrick", size = 2.8, 
+                  fontface = "italic", max.overlaps = Inf, 
                   min.segment.length = 0, seed = 1) +
-  scale_fill_manual(values = c(insideGLGS = "forestgreen", outsideGLGS = "tan"), 
-                    labels = c(insideGLGS = "inside", outsideGLGS = "outside")) +
+  scale_fill_manual(values = c(insideGLGS = "forestgreen", 
+                               outsideGLGS = "tan"), 
+                    labels = c(insideGLGS = "inside", 
+                               outsideGLGS = "outside")) +
   scale_colour_manual(values = c("threatened (VU, EN, CR)" = "firebrick", 
-                                 "not threatened (LC, NT)" = "grey60", 
-                                 "not assessed, or data deficient" = "steelblue")) +
+                              "not threatened (LC, NT)" = "grey60", 
+                              "not assessed, or data deficient" = "steelblue")) +
   coord_equal() +
   labs(x = "Latent variable 1", 
        y = "Latent variable 2", 
@@ -328,7 +360,22 @@ rbind(LV1 = share("LV1"), LV2 = share("LV2"))
 
 Order explains about a fifth of the spread along the first axis, and the evidence for even that is borderline (p close to 0.05). Along the second axis it explains less, with no real evidence at all. Rodents fan out in many directions. The ordination describes how detections co-occur at these sites. It does not recover the taxonomy, and it still cannot say where a species is.
 
-## The wall: where is the dhole?
+### What the ordination tells us, and what it does not
+
+What it shows clearly:
+
+- The strongest pattern runs from top to bottom of the plot (latent variable 2). At the top are the Northwest and the less modified, more forested sites, most of them with streams rising inside the reserve. At the bottom are the more modified sites of the Southwest, most of them outside it.
+- Species sort along that gradient. Shrews, the takin, the muntjac and the pika of little-disturbed forest point up. Livestock, the rats that live with people and the palm civet point down.
+
+What it leaves ambiguous:
+
+- Several covariates change together along the same gradient: latitude, temperature, forest cover, human modification, region and the reserve. Most Southwest sites are outside the reserve, and most Northwest sites are inside it. The ordination cannot say which of these the species respond to, because it never looks at the covariates. We only laid them over the plot afterwards.
+- Latent variable 1 has no clear meaning. It follows temperature and latitude to some extent, with the cold Northwest sites on the left, but nothing we measured explains most of it.
+- Threatened species do not stand out from common ones, and taxonomic order explains little of where species sit.
+- The plot is built from raw detections: a species counts as present at a site if any one of its 18 PCRs was positive. False positives and false negatives are built into every arrow. The next section shows how large those errors can be.
+
+
+## A single species: Where is the dhole?
 
 The dhole (*Cuon alpinus*) is an Endangered wild dog. Here is where it was detected.
 
@@ -337,34 +384,91 @@ dhole <- species$otu_id[species$species == "Cuon alpinus"]
 dhole_pcr <- tapply(OTU[, dhole], info$Site, sum)
 dhole_sites <- sites |> mutate(positive_pcrs = as.numeric(dhole_pcr[Site]))
 
-ggplot(dhole_sites, aes(Xs.1, Xs.2, colour = positive_pcrs > 0, size = positive_pcrs)) +
+ggplot(dhole_sites, 
+       aes(Xs.1, Xs.2, colour = positive_pcrs > 0, size = positive_pcrs)) +
   geom_point(alpha = 0.8) +
-  scale_colour_manual(values = c(`TRUE` = "firebrick", `FALSE` = "grey70"), name = "Any positive PCR") +
-  scale_size_continuous(range = c(1.5, 7), name = "Positive PCRs (of 18)") +
+  scale_colour_manual(values = c(`TRUE` = "firebrick", `FALSE` = "grey70"), 
+                      name = "Any positive PCR") +
+  scale_size_continuous(range = c(1.5, 7), 
+                        name = "Positive PCRs (of 18)") +
   coord_quickmap() +
   labs(x = "Longitude", y = "Latitude", title = "Raw dhole detections") +
   theme_minimal()
 ```
 
-Neither the composition chart nor the ordination can say where the dhole is, or how sure we are. The map above looks like an answer, but is it?
+Neither the composition chart nor the ordination can say where the dhole is. The map above looks like an answer, but it treats a site with one positive PCR out of 18 the same as a site with 18 out of 18, and every grey point as an absence.
 
-```{r dhole-counts}
-table(positive_pcrs = dhole_pcr[dhole_pcr > 0])
+To see what lies behind each point, we lay out the detections the way they were collected, as in Figure 1 of Ji et al. ([2025](https://doi.org/10.1111/ele.70302){.uri}). There is one column for each site where the dhole was detected, one row for each of the site's three field samples, and in each cell the number of that sample's six PCRs that were positive.
+
+```{r dhole-samples}
+dhole_samples <- info |>
+  mutate(positive = OTU[, dhole]) |>
+  group_by(Site, Sample) |>
+  summarise(positive = sum(positive), .groups = "drop") |>   # positive PCRs, out of 6, per field sample
+  group_by(Site) |>
+  mutate(sample = paste("Sample", row_number()),             # 1 to 3 within each site
+         site_total = sum(positive)) |>                      # positive PCRs, out of 18, per site
+  ungroup() |>
+  filter(site_total > 0)                                     # only sites where the dhole was detected
 ```
 
-Of the sites with a detection, many have only one or two positive PCRs out of 18. Is that a dhole in the river, or a stray positive from contamination or the lab? A detection is not the same as a presence.
+```{r dhole-grid, fig.width = 10, fig.height = 3.5}
+dhole_samples |>
+  mutate(Site = fct_reorder(Site, site_total, .desc = TRUE)) |>   # most positive PCRs on the left
+  ggplot(aes(Site, fct_rev(sample), fill = positive)) +
+  geom_tile(colour = "white", linewidth = 0.8) +
+  geom_text(aes(label = positive, colour = positive > 3), size = 3) +
+  scale_fill_gradient(low = "grey92", high = "firebrick", 
+                      limits = c(0, 6), breaks = 0:6, 
+                      name = "Positive PCRs\n(of 6)") +
+  scale_colour_manual(values = c(`TRUE` = "white", `FALSE` = "grey20"), guide = "none") +
+  labs(x = NULL, y = NULL, 
+       title = "Every site where the dhole was detected, one column per site") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1, size = 7), 
+        panel.grid = element_blank(), 
+        legend.position = "bottom")
+```
 
-## Detection is not presence
+The sites on the left are the clearest: the dhole's DNA turned up in almost every PCR. Moving right, the signal fades until, at the far right, a whole site rests on a single positive PCR. Two kinds of error are hidden in this table.
 
-An occupancy model separates two things the raw data mix together. Whether the species is at the site (occupancy), and whether the survey would detect it if it were there. It also allows for false positives: the false-positive rate below is the chance that a single PCR is positive for a species that is not at the site. Session 2 builds it. Here we only compare the answer with the raw count, using a model already fitted to the mammal data.
+```{r dhole-errors}
+n_detecting <- n_distinct(dhole_samples$Site)                       # sites with any positive PCR
+n_samples <- nrow(dhole_samples)                                    # their field samples
+n_empty <- sum(dhole_samples$positive == 0)                         # samples with no positive PCR
+n_weak <- n_distinct(dhole_samples$Site[dhole_samples$site_total <= 2])   # sites with 1 or 2 of 18
+
+# A site where one sample is strongly positive and another is empty
+example <- dhole_samples |>
+  group_by(Site) |>
+  filter(min(positive) == 0) |>
+  ungroup() |>
+  slice_max(positive, n = 1, with_ties = FALSE)
+
+c(detecting_sites = n_detecting, samples = n_samples, empty_samples = n_empty, weak_sites = n_weak)
+example
+```
+
+**False negatives are certain.** At site `r example$Site`, one field sample had `r example$positive` positive PCRs out of 6, so the dhole's DNA was in the water there. Yet at least one other sample, taken at the same place, had none. Across the `r n_detecting` sites with a detection, `r n_empty` of their `r n_samples` field samples had no positive PCR at all, and inside the positive samples most PCRs were negative too. If one sample can miss the dhole at a site where it is present, then sometimes all three will. So among the `r 101 - n_detecting` sites with no detection, there are probably some where the dhole was present and all 18 PCRs missed it. We cannot see those false negatives in the data. We can only infer that they exist.
+
+**False positives are possible.** `r n_weak` of the `r n_detecting` sites rest on only one or two positive PCRs out of 18. A signal that weak could be a little real DNA, or DNA that reached the sample by another route: contamination in the field or the lab, or a sequencing read assigned to the wrong sample. Looking at one site alone, we cannot tell which. Ji et al. (2025, Figure 1) show the same pattern for the takin (*Budorcas taxicolor*): a handful of weak detections in the south of the study area, where the takin is known not to live.
+
+So the raw map is wrong in both directions. Some grey points should probably be red, and some red points may be wrong. Neither error can be fixed by staring harder at one site. What fixes them is to use all the sites together. The strong sites on the left tell us how often a PCR detects dhole DNA when it is there, and the scattered weak positives tell us how often a PCR is positive when it is not. With those two rates, each site's pattern of 18 PCRs can be weighed: is three samples with a single positive between them more likely to come from a dhole that is there and hard to detect, or from a dhole that is absent and a stray positive? **A detection is not the same as a presence, and a non-detection is not the same as an absence.**
+
+## What an occupancy model does
+
+An occupancy model does that weighing. It separates whether the species is at the site (occupancy) from whether the survey detects it if it is there, and it estimates the false-positive rate: the chance that a single PCR is positive for a species that is not at the site. Session 2 builds it for the dhole. Here we only look at what it gives, using a model already fitted to all the mammals.
 
 ```{r naive-vs-model}
 fit <- read_fit_summary()
 n_sites_detected <- colSums(presence)
-naive <- tibble(otu_id = names(n_sites_detected), naive = as.numeric(n_sites_detected) / 101)
+naive <- tibble(otu_id = names(n_sites_detected), 
+                naive = as.numeric(n_sites_detected) / 101)
+
 model <- fit$occ |>
   group_by(otu_id) |>
   summarise(model = mean(cond_mean), .groups = "drop")
+
 compare <- species |>
   left_join(naive, by = "otu_id") |>
   left_join(model, by = "otu_id") |>

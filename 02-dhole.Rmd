@@ -15,9 +15,9 @@ As in Session 1, the first code chunk is only for the workshop, and the second l
 
 ```{r workshop-setup}
 source("setup/pins.R")
-use_workshop_lib()                  # use the packages installed for the workshop
-source("R/data.R")                  # derived_path(), used by read_fit_summary()
-source("R/fit.R")                   # read_fit_summary(): saved results of the model fitted to all mammals
+use_workshop_lib()              # use the packages installed for the workshop
+source("R/data.R")              # derived_path(), used by read_fit_summary()
+source("R/fit.R")               # read_fit_summary(): saved results of the model fitted to all mammals
 mcp_off <- Sys.getenv("WORKSHOP_NO_MCP") == "1"
 live_fit <- Sys.getenv("WORKSHOP_LIVE_FIT", unset = "1") != "0"
 ```
@@ -35,18 +35,23 @@ Session 1 ended with a map of raw dhole detections and a doubt: a detection is n
 
 A two-stage eDNA model needs to know the survey's structure: PCR replicates sit inside field samples, and field samples sit inside sites. That structure is what lets it separate the presence of the animal from the detection of its DNA.
 
-We keep all of `info` and only the dhole's column of `OTU`.
+We read the same CSV files as in Session 1, keep all of `info` and only the dhole's column of `OTU`, and put the two in a list called `d`, the form `runOccJSDM()` expects.
 
 ```{r layout}
 info <- read.csv("data-derived/info.csv")
 OTU <- as.matrix(read.csv("data-derived/OTU.csv"))
 dhole_col <- grep("Cuon_alpinus", colnames(OTU), value = TRUE)   # the dhole's column name in OTU
-d <- list(info = info, OTU = OTU[, dhole_col, drop = FALSE])      # drop = FALSE keeps OTU a matrix
-head(d$info[, c("Site", "Sample", "annual_precipitation", "Filter_vol")], 8)
+d <- list(info = info,
+          OTU = OTU[, dhole_col, drop = FALSE])                   # drop = FALSE keeps OTU a matrix
+str(d, max.level = 1)
 dim(d$OTU)
 ```
 
-`info` has one row per PCR replicate. `Site` and `Sample` say where the replicate belongs, and the other columns are covariates. `OTU` has one row per replicate and one column per species, here only the dhole. A 1 means the PCR was positive.
+Click on `d` in the Environment tab to open it.
+
+- `d$info` is the table from Session 1, unchanged: one row per PCR replicate, with `Site`, `Sample`, the site covariates and the collection covariates.
+- `d$OTU` is a matrix with the same 1,818 rows and a single column, the dhole. A 1 means the PCR was positive. It must stay a matrix with a column name, even with one species, which is why we write `drop = FALSE`.
+- The rows of the two tables must be in the same order. Here they are, because both come from the same files.
 
 Here is one site, laid out as the model sees it: three field samples, six PCRs each.
 
@@ -59,7 +64,7 @@ d$info |>
   summarise(pcrs = n(), positive = sum(positive), .groups = "drop")
 ```
 
-Two covariate sets matter. Occupancy covariates describe the site (climate, forest, human modification, region). Collection covariates describe how a sample was taken (the volume of water filtered, rain the previous day), and can change whether DNA was caught at all.
+Two covariate sets matter. Occupancy covariates describe the site (climate, forest, human modification, region, and whether the stream rises inside the nature reserve). Collection covariates describe how a sample was taken (the volume of water filtered, rain the previous day), and can change whether DNA was caught at all.
 
 ## Fit the model
 
@@ -96,13 +101,23 @@ The model is fitted by MCMC, which explores possible parameter values. We must c
 
 ```{r diagnostics}
 diag <- returnConvergenceDiagnostics(fit)
+head(diag)
 c(parameters = nrow(diag),
   rhat_above_1.01 = sum(diag$rhat > 1.01, na.rm = TRUE),
   ess_below_400 = sum(diag$ess < 400, na.rm = TRUE))
-diag |> filter(rhat > 1.01 | ess < 400) |> select(param, label1, mean, rhat, ess)
+diag |>
+  filter(rhat > 1.01 | ess < 400) |>
+  select(param, label1, mean, rhat, ess)
 ```
 
-R-hat compares the chains, and values near 1 mean they agree. ESS counts how many independent draws the chain is worth, and we want it large. A flagged parameter is a reason to look closer, not to stop.
+`diag` has one row per parameter. Open it in the Environment tab.
+
+- `param` is the kind of parameter: `beta_psi` for the effect of an occupancy covariate, `p` and `q` for the true- and false-positive rates, and so on. `label1` (and `label2`, where needed) say which covariate or species it belongs to.
+- `mean`, `sd`, `q2.5` and `q97.5` summarise the posterior: its mean, its spread, and the ends of its 95% interval.
+- `rhat` compares the chains. Values near 1 mean they agree.
+- `ess` counts how many independent draws the chains are worth. We want it large.
+
+A flagged parameter is a reason to look closer, not to stop.
 
 ```{r traceplot}
 draws <- fit$results_output$jsdm_output$B0_output   # species x iteration x chain
@@ -112,7 +127,8 @@ trace <- tibble(iteration = rep(seq_len(dim(draws)[2]), 2),
 ggplot(trace, aes(iteration, value, colour = chain)) +
   geom_line(alpha = 0.6) +
   labs(title = "Trace of the baseline occupancy intercept",
-       subtitle = "Two chains that overlap and wander around one level are a good sign", y = "Intercept") +
+       subtitle = "Two chains that overlap and wander around one level are a good sign",
+       y = "Intercept") +
   theme_minimal()
 ```
 
@@ -121,20 +137,25 @@ ggplot(trace, aes(iteration, value, colour = chain)) +
 The model estimates how often a PCR is positive when the dhole's DNA is in the sample (the true-positive rate), and how often it is positive when the dhole is not there (the false-positive rate).
 
 ```{r detection}
+p_draws <- fit$results_output$p_output
+q_draws <- fit$results_output$q_output
 rates <- tibble(
   rate = c("True-positive rate", "False-positive rate (PCR)"),
-  mean = c(mean(fit$results_output$p_output), mean(fit$results_output$q_output)),
-  lower = c(quantile(fit$results_output$p_output, 0.025), quantile(fit$results_output$q_output, 0.025)),
-  upper = c(quantile(fit$results_output$p_output, 0.975), quantile(fit$results_output$q_output, 0.975))
+  mean = c(mean(p_draws), mean(q_draws)),
+  lower = c(quantile(p_draws, 0.025), quantile(q_draws, 0.025)),
+  upper = c(quantile(p_draws, 0.975), quantile(q_draws, 0.975))
 )
 rates |> mutate(across(where(is.numeric), ~ round(.x, 3)))
+p_in_ten <- round(10 * mean(p_draws))       # used in the text below
 ```
 
-A PCR catches the dhole's DNA about six times in ten when it is there, and a stray positive is rare but not zero. That is why one positive PCR at a site is weak evidence on its own.
+A PCR catches the dhole's DNA about `r p_in_ten` times in ten when it is there, and a stray positive is rare but not zero. That is why one positive PCR at a site is weak evidence on its own.
 
 The convergence table above flagged the detection rates themselves: their R-hat is a little above 1.01 and their effective sample size is below 400. So the ends of these intervals rest on fewer effective draws than we would like. A longer run (raise `nburn` and `niter`) would pin them down more precisely. It would not make the intervals much narrower, because their width reflects how much the data say, not how long the chains ran. The conclusion that a single positive PCR is weak evidence does not depend on the exact numbers.
 
 ## Is the dhole at each site?
+
+`computeConditionalOccupancyProbs()` returns a matrix with one row per site and one column per species (here only the dhole). Each value is the probability that the species is present at the site, given what was detected there. To map it, we need the site table from Session 1.
 
 ```{r probability}
 cond <- computeConditionalOccupancyProbs(fit)
@@ -142,15 +163,18 @@ sites <- info |>
   distinct(Site, .keep_all = TRUE) |>                  # one row per site, as in Session 1
   select(-Sample, -Primer, -Filter_vol, -PrevDayRain) |>
   arrange(Site)
-map_data <- sites |> mutate(probability = as.numeric(cond[Site, 1]))
+map_data <- sites |> mutate(probability = as.numeric(cond[Site, 1]))   # match by site name
 
 ggplot(map_data, aes(Xs.1, Xs.2, colour = probability)) +
   geom_point(size = 3.5) +
   scale_colour_viridis_c(name = "Probability the\ndhole is present", option = "C", limits = c(0, 1)) +
-  coord_quickmap() + labs(x = "Longitude", y = "Latitude",
-                       title = "The model's answer, site by site") +
+  coord_quickmap() +
+  labs(x = "Longitude", y = "Latitude",
+       title = "The model's answer, site by site") +
   theme_minimal()
 ```
+
+Each bar of the histogram below counts sites. Bars at the left are sites where the dhole is almost certainly absent, bars at the right where it is almost certainly present, and bars in the middle are sites the data cannot settle.
 
 ```{r certainty}
 ggplot(map_data, aes(probability)) +
@@ -165,7 +189,8 @@ Compare this with Session 1's raw map. Many sites with a detection are now judge
 ```{r certainty-count}
 map_data |>
   mutate(verdict = cut(probability, c(-Inf, 0.1, 0.5, 0.9, Inf),
-                       labels = c("almost certainly absent", "probably absent", "probably present", "almost certainly present"))) |>
+                       labels = c("almost certainly absent", "probably absent",
+                                  "probably present", "almost certainly present"))) |>
   count(verdict)
 ```
 
@@ -184,20 +209,51 @@ ggplot(effects, aes(mean, covariate)) +
   labs(x = "Effect on the log-odds of presence", y = NULL,
        title = "Where the data are weak, intervals are wide") +
   theme_minimal()
+
+detecting_sites <- sum(tapply(d$OTU[, 1], d$info$Site, sum) > 0)
+crossing <- sum(effects$lower < 0 & effects$upper > 0)
+c(detecting_sites = detecting_sites, effects = nrow(effects), intervals_crossing_zero = crossing)
 ```
 
-An interval that crosses the dashed line means we cannot tell whether the covariate matters. With one species and 41 detecting sites, every interval here crosses it. The mammal-wide fit of Session 3 does put the dhole's Southwest effect clearly below zero, but do not set its numbers beside these: its effects are measured after allowing for hidden site effects shared by all species, so they are on a different scale, and its intervals are mostly wider, not narrower. Being sure where the dhole is does not require being sure why.
+How to read this figure:
+
+- Each row is one covariate. The point is the best estimate of its effect, and the line is its 95% interval.
+- For a number, such as `Human_modification_1km`, a positive effect means the dhole is more likely to be present where the covariate is higher.
+- For a category, the effect compares one level with a reference level that does not get a row. `streamOriginoutsideGLGS` compares sites whose stream rises outside the Gaoligongshan reserve with those whose stream rises inside it. `Regional_DivisionNorthwest` and `Regional_DivisionSouthwest` compare those regions with the East.
+- An interval that crosses the dashed line means we cannot tell whether the covariate matters.
+
+With one species and `r detecting_sites` detecting sites, `r crossing` of the `r nrow(effects)` intervals cross the line.
+
+Session 1 left a question open. In the ordination, sites inside the reserve and sites with little human modification lay at the same end of the plot, so the figure could not say which one species respond to. The model estimates the effect of each covariate with the others held fixed, so `streamOrigin` and `Human_modification_1km` are separated here. For the dhole alone, the data are too thin to say which matters. Session 3 asks the same question of all 108 mammals at once.
+
+The mammal-wide fit of Session 3 does put one of the dhole's effects clearly away from zero.
+
+```{r joint-effects}
+joint_effects <- read_fit_summary()$effects |>
+  filter(species == "Cuon alpinus") |>
+  select(covariate, mean, lo, hi) |>
+  mutate(across(where(is.numeric), ~ round(.x, 2)))
+joint_effects
+```
+
+Its Southwest effect is clearly below zero. But do not set these numbers beside the one-species fit: they are measured after allowing for hidden site effects shared by all species, so they are on a different scale, and the intervals are mostly wider, not narrower. Being sure where the dhole is does not require being sure why.
+
+Do the two fits at least agree about where the dhole is? Each point below is a site. Points on the grey line get the same probability from both fits.
 
 ```{r agreement}
 joint <- read_fit_summary()$occ |>
   filter(species == "Cuon alpinus") |>
   select(Site, joint = cond_mean)
-both <- map_data |> select(Site, single = probability) |> left_join(joint, by = "Site")
+both <- map_data |>
+  select(Site, single = probability) |>
+  left_join(joint, by = "Site")
 ggplot(both, aes(joint, single)) +
-  geom_abline(colour = "grey60") + geom_point(alpha = 0.7) +
+  geom_abline(colour = "grey60") +
+  geom_point(alpha = 0.7) +
   labs(x = "Mammal-wide fit", y = "One-species fit",
        title = "Both fits agree about where the dhole is") +
-  theme_minimal() + coord_equal()
+  theme_minimal() +
+  coord_equal()
 round(cor(both$joint, both$single), 2)
 ```
 
