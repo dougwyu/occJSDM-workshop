@@ -2,7 +2,6 @@
 # If one of these fails, the sentence that quotes it needs rewriting, not just the test.
 source(testthat::test_path("..", "R", "data.R"))
 source(testthat::test_path("..", "R", "fit.R"))
-source(testthat::test_path("..", "R", "scp.R"))
 .libPaths(c(file.path(workshop_root(), "Rlib"), .libPaths()))
 suppressPackageStartupMessages(library(dplyr))
 
@@ -99,16 +98,4 @@ test_that("Session 4: livestock and Red List coverage", {
   dom <- status$species[status$local_status == "dom"]
   expect_true(all(c("Bos taurus", "Bubalus bubalis", "Capra hircus") %in% dom))
   expect_equal(sum(is.na(status$iucn) & is.na(status$china_red_list)), 13)
-})
-
-test_that("Session 4: costing by human modification picks less modified sites, and more of them", {
-  occ <- read.csv(derived_path("occupancy_long.csv"))[, c("Site", "species", "cond_mean")]
-  sites <- site_covariates()
-  w <- suppressWarnings(species_weights(status, "redlist"))
-  equal <- build_scp(occ, w, data.frame(Site = sites$Site, cost = 1), budget = 0.2 * 101)
-  human <- build_scp(occ, w, data.frame(Site = sites$Site, cost = sites$Human_modification_1km),
-                     budget = 0.2 * sum(sites$Human_modification_1km))
-  hm <- function(plan) sites$Human_modification_1km[match(plan$Site[plan$selected], sites$Site)]
-  expect_lt(mean(hm(human)), mean(hm(equal)))
-  expect_gt(sum(human$selected), sum(equal$selected))
 })

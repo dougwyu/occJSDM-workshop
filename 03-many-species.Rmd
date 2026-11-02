@@ -9,12 +9,20 @@ output:
 
 ```{r setup, include = FALSE}
 knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE, fig.width = 8, fig.height = 5.5)
+```
+
+As before, the first code chunk is only for the workshop, and the second loads the packages.
+
+```{r workshop-setup}
 source("setup/pins.R")
-use_workshop_lib()
-source("R/data.R")
-source("R/fit.R")
-library(tidyverse)
+use_workshop_lib()                  # use the packages installed for the workshop
+source("R/data.R")                  # load_mammal(), species_status(), site_covariates()
+source("R/fit.R")                   # read_fit_summary(): saved results of the model fitted to all mammals
 mcp_off <- Sys.getenv("WORKSHOP_NO_MCP") == "1"
+```
+
+```{r packages}
+library(tidyverse)
 ```
 
 ## From one species to a community
@@ -24,9 +32,44 @@ A conservation plan needs an answer for every species, not one. We could fit 108
 Fitting this model for 108 mammals takes several minutes on a fast laptop, so we use a fit prepared earlier (5,000 burn-in and 5,000 kept iterations, two chains). The summaries below come from it. If you want to run the occJSDM output functions on the full fit, your instructor can share the file.
 
 ```{r load}
-fit <- read_fit_summary()
+fit <- read_fit_summary()      # a list of tables: occ, params, diagnostics and assoc
 status <- species_status()
 sites <- site_covariates()
+m <- load_mammal()
+presence <- (rowsum(m$OTU, m$info$Site) > 0) * 1   # as in Session 1: 1 if any PCR at the site was positive
+sites_detected <- colSums(presence)
+```
+
+The full fitted model is too large for a 4 GB session, so `read_fit_summary()` loads tables taken from it. On a fit of your own you would make those tables with the occJSDM functions you used on the dhole in Session 2. The chunk below shows how, and is not run in class.
+
+```{r from-a-fit, eval = FALSE}
+library(occJSDM)
+fit_full <- readRDS("fit_Mammal_d4_fixed.rds")     # the full mammal fit, 236 MB
+
+# Probability of presence given the detections (cond_mean), and before them (psi_mean):
+# one row per site, one column per species
+cond <- computeConditionalOccupancyProbs(fit_full)
+psi <- computePredictiveOccupancyProbs(fit_full)
+occ <- tibble(Site = rep(rownames(cond), ncol(cond)), otu_id = rep(colnames(cond), each = nrow(cond)),
+              cond_mean = as.vector(cond), psi_mean = as.vector(psi))
+
+# Detection rates: posterior draws in fit_full$results_output$p_output and q_output, as in Session 2
+
+# Convergence: the largest R-hat per species, for detection and for the occupancy effects
+diag <- returnConvergenceDiagnostics(fit_full)
+species_ids <- colnames(cond)
+diagnostics <- diag |>
+  mutate(otu_id = if_else(label2 %in% species_ids, label2, label1),     # the species name is in one of the two
+         group = if_else(param %in% c("beta0_psi", "beta_psi"), "rhat_effects", "rhat_detection")) |>
+  group_by(otu_id, group) |>
+  summarise(rhat = max(rhat, na.rm = TRUE), .groups = "drop") |>
+  pivot_wider(names_from = group, values_from = rhat)
+
+# Associations: lower, median and upper residual correlation for each pair of species
+sig <- returnResidualCorrelationMatrix(fit_full)   # 3 x species x species
+pairs <- which(upper.tri(sig[1, , ]), arr.ind = TRUE)
+assoc <- tibble(otu_a = species_ids[pairs[, 1]], otu_b = species_ids[pairs[, 2]],
+                lo = sig[1, , ][pairs], median = sig[2, , ][pairs], hi = sig[3, , ][pairs])
 ```
 
 ## Can we trust the computation?
@@ -34,7 +77,6 @@ sites <- site_covariates()
 With 108 species there are hundreds of parameters. For each species we take the largest R-hat in two groups: its detection parameters (the true- and false-positive rates and the effects of the collection covariates), and its covariate effects on occupancy. As in Session 2, R-hat near 1 means the chains agree. Here we call a group settled if its largest R-hat is at most 1.1.
 
 ```{r convergence}
-sites_detected <- colSums(site_presence(load_mammal()))
 conv <- fit$diagnostics |>
   mutate(sites_detected = sites_detected[otu_id],
          detection_settled = rhat_detection <= 1.1,
@@ -92,7 +134,8 @@ The highest false-positive rates belong to species detected at most sites. They 
 For each site and each species, the model gives the probability that the species is present given what was detected. These are the numbers the conservation plan will use.
 
 ```{r occupancy}
-occ <- occupancy_long()
+occ <- fit$occ |>
+  left_join(status |> select(otu_id, order, family, iucn, china_red_list, local_status), by = "otu_id")
 occ |> select(Site, species, cond_mean, psi_mean) |> head()
 ```
 
@@ -112,11 +155,10 @@ ggplot(occ, aes(cond_mean)) +
 The raw count of species detected at a site and the model's expected number of species are different things. The expected number is the sum of the probabilities of presence.
 
 ```{r richness}
-detected <- site_presence(load_mammal())
 richness <- occ |>
   group_by(Site) |>
   summarise(expected = sum(cond_mean), .groups = "drop") |>
-  mutate(detected = rowSums(detected)[Site]) |>
+  mutate(detected = rowSums(presence)[Site]) |>
   left_join(sites, by = "Site")
 
 richness |>
@@ -130,7 +172,7 @@ richness |>
   geom_point(size = 3) +
   facet_wrap(~ measure) +
   scale_colour_viridis_c(option = "C", name = "Species") +
-  coord_equal() + labs(x = "Longitude", y = "Latitude") +
+  coord_quickmap() + labs(x = "Longitude", y = "Latitude") +
   theme_minimal()
 ```
 

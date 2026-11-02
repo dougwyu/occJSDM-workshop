@@ -9,14 +9,22 @@ output:
 
 ```{r setup, include = FALSE}
 knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE, fig.width = 8, fig.height = 5.5)
+```
+
+As in Session 1, the first code chunk is only for the workshop, and the second loads the packages you would use in a project of your own.
+
+```{r workshop-setup}
 source("setup/pins.R")
-use_workshop_lib()
-source("R/data.R")
-source("R/fit.R")
-library(tidyverse)
-library(occJSDM)
+use_workshop_lib()                  # use the packages installed for the workshop
+source("R/data.R")                  # load_mammal(), site_covariates(), derived_path()
+source("R/fit.R")                   # read_fit_summary(): saved results of the model fitted to all mammals
 mcp_off <- Sys.getenv("WORKSHOP_NO_MCP") == "1"
 live_fit <- Sys.getenv("WORKSHOP_LIVE_FIT", unset = "1") != "0"
+```
+
+```{r packages}
+library(tidyverse)
+library(occJSDM)
 ```
 
 ## What we want to know
@@ -27,9 +35,13 @@ Session 1 ended with a map of raw dhole detections and a doubt: a detection is n
 
 A two-stage eDNA model needs to know the survey's structure: PCR replicates sit inside field samples, and field samples sit inside sites. That structure is what lets it separate the presence of the animal from the detection of its DNA.
 
+We keep all of `info` and only the dhole's column of `OTU`.
+
 ```{r layout}
-d <- dhole_input()
-head(d$info[, c("Site", "Sample", "Primer", "annual_precipitation", "Filter_vol")], 8)
+m <- load_mammal()
+dhole_col <- grep("Cuon_alpinus", colnames(m$OTU), value = TRUE)   # the dhole's column name in OTU
+d <- list(info = m$info, OTU = m$OTU[, dhole_col, drop = FALSE])    # drop = FALSE keeps OTU a matrix
+head(d$info[, c("Site", "Sample", "annual_precipitation", "Filter_vol")], 8)
 dim(d$OTU)
 ```
 
@@ -131,7 +143,7 @@ map_data <- sites |> mutate(probability = as.numeric(cond[Site, 1]))
 ggplot(map_data, aes(Xs.1, Xs.2, colour = probability)) +
   geom_point(size = 3.5) +
   scale_colour_viridis_c(name = "Probability the\ndhole is present", option = "C", limits = c(0, 1)) +
-  coord_equal() + labs(x = "Longitude", y = "Latitude",
+  coord_quickmap() + labs(x = "Longitude", y = "Latitude",
                        title = "The model's answer, site by site") +
   theme_minimal()
 ```

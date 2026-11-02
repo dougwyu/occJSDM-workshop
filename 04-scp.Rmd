@@ -9,13 +9,21 @@ output:
 
 ```{r setup, include = FALSE}
 knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE, fig.width = 8, fig.height = 5.5)
+```
+
+As before, the first code chunk is only for the workshop, and the second loads the packages.
+
+```{r workshop-setup}
 source("setup/pins.R")
-use_workshop_lib()
-source("R/data.R")
-source("R/fit.R")
-source("R/scp.R")
-library(tidyverse)
+use_workshop_lib()                  # use the packages installed for the workshop
+source("R/data.R")                  # species_status(), site_covariates(), derived_path()
 mcp_off <- Sys.getenv("WORKSHOP_NO_MCP") == "1"
+```
+
+```{r packages}
+library(tidyverse)
+library(prioritizr)   # systematic conservation planning
+library(highs)        # the solver prioritizr uses here
 ```
 
 ## From probabilities to a plan
@@ -45,10 +53,54 @@ We start by treating every site as equally expensive and allowing 20% of them. C
 
 ## A first plan: every species counts equally
 
+`prioritizr` wants one table with a row per planning unit (site), its cost, and a column per feature (species) holding its amount at that site.
+
+```{r planning-units}
+pu <- occ_in |>
+  pivot_wider(id_cols = Site, names_from = species, values_from = cond_mean) |>
+  left_join(cost_equal, by = "Site") |>
+  arrange(Site) |>
+  mutate(id = row_number())          # prioritizr needs a numeric id for each planning unit
+dim(pu)
+```
+
+Every species gets weight 1, so a shortfall for any species counts the same.
+
 ```{r baseline}
-w_equal <- species_weights(status, "equal")
-plan_equal <- build_scp(occ_in, w_equal, cost_equal, budget = budget_frac * nrow(cost_equal), target = target)
+w_equal <- tibble(species = status$species, weight = 1)
+
+problem_equal <- problem(pu, features = w_equal$species, cost_column = "cost") |>
+  add_min_shortfall_objective(budget = budget_frac * nrow(pu)) |>   # get as close to every target as the budget allows
+  add_relative_targets(target) |>                                   # each target: this share of the species' total
+  add_feature_weights(w_equal$weight) |>                            # how much each species' shortfall counts
+  add_binary_decisions() |>                                         # each site is either protected or not
+  add_highs_solver(gap = 0.01, time_limit = 30, verbose = FALSE)    # a near-best answer, within 30 seconds
+
+solution <- solve(problem_equal, run_checks = FALSE)
+plan_equal <- tibble(Site = solution$Site, selected = solution$solution_1 == 1)
 sum(plan_equal$selected)
+```
+
+We will build several plans, changing one ingredient at a time. So we put the same steps in a function. A species with weight 0 is left out of the plan altogether.
+
+```{r make-plan}
+make_plan <- function(weights, cost, budget) {
+  weights <- filter(weights, weight > 0)
+  pu <- occ_in |>
+    filter(species %in% weights$species) |>
+    pivot_wider(id_cols = Site, names_from = species, values_from = cond_mean) |>
+    left_join(cost, by = "Site") |>
+    arrange(Site) |>
+    mutate(id = row_number())
+  solution <- problem(pu, features = weights$species, cost_column = "cost") |>
+    add_min_shortfall_objective(budget = budget) |>
+    add_relative_targets(target) |>
+    add_feature_weights(weights$weight) |>
+    add_binary_decisions() |>
+    add_highs_solver(gap = 0.01, time_limit = 30, verbose = FALSE) |>
+    solve(run_checks = FALSE)
+  tibble(Site = solution$Site, selected = solution$solution_1 == 1)
+}
 ```
 
 ```{r plot-helper}
@@ -59,7 +111,7 @@ plot_plan <- function(plan, title) {
     geom_point() +
     scale_colour_manual(values = c(`TRUE` = "firebrick", `FALSE` = "grey75"), name = "Protected") +
     scale_size_manual(values = c(`TRUE` = 4, `FALSE` = 1.8), guide = "none") +
-    coord_equal() + labs(x = "Longitude", y = "Latitude", title = title) +
+    coord_quickmap() + labs(x = "Longitude", y = "Latitude", title = title) +
     theme_minimal()
 }
 plot_plan(plan_equal, "Plan 1: equal weights, equal costs")
@@ -68,7 +120,14 @@ plot_plan(plan_equal, "Plan 1: equal weights, equal costs")
 How well does it do? For each species, `held` is the share of its total probability of presence inside the protected sites. The target is 0.5.
 
 ```{r coverage-equal}
-cov_equal <- scp_coverage(plan_equal, occ_in)
+coverage <- function(plan) {
+  occ_in |>
+    left_join(plan, by = "Site") |>
+    group_by(species) |>
+    summarise(held = sum(cond_mean[selected]) / sum(cond_mean), .groups = "drop")
+}
+
+cov_equal <- coverage(plan_equal)
 ggplot(cov_equal, aes(held)) +
   geom_histogram(binwidth = 0.05, fill = "grey40") +
   geom_vline(xintercept = target, linetype = 2, colour = "firebrick") +
@@ -82,13 +141,22 @@ c(met = sum(cov_equal$held >= target - 1e-9), of = nrow(cov_equal))
 
 The Red List says that some species are closer to extinction. We can ask the plan to care more about them. Species are weighted by their IUCN category: Critically Endangered 5, Endangered 4, Vulnerable 3, Near Threatened 2, Least Concern and Data Deficient 1. Where IUCN has no entry we use the China Red List, and where neither has one we give weight 1.
 
-```{r weights, warning = TRUE}
-w_redlist <- species_weights(status, "redlist")
+```{r weights}
+category_weight <- c(CR = 5, EN = 4, VU = 3, NT = 2, LC = 1, DD = 1)
+w_redlist <- status |>
+  mutate(category = coalesce(iucn, china_red_list),          # IUCN first, then the China Red List
+         weight = unname(category_weight[category]))
+
+w_redlist |> filter(is.na(weight)) |> select(species, iucn, china_red_list)   # no usable status
+
+w_redlist <- w_redlist |>
+  mutate(weight = replace_na(weight, 1)) |>
+  select(species, weight)
 table(w_redlist$weight)
 ```
 
 ```{r weighted-plan}
-plan_redlist <- build_scp(occ_in, w_redlist, cost_equal, budget = budget_frac * nrow(cost_equal), target = target)
+plan_redlist <- make_plan(w_redlist, cost_equal, budget = budget_frac * nrow(cost_equal))
 plot_plan(plan_redlist, "Plan 2: Red List weights, equal costs")
 ```
 
@@ -100,8 +168,8 @@ c(only_plan_1 = sum(plan_equal$selected) - shared, shared = shared, only_plan_2 
 
 threatened <- w_redlist$species[w_redlist$weight >= 3]   # Vulnerable or worse, on either Red List
 bind_rows(
-  scp_coverage(plan_equal, occ_in) |> mutate(plan = "Plan 1: equal weights"),
-  scp_coverage(plan_redlist, occ_in) |> mutate(plan = "Plan 2: Red List weights")
+  coverage(plan_equal) |> mutate(plan = "Plan 1: equal weights"),
+  coverage(plan_redlist) |> mutate(plan = "Plan 2: Red List weights")
 ) |>
   filter(species %in% threatened) |>
   group_by(plan) |>
@@ -117,7 +185,7 @@ Protecting a heavily modified site is usually more expensive: land is more costl
 
 ```{r cost-plan}
 budget_human <- budget_frac * sum(cost_human$cost)
-plan_cost <- build_scp(occ_in, w_redlist, cost_human, budget = budget_human, target = target)
+plan_cost <- make_plan(w_redlist, cost_human, budget = budget_human)
 plot_plan(plan_cost, "Plan 3: Red List weights, cost = human modification")
 ```
 
@@ -138,8 +206,8 @@ The plan now picks less modified sites and can afford more of them. Notice where
 
 ```{r cost-coverage}
 bind_rows(
-  scp_coverage(plan_redlist, occ_in) |> mutate(plan = "Plan 2"),
-  scp_coverage(plan_cost, occ_in) |> mutate(plan = "Plan 3")
+  coverage(plan_redlist) |> mutate(plan = "Plan 2"),
+  coverage(plan_cost) |> mutate(plan = "Plan 3")
 ) |>
   filter(species %in% threatened) |>
   group_by(plan) |>
@@ -155,8 +223,8 @@ w_wild <- w_redlist |>
   left_join(status[, c("species", "local_status")], by = "species") |>
   mutate(weight = if_else(local_status == "dom", 0, weight)) |>
   select(species, weight)
-plan_wild <- build_scp(occ_in, w_wild, cost_human, budget = budget_human, target = target)
-c(species_in_plan = length(attr(plan_wild, "features")),
+plan_wild <- make_plan(w_wild, cost_human, budget = budget_human)
+c(species_in_plan = sum(w_wild$weight > 0),
   sites_changed_from_plan_3 = sum(plan_wild$selected != plan_cost$selected))
 ```
 
