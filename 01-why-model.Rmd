@@ -1,5 +1,5 @@
 ---
-title: "Session 1: Why model? From eDNA summaries to a decision"
+title: "Session 1: Why model? What eDNA summaries cannot tell you"
 output:
   html_document:
     toc: true
@@ -58,12 +58,12 @@ For this workshop, we read `info` and `OTU` from CSV files, as you would read yo
 
 ```{r data}
 info <- read.csv("data-derived/info.csv")         # one row per PCR replicate
-OTU <- as.matrix(read.csv("data-derived/OTU.csv"))# same rows as info, one column per species
+OTU <- as.matrix(read.csv("data-derived/OTU.csv")) # same rows as info, one column per species
 species <- read.csv("data-derived/species.csv")   # one row per species: taxonomy and Red List status
 
 dim(info) # 1818 rows = 101 sites X 3 samples/site X 6 PCRs/sample
 dim(OTU) # 1818 rows X 108 species, same row order as info
-dim(species) # 108 species X 9 trait and taxonomic descriptors
+dim(species) # 108 species X 9 columns: ID, name, taxonomy, Red List status and body mass
 ```
 
 Click on the `OTU`, `info`, and `species` data frames in the Environment tab to view them.
@@ -74,7 +74,7 @@ Click on the `OTU`, `info`, and `species` data frames in the Environment tab to 
 
   - `annual_precipitation` to `Regional_Division` are environmental covariates, which describe site conditions. These values therefore repeat over the 18 rows of each site. For example, `Human_modification_1km` describes how much people have changed the land within 1 km of each site.
 
-  - `Filter_vol` is a collection covariate and describes how much water was filtered into each sample, which can change how much DNA was caught. These values change from sample to sample and therefore repeat over only the 6 rows of each sample.
+  - `Filter_vol` is a collection covariate and describes how much water was filtered into each sample, which can change how much DNA was caught. `PrevDayRain`, the rain on the previous day, is also a collection covariate. These values change from sample to sample and therefore repeat over only the 6 rows of each sample.
 
   - `Xs.1` and `Xs.2` are the site longitude and latitude.
 
@@ -100,7 +100,7 @@ design <- info |>
   count(Site, Sample, name = "K") |>    # PCR replicates in each field sample
   group_by(Site) |>
   summarise(M = n(), K = first(K)) |>   # field samples at the site; K is the same for each of them here
-  left_join(sites |> select(Site, Regional_Division, Human_modification_1km), by = "Site")
+  left_join(sites |> select(Site, Regional_Division), by = "Site")
 
 design
 
@@ -127,7 +127,7 @@ Each box is a taxonomic order, its area set by the number of species detected. T
 
 ## Summary 3: an ordination
 
-An ordination puts sites and species on a map where similar ones sit close together. We use `ecoCopula`, a model-based ordination package, on site-by-species presence and absence. NMDS has long been known to be unreliable. A species counts as present at a site if any of its 18 PCRs was positive. Species detected at fewer than 5 sites are dropped, because there is too little information to place them.
+An ordination puts sites and species on a map where similar ones sit close together. We use `ecoCopula`, a model-based ordination package, on site-by-species presence and absence. We do not use NMDS, the usual choice, because distance-based methods like it can mistake differences in how common species are for differences in where they occur (Warton et al. 2012, *Methods in Ecology and Evolution*). A species counts as present at a site if any of its 18 PCRs was positive. Species detected at fewer than 5 sites are dropped, because there is too little information to place them.
 
 First, turn the PCR rows into one row per site.
 
@@ -190,12 +190,12 @@ modification <- c(LV1 = cor(site_scores$Human_modification_1km,
 modification
 ```
 
-Human modification increases mostly downward, along latent variable 2. Next, we measure how far each species' arrow reaches along the dashed arrow. A positive value means the species turns up more at modified sites, a negative value at less modified ones. We label the eight species at each end.
+Human modification increases mostly downward, along latent variable 2. Next, we measure how far each species' arrow reaches along the dashed arrow. A positive value means the species turns up more at modified sites, a negative value at less modified ones. We label the eight species at each end, and three domestic animals.
 
 The next chunk does three things.
 
 - It gives every species a score, `toward_modification`. Think of the dashed arrow as a ruler laid across the plot from the centre. For each species, we drop a line from the tip of its arrow straight onto the ruler and read off where it lands. A species whose arrow points along the dashed arrow scores high, one pointing the opposite way scores low (negative), and one pointing across it scores near zero. The formula multiplies each arrow's two coordinates by the dashed arrow's two coordinates, adds them, and divides by the dashed arrow's length.
-- It picks the eight species with the lowest scores and the eight with the highest (`ends`), the ones we will label on the plot.
+- It picks the eight species with the lowest scores and the eight with the highest, plus three domestic animals (yak, horse and cat) that we discuss below (`ends`). These are the ones we will label on the plot.
 - It sets the colours and legend labels for wild and domestic species, and `r`, a scale factor that stretches the dashed arrow so that it reaches the edge of the sites.
 
 ```{r toward-modification}
@@ -205,7 +205,8 @@ species_scores <- species_scores |>
               LV2 * modification["LV2"]) / sqrt(sum(modification^2)))
 
 ends <- species_scores |>
-  filter(rank(toward_modification) <= 8 | rank(-toward_modification) <= 8)
+  filter(rank(toward_modification) <= 8 | rank(-toward_modification) <= 8 |
+           species %in% c("Bos grunniens", "Equus caballus", "Felis catus"))   # yak, horse, cat
 
 status_colours <- c(wild = "grey35", 
                     dom = "firebrick", 
@@ -272,11 +273,10 @@ The next chunk prepares the second biplot, in the same way as the first.
 
 ```{r reserve-direction}
 species_scores <- species_scores |>
-  mutate(red_list = coalesce(iucn, china_red_list),
+  mutate(red_list = coalesce(iucn, china_red_list),        # IUCN first, then the China Red List
          red_list = case_when(red_list %in% c("VU", "EN", "CR") ~ "threatened (VU, EN, CR)",
-          red_list %in% c("LC", "NT") ~ "not threatened (LC, NT)",
-          .default = "not assessed, or data deficient")
-         )
+                              red_list %in% c("LC", "NT") ~ "not threatened (LC, NT)",
+                              .default = "not assessed, or data deficient"))
 
 inside <- site_scores$streamOrigin == "insideGLGS"
 reserve <- c(LV1 = cor(inside, site_scores$LV1), 
@@ -339,7 +339,7 @@ Patterns we can see:
 
 Why we do not know how reliable these patterns are:
 
-- The plot is built from raw detections: a species counts as present at a site if any one of its 18 PCRs was positive. Every arrow therefore includes false positives (detections where the species is absent) and false negatives (missed detections where it is present). The next section shows how common those errors can be.
+- The plot is built from raw detections: a species counts as present at a site if any one of its 18 PCRs was positive. Every arrow therefore includes false positives (detections where the species is absent) and false negatives (missed detections where it is present). The dhole example below shows both kinds of error.
 - Many site features change together from the top of the plot to the bottom: latitude, temperature, forest cover, human modification, region and the reserve. So we cannot tell which of them the species are responding to.
 
 So treat these patterns as ideas to test, not as results. Session 3 tests them with a model that allows for both kinds of error.
@@ -446,9 +446,9 @@ The figure points to two kinds of error.
 
 **There are probably false positives.** The arrows point to sites with just 1 positive PCR out of 18. That could be a trace of real dhole DNA, or contamination in the field or the lab. From one site alone, we cannot tell. Ji et al. (2025) found the same pattern for the takin (*Budorcas taxicolor*): a few weak detections in the south, where the takin is known not to live.
 
-> Thus, we think that some of the red circles on the map are **false positives**: sites where we detected dhole DNA, but the DNA was from contamination, like (0, 0, 1).
+> Thus, we think that some of the red circles on the map are **false positives**: some sites with a weak pattern like (0, 0, 1) may be sites where the dhole was absent and the DNA came from contamination.
 
-In total, the raw map can be wrong in both directions. **A detection is not the same as a presence, and a non-detection (0, 0, 0) is not the same as an absence.**
+So, the raw map can be wrong in both directions. **A detection is not the same as a presence, and a non-detection (0, 0, 0) is not the same as an absence.**
 
 ## Next: an occupancy model
 
