@@ -34,12 +34,14 @@ test_that("Sessions 1 and 2: the imaginary species supports the text", {
     end <- start + which(rmd[(start + 1):length(rmd)] == "```")[1]
     rmd[(start + 1):(end - 1)]
   }
-  expect_identical(chunk("01-why-model.Rmd", "simulate"), chunk("02-dhole.Rmd", "simulate"))   # "the same code"
+  # "the same code"; trailing spaces are ignored, since RStudio strips them on save
+  expect_identical(trimws(chunk("01-why-model.Rmd", "simulate-survey"), "right"),
+                   trimws(chunk("02-dhole.Rmd", "simulate-survey"), "right"))
 
   sim <- new.env()
   sim$info <- read.csv(derived_path("info.csv"))
   sim$sim_fit <- readRDS(derived_path("simulated_fit.rds"))
-  eval(parse(text = chunk("02-dhole.Rmd", "simulate")), envir = sim)
+  eval(parse(text = chunk("02-dhole.Rmd", "simulate-survey")), envir = sim)
   invisible(capture.output(eval(parse(text = chunk("02-dhole.Rmd", "simulated-check")), envir = sim)))
   s <- sim$sim_check
 

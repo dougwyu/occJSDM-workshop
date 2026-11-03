@@ -17,6 +17,6 @@ chunk <- function(label) {   # the code of one chunk of 02-dhole.Rmd
 
 info <- read.csv("data-derived/info.csv")
 live_fit <- TRUE
-eval(parse(text = chunk("simulate")))
+eval(parse(text = chunk("simulate-survey")))
 eval(parse(text = chunk("simulated-fit")))
 saveRDS(sim_fit, "data-derived/simulated_fit.rds")

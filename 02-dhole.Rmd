@@ -133,29 +133,31 @@ What the arguments mean:
 
 Before we read the dhole's results, we try the model on the imaginary species from the end of Session 1. We know where it really lives, so we can check the model's answers. This is the same code as in Session 1, with the same seed, so it makes the same survey.
 
-```{r simulate}
-set.seed(2026)   # the same "random" survey every time
+```{r simulate-survey}
+set.seed(2026)   # so that every student gets the same "random" survey
 
-# 1. Is the species present at each site? More likely where forest cover is high.
+# 1. The species is more likely to be present where forest cover is high.
 truth <- info |>
   distinct(Site, forest = Percent_of_forest_cover_1km) |>
-  mutate(prob_present = plogis(-0.5 + 2 * as.vector(scale(forest))),   # plogis() turns a score into a probability
-         present = rbinom(n(), 1, prob_present))                        # 1 = present, 0 = absent
+  mutate(prob_present = plogis(-0.5 + 2 * as.vector(scale(forest))),   
+         # plogis() turns a score into a probability
+         present = rbinom(n(), 1, prob_present))  # 1 = present, 0 = absent
 
-# 2. Does each field sample catch the species' DNA? Only if it is present, and then 40% of the time.
+# 2. A field sample catches the species' DNA only 40% of the time when the species is at the site
 sim_samples <- info |>
   distinct(Site, Sample) |>
   left_join(truth, by = "Site") |>
   mutate(dna = present * rbinom(n(), 1, 0.4))
 
-# 3. Is each PCR positive? Only if its sample caught DNA, and then 60% of the time.
+# 3. A PCR detects the DNA only 60% of the time that the DNA is in the sample.
 sim_pcrs <- info |>
   select(Site, Sample) |>
   left_join(sim_samples, by = c("Site", "Sample")) |>
   mutate(positive = dna * rbinom(n(), 1, 0.6))
 
-# The detections, laid out like OTU: one row per PCR, one column for the species
-sim_OTU <- matrix(sim_pcrs$positive, ncol = 1, dimnames = list(NULL, "simulated"))
+# The detections table, laid out like OTU (Session 2 fits the model to it)
+sim_OTU <- matrix(sim_pcrs$positive, ncol = 1, 
+                  dimnames = list(NULL, "simulated"))
 ```
 
 We fit it with the same call as the dhole, with two differences. The only occupancy covariate is forest cover, which is what the species responds to. And there are no collection covariates, because in our survey every sample has the same chance of catching DNA. The fit takes a few seconds.
@@ -603,10 +605,16 @@ Each exercise refits the model with one change and compares the answer with the 
 First, store the covariates in two vectors, so each exercise can reuse them.
 
 ```{r exercise-setup}
-occ_covs <- c("annual_precipitation", "mean_temperature", "Human_modification_1km",
-              "Percent_of_forest_cover_1km", "Patch_density_1km", "Edge_density_1km",
-              "streamOrigin", "Regional_Division")
-coll_covs <- c("Filter_vol", "PrevDayRain")
+occ_covs <- c("annual_precipitation", 
+              "mean_temperature",
+              "Human_modification_1km",
+              "Percent_of_forest_cover_1km", 
+              "Patch_density_1km",
+              "Edge_density_1km",
+              "streamOrigin", 
+              "Regional_Division")
+coll_covs <- c("Filter_vol", 
+               "PrevDayRain")
 ```
 
 ### Exercise 1: a species whose range we know
@@ -691,24 +699,34 @@ Rain on the previous day lowered the chance that a sample caught the dhole's DNA
 
 ```{r exercise-no-rain, eval = FALSE}
 set.seed(2026)
-fit_no_rain <- runOccJSDM(data = d, listParams = list(n_factors = 0), threshold = 1,
-                          occCovariates = occ_covs, collCovariates = "Filter_vol",   # no PrevDayRain
+fit_no_rain <- runOccJSDM(data = d, 
+                          listParams = list(n_factors = 0), 
+                          threshold = 1,
+                          occCovariates = occ_covs, 
+                          collCovariates = "Filter_vol",   # no PrevDayRain
                           spatCovariates = character(),
-                          MCMCparams = list(nchain = 2, nburn = 5000, niter = 5000, nthin = 1, ncores = 2),
+                          MCMCparams = list(nchain = 2, 
+                                            nburn = 5000, 
+                                            niter = 5000, 
+                                            nthin = 1, 
+                                            ncores = 2),
                           summarisedLatentPresences = TRUE)
 
 no_rain_probability <- computeConditionalOccupancyProbs(fit_no_rain)
+
 rain <- info |>
   group_by(Site) |>
   summarise(rain_mm = mean(PrevDayRain))                 # rain the day before sampling, per site
 
 compare_rain <- map_data |>
   select(Site, pattern, with_rain = model) |>
-  left_join(tibble(Site = rownames(no_rain_probability), without_rain = no_rain_probability[, 1]), by = "Site") |>
+  left_join(tibble(Site = rownames(no_rain_probability), 
+                   without_rain = no_rain_probability[, 1]), 
+            by = "Site") |>
   left_join(rain, by = "Site")
 
 compare_rain |>
-  filter(abs(with_rain - without_rain) > 0.1) |>     # the sites that moved most
+  filter(abs(with_rain - without_rain) > 0.1) |>   # the sites that moved most
   mutate(across(c(with_rain, without_rain), \(x) round(x, 2)))
 ```
 

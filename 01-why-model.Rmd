@@ -532,49 +532,60 @@ The figure points to two kinds of error.
 >
 > There are 60 empty circles on the map. How many of these are false negatives?
 
-**There are also probably false positives.** The four arrows point to sites with just 1 positive PCR out of 18. That could be a trace of real dhole DNA, or contamination in the field or the lab. From one site alone, we cannot tell. Ji et al. (2025) found the same pattern for the takin (*Budorcas taxicolor*): a few weak detections in the south, where the takin is known not to live.
+**There are also probably false positives.** The four arrows point to sites with just 1 positive PCR out of 18. That might be a trace of real dhole DNA, or it could be contamination in the field or the lab. From one site alone, we cannot tell.
 
-> Thus, we think that some of the red circles on the map are **false positives**: some sites with a weak pattern like (0, 0, 1) may be sites where the dhole was absent and the DNA came from contamination.
+> Thus, we think that some of the 41 red circles on the map are **false positives**: some sites with a weak pattern like (0, 0, 1) may be sites where the dhole was absent and the DNA came from contamination.
+>
+> Ji et al. (2025) found the same pattern for the takin (*Budorcas taxicolor*): a few weak detections in the south, where the takin is known not to live.
 
 So, the raw map can be wrong in both directions. **A detection is not the same as a presence, and a non-detection (0, 0, 0) is not the same as an absence.**
 
-## A survey where we know the truth
+## A simulated survey to demonstrate false-negative error
 
-For the dhole, we can only argue that false negatives exist, because we never learn where it really lives. To see them, we make up a species and survey it ourselves, on the same 101 sites with the same design: three field samples per site and six PCRs per sample. Because we make it up, we know where it really is.
+For the dhole example above, we can only argue that false negatives exist, because we never learn where it really lives.
 
-Our imaginary species is more likely to live at sites with more forest cover. Where it lives, each field sample catches its DNA 40% of the time, and each PCR detects DNA that is in the sample 60% of the time. To keep things simple, it has **no false positives**: where the species is absent, no sample catches its DNA and no PCR is positive.
+To see false negative error,
 
-```{r simulate}
-set.seed(2026)   # the same "random" survey every time
+- We simulate a survey. We use the same 101 sites and the same study design: 3 field samples per site and 6 PCRs per sample.
 
-# 1. Is the species present at each site? More likely where forest cover is high.
+- We simulate a species. Our imaginary species is more likely to live at sites with more forest cover. In the sites where it lives, each sample successfully catches its DNA 40% of the time, and each PCR successfully detects the DNA that is in the sample 60% of the time. This means that the simulation **allows** **false negatives**. Some sites will have the species but all detections failed.
+
+- To keep things simple, we assume **no false positives**. That is, in our simulation, any detection is a true presence.
+
+```{r simulate-survey}
+set.seed(2026)   # so that every student gets the same "random" survey
+
+# 1. The species is more likely to be present where forest cover is high.
 truth <- info |>
   distinct(Site, forest = Percent_of_forest_cover_1km) |>
-  mutate(prob_present = plogis(-0.5 + 2 * as.vector(scale(forest))),   # plogis() turns a score into a probability
-         present = rbinom(n(), 1, prob_present))                        # 1 = present, 0 = absent
+  mutate(prob_present = plogis(-0.5 + 2 * as.vector(scale(forest))),   
+         # plogis() turns a score into a probability
+         present = rbinom(n(), 1, prob_present))  # 1 = present, 0 = absent
 
-# 2. Does each field sample catch the species' DNA? Only if it is present, and then 40% of the time.
+# 2. A field sample catches the species' DNA only 40% of the time when the species is at the site
 sim_samples <- info |>
   distinct(Site, Sample) |>
   left_join(truth, by = "Site") |>
   mutate(dna = present * rbinom(n(), 1, 0.4))
 
-# 3. Is each PCR positive? Only if its sample caught DNA, and then 60% of the time.
+# 3. A PCR detects the DNA only 60% of the time that the DNA is in the sample.
 sim_pcrs <- info |>
   select(Site, Sample) |>
   left_join(sim_samples, by = c("Site", "Sample")) |>
   mutate(positive = dna * rbinom(n(), 1, 0.6))
 
-# The detections, laid out like OTU: one row per PCR, one column for the species
-sim_OTU <- matrix(sim_pcrs$positive, ncol = 1, dimnames = list(NULL, "simulated"))
+# The detections table, laid out like OTU (Session 2 fits the model to it)
+sim_OTU <- matrix(sim_pcrs$positive, ncol = 1, 
+                  dimnames = list(NULL, "simulated"))
 ```
 
-Now we compare what the survey detected with the truth.
+Now we compare what the survey detected with the (simulated) truth.
 
 ```{r simulated-sites}
 sim_sites <- sim_pcrs |>
   group_by(Site) |>
-  summarise(present = first(present), positive = sum(positive)) |>   # positive PCRs, out of 18
+  summarise(present = first(present), positive = sum(positive)) |>   
+       # positive PCRs, out of 18
   mutate(status = case_when(present == 0 ~ "absent",
                             positive > 0 ~ "present, detected",
                             TRUE         ~ "present, missed")) |>
@@ -588,9 +599,12 @@ ggplot(sim_sites, aes(Xs.1, Xs.2, fill = status)) +
   geom_point(shape = 21, size = 3, colour = "grey25", stroke = 0.3) +
   scale_fill_manual(values = c("absent" = NA, "present, detected" = "#cb181d",
                                "present, missed" = "orange"),
-                    breaks = c("present, detected", "present, missed", "absent"), name = NULL) +
+                    breaks = c("present, detected", "present, missed",
+                               "absent"), name = NULL) +
   coord_quickmap() +
-  labs(x = "Longitude", y = "Latitude", title = "The imaginary species: truth and detections") +
+  labs(x = "Longitude", 
+       y = "Latitude", 
+       title = "The imaginary species: truth and detections") +
   theme_minimal() +
   theme(legend.position = "bottom")
 ```
