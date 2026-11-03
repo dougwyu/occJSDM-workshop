@@ -28,32 +28,41 @@ library(ggrepel)      # labels that do not overlap, in ggplot2
 
 ## From one species to a community
 
-A conservation plan needs an answer for every species, not one. We could fit 108 separate models, but a joint model does better: it fits all species together, shares information between them through hidden site effects that act on many species at once, and estimates how species go together after the environment is accounted for.
+A conservation plan needs an answer for every species, not just the dhole. We could fit 108 separate models, but a joint model does better. It:
 
-Fitting this model for 108 mammals takes several minutes on a fast laptop, so we use a fit prepared earlier (5,000 burn-in and 5,000 kept iterations, two chains). The summaries below come from it. If you want to run the occJSDM output functions on the full fit, your instructor can share the file.
+- fits all species together,
+- shares information between them through hidden site effects that act on many species at once,
+- and estimates which species go together after the environment is accounted for.
+
+Fitting this model for 108 mammals takes several minutes on a fast laptop, so we use a fit prepared earlier (5,000 burn-in and 5,000 kept iterations, two chains). If you want to run the occJSDM output functions on the full fit, your instructor can share the file.
+
+We read the saved results, and the same data tables as in Session 1.
 
 ```{r load}
 fit <- read_fit_summary()      # a list of tables taken from the full fit
 status <- read.csv("data-derived/species.csv")
 info <- read.csv("data-derived/info.csv")
 OTU <- as.matrix(read.csv("data-derived/OTU.csv"))
+
+# one row per site, with its coordinates, for the maps
 sites <- info |>
-  distinct(Site, .keep_all = TRUE) |>                  # one row per site, as in Session 1
-  select(-Sample, -Primer, -Filter_vol, -PrevDayRain) |>
-  arrange(Site)
+  distinct(Site, Xs.1, Xs.2)
+
+# as in Session 1: a species is detected at a site if any of the site's 18 PCRs was positive
 presence <- info |>
   select(Site) |>
   bind_cols(as_tibble(OTU)) |>
   pivot_longer(-Site, names_to = "otu_id", values_to = "positive") |>
   group_by(Site, otu_id) |>
-  summarise(present = as.numeric(any(positive > 0)), .groups = "drop")   # as in Session 1: 1 if any PCR at the site was positive
+  summarise(present = as.numeric(any(positive > 0)), .groups = "drop")
+
+# the number of sites where each species was detected
 sites_detected <- presence |>
   group_by(otu_id) |>
-  summarise(sites_detected = sum(present))    # the number of sites where each species was detected
-names(fit)
+  summarise(sites_detected = sum(present))
 ```
 
-`fit` is a list of five tables. Open it in the Environment tab. Each table has the species' `otu_id` (its column name in `OTU`) and its `species` name.
+Click on `fit` in the Environment tab to view it. It is a list of tables. Each table has the species' `otu_id` (its column name in `OTU`) and its `species` name.
 
 - `occ`: one row per site and species. `cond_mean` and `psi_mean` are probabilities of presence, explained below.
 - `params`: one row per species. `p_` columns are the true-positive rate, `q_` columns the false-positive rate, each with its mean and the ends of its 95% interval (`_lo`, `_hi`).
@@ -61,7 +70,7 @@ names(fit)
 - `effects`: one row per species and occupancy covariate: the effect's mean, its 95% interval (`lo`, `hi`) and its R-hat. It is the `beta_psi` part of the diagnostics table you met in Session 2.
 - `assoc`: one row per pair of species, with their residual correlation.
 
-The full fitted model is too large for a 4 GB session, so `read_fit_summary()` loads these tables instead. On a fit of your own you would make them with the occJSDM functions you used on the dhole in Session 2. The chunk below shows how, and is not run in class.
+The full fitted model is too large for a 4 GB session, so `read_fit_summary()` loads these tables instead. On a fit of your own you would make them with the occJSDM functions you used on the dhole in Session 2. The chunk below shows how. It is not run in class.
 
 ```{r from-a-fit, eval = FALSE}
 library(occJSDM)
@@ -104,7 +113,12 @@ assoc <- tibble(otu_a = species_ids[pairs[, 1]], otu_b = species_ids[pairs[, 2]]
 
 ## Can we trust the computation?
 
-With 108 species there are hundreds of parameters. For each species we take the largest R-hat in two groups: its detection parameters (the true- and false-positive rates and the effects of the collection covariates), and its covariate effects on occupancy. As in Session 2, R-hat near 1 means the chains agree. Here we call a group settled if its largest R-hat is at most 1.1.
+With 108 species there are hundreds of parameters. For each species we take the largest R-hat in two groups:
+
+- its **detection** parameters: the true- and false-positive rates and the effects of the collection covariates;
+- its **covariate effects** on occupancy.
+
+As in Session 2, R-hat near 1 means the chains agree. Here we call a group settled if its largest R-hat is at most 1.1.
 
 ```{r convergence}
 conv <- fit$diagnostics |>
@@ -112,55 +126,86 @@ conv <- fit$diagnostics |>
   mutate(detection_settled = rhat_detection <= 1.1,
          effects_settled = rhat_effects <= 1.1,
          settled = detection_settled & effects_settled)
+
 conv |> count(detection_settled, effects_settled)
+
+# the species that fail one check or the other, rarest first
 conv |>
   filter(!settled) |>
   arrange(sites_detected) |>
   select(species, sites_detected, rhat_detection, rhat_effects)
-
-# Numbers used in the text below
-unsettled <- conv |>
-  summarise(detection = sum(!detection_settled),
-            effects = sum(!effects_settled),
-            either = sum(!settled),
-            rare = sum(!settled & sites_detected <= 6))
-rattus_sites <- conv |>
-  filter(species == "Rattus tanezumi") |>
-  pull(sites_detected)
 ```
+
+> Look at the `sites_detected` column of the second table. What do most of the unsettled species have in common? Which ones break the pattern?
 
 Each panel below is a histogram of species. Species to the right of the red dashed line have at least one parameter whose chains have not settled.
 
 ```{r rhat-plot}
 conv |>
-  pivot_longer(c(rhat_detection, rhat_effects), names_to = "parameters", values_to = "rhat") |>
+  pivot_longer(c(rhat_detection, rhat_effects),
+               names_to = "parameters",
+               values_to = "rhat") |>
   ggplot(aes(rhat)) +
   geom_histogram(binwidth = 0.02, fill = "grey40") +
   geom_vline(xintercept = 1.1, linetype = 2, colour = "firebrick") +
   facet_wrap(~ parameters, ncol = 1) +
-  labs(x = "Largest R-hat per species", y = "Number of species",
+  labs(x = "Largest R-hat per species",
+       y = "Number of species",
        title = "Detection has settled for almost every species; the covariate effects have not") +
   theme_minimal()
 ```
 
-Detection has settled for all but `r unsettled$detection` species. The covariate effects are worse: for `r unsettled$effects` species at least one effect has not settled, and `r unsettled$either` species fail one check or the other. `r unsettled$rare` of those `r unsettled$either` were detected at six sites or fewer, where there is little information, but the list also includes common species such as *Rattus tanezumi*, detected at `r rattus_sites` sites. The dhole passes both checks.
+- Detection has settled for all but 4 species.
+- The covariate effects are worse: for 29 species at least one effect has not settled.
+- Together, 30 species fail one check or the other. Half of them (15) were detected at six sites or fewer, where there is little information. But the list also includes common species such as *Rattus tanezumi*, detected at 84 sites.
+- The dhole passes both checks.
 
-The cure is a longer run, which takes too long for class. Until then, do not read the covariate effects of these `r unsettled$either` species, and treat their probabilities of presence with care, because those probabilities are built from the same effects. This is a limit of this fit, not a reason to drop the whole analysis.
+The cure is a longer run, which takes too long for class. Until then, do not read the covariate effects of these 30 species, and treat their probabilities of presence with care, because those probabilities are built from the same effects. This is a limit of this fit, not a reason to drop the whole analysis.
 
 ## How reliable is each species' detection?
 
-The model gives each species its own true-positive and false-positive rates. In the figure below, each point is a species, with its 95% intervals as faint lines.
+The model gives each species its own true-positive and false-positive rates. First we join each species' wild or domestic status to its rates.
+
+```{r detection-rates}
+profile <- fit$params |>
+  left_join(status |> select(otu_id, local_status), by = "otu_id")
+```
+
+We start with the plainest plot: one point per species.
+
+```{r detection-plain}
+ggplot(profile, aes(q_mean, p_mean)) +
+  geom_point(size = 2, colour = "grey40") +
+  labs(x = "False-positive rate per PCR",
+       y = "True-positive rate per PCR",
+       title = "Each point is a species") +
+  theme_minimal()
+```
+
+How to read it:
 
 - Up means a positive PCR is more likely when the species' DNA is there. Species near the top are easy to detect.
 - Right means a PCR is more often positive when the species is not there. Species to the right have detections that overstate where they live.
-- The best place to be is the top left. We label the six species with the highest false-positive rates.
+- The best place to be is the top left.
+
+What can we read from this plain version?
+
+- True-positive rates spread widely, from about 0.15 to 0.95. Some species are easy to detect and some are hard.
+- Most species (96 of 108) sit at the far left, with false-positive rates below 0.05.
+- A few species sit far to the right.
+
+What we cannot read is which species those are, whether they are wild or domestic, or how sure the model is about each rate. So we colour the points by wild or domestic, add each species' 95% intervals as faint lines, and label the six species with the highest false-positive rates.
 
 ```{r detection-profile}
-status_colours <- c(wild = "grey35", dom = "purple3", wild_or_dom = "darkorange")   # as in Session 1
-status_labels <- c(wild = "wild", dom = "domestic", wild_or_dom = "wild or domestic")
+# the same colours as in Session 1
+status_colours <- c(wild = "grey35",
+                    dom = "purple3",
+                    wild_or_dom = "darkorange")
+status_labels <- c(wild = "wild",
+                   dom = "domestic",
+                   wild_or_dom = "wild or domestic")
 
-profile <- fit$params |>
-  left_join(status |> select(otu_id, local_status, order), by = "otu_id")
+# the six species to label
 worst <- profile |> slice_max(q_mean, n = 6)
 
 ggplot(profile, aes(q_mean, p_mean, colour = local_status)) +
@@ -169,37 +214,55 @@ ggplot(profile, aes(q_mean, p_mean, colour = local_status)) +
   geom_point(size = 2) +
   geom_text_repel(data = worst,
                   aes(label = species),
-                  size = 3, fontface = "italic", min.segment.length = 0,
-                  show.legend = FALSE, seed = 1) +
-  scale_colour_manual(values = status_colours, labels = status_labels, name = "Species") +
+                  size = 3,
+                  fontface = "italic",
+                  min.segment.length = 0,
+                  show.legend = FALSE,
+                  seed = 1) +
+  scale_colour_manual(values = status_colours,
+                      labels = status_labels,
+                      name = "Species") +
   labs(x = "False-positive rate per PCR",
        y = "True-positive rate per PCR",
        title = "Detection quality varies a lot between species") +
   theme_minimal()
 ```
 
+Here are the ten species with the highest false-positive rates, with the number of sites where each was detected.
+
 ```{r worst-fp}
 profile |>
   arrange(desc(q_mean)) |>
   left_join(sites_detected, by = "otu_id") |>
-  transmute(species, local_status, sites_detected,
-            false_positive = round(q_mean, 3), true_positive = round(p_mean, 2)) |>
+  transmute(species,
+            local_status,
+            sites_detected,
+            false_positive = round(q_mean, 3),
+            true_positive = round(p_mean, 2)) |>
   head(10)
 ```
 
-The highest false-positive rates belong to species detected at most sites. They include the pig and cattle, whose DNA probably reaches rivers from farms and settlements, but also several common small mammals. The model cannot say why a species has a high rate, only that its raw detections overstate where it lives.
+The highest false-positive rates belong to species detected at most sites. They include the pig and cattle, whose DNA probably reaches rivers from farms and settlements, but also several common small mammals. The model cannot say why a species has a high rate, only that its raw detections overstate where they live.
+
+> **Discussion.** If a species' false-positive rate is high, what does that mean for a map of its raw detections?
 
 ## Probability of presence at every site
 
-For each site and each species, the model gives the probability that the species is present given what was detected. These are the numbers the conservation plan will use.
+For each site and each species, the model gives the probability that the species is present given what was detected. These are the numbers the conservation plan will use. We attach each species' taxonomic order, which we use below.
 
 ```{r occupancy}
 occ <- fit$occ |>
-  left_join(status |> select(otu_id, order, family, iucn, china_red_list, local_status), by = "otu_id")
-occ |> select(Site, species, cond_mean, psi_mean) |> head()
+  left_join(status |> select(otu_id, order),
+            by = "otu_id")
 ```
 
-`cond_mean` is the probability of presence given the detections: the one for asking "is species X at site 12?". `psi_mean` is the probability of presence before this species' own detections at the site are weighed. It comes from the site's covariates plus the hidden site effects, and those hidden effects were estimated from what all the species detected at the site have in common. So `psi_mean` is not a prediction for a site nobody surveyed. That would need the covariates alone, which this workshop does not cover. Both are posterior means. The package does not yet return intervals for these, which we come back to in Session 4.
+Click on `occ` in the Environment tab to view it. It has 10,908 rows. Can you work out why?
+
+It has two probabilities of presence:
+
+- `cond_mean` is the probability of presence given the detections. Use it to ask "is species X at site 12?".
+- `psi_mean` is the probability of presence before this species' own detections at the site are weighed. It comes from the site's covariates plus the hidden site effects, which were estimated from the survey itself. So it is not a prediction for a site nobody surveyed.
+- Both are posterior means. The package does not yet return intervals for them, which we come back to in Session 4.
 
 The histogram below counts site-species pairs, on a log scale because most of them pile up near zero. Pairs at either end are settled; pairs in the middle are ones the data cannot decide.
 
@@ -207,7 +270,8 @@ The histogram below counts site-species pairs, on a log scale because most of th
 ggplot(occ, aes(cond_mean)) +
   geom_histogram(binwidth = 0.05, fill = "grey40") +
   scale_y_log10() +
-  labs(x = "Probability of presence given the detections", y = "Site-species pairs (log scale)",
+  labs(x = "Probability of presence given the detections",
+       y = "Site-species pairs (log scale)",
        title = "Most site-species pairs are settled; a minority are uncertain") +
   theme_minimal()
 ```
@@ -217,19 +281,31 @@ ggplot(occ, aes(cond_mean)) +
 The raw count of species detected at a site and the model's expected number of species are different things. The expected number is the sum of the probabilities of presence.
 
 ```{r richness}
+# the number of species detected at each site
+detected_per_site <- presence |>
+  group_by(Site) |>
+  summarise(detected = sum(present))
+
 richness <- occ |>
   group_by(Site) |>
-  summarise(expected = sum(cond_mean), .groups = "drop") |>
-  left_join(presence |> group_by(Site) |> summarise(detected = sum(present)), by = "Site") |>   # species detected at each site
+  summarise(expected = sum(cond_mean)) |>
+  left_join(detected_per_site, by = "Site") |>
   left_join(sites, by = "Site")
 
 richness |>
-  summarise(detected = mean(detected), expected = mean(expected))
+  summarise(detected = mean(detected),
+            expected = mean(expected))
 ```
+
+> On average a site had 22.5 species detected, but the model expects only 12.8. Think back to the false-positive rates. Why might the model expect fewer species than were detected?
+
+Now we map both measures side by side.
 
 ```{r richness-map, fig.width = 10}
 richness |>
-  pivot_longer(c(detected, expected), names_to = "measure", values_to = "species") |>
+  pivot_longer(c(detected, expected),
+               names_to = "measure",
+               values_to = "species") |>
   ggplot(aes(Xs.1, Xs.2, colour = species)) +
   geom_point(size = 3) +
   facet_wrap(~ measure) +
@@ -246,7 +322,7 @@ occ |>
   group_by(order, Site) |>
   summarise(expected = sum(cond_mean), .groups = "drop") |>
   group_by(order) |>
-  summarise(mean_per_site = round(mean(expected), 2), .groups = "drop") |>
+  summarise(mean_per_site = round(mean(expected), 2)) |>
   arrange(desc(mean_per_site))
 ```
 
@@ -254,23 +330,35 @@ The saved table `data-derived/occupancy_long.csv` has one row per site and speci
 
 ## Does the reserve matter, once human modification is accounted for?
 
-In Session 1's ordination, sites whose stream rises inside the Gaoligongshan reserve sat at the opposite end from the most modified sites, so the figure could not say which of the two species respond to. The model includes both covariates, and estimates the effect of each with the other held fixed. Session 2 could not answer the question for the dhole alone. Here we ask it of every species.
+In Session 1's ordination, sites whose stream rises inside the Gaoligongshan reserve sat at the opposite end from the most modified sites. So the figure could not say which of the two the species respond to.
 
-The model reports the reserve as `streamOriginoutsideGLGS`: outside compared with inside. We flip its sign, so a positive value means a species is more likely to be present where the stream rises inside the reserve. We keep only the species whose chains settled, and group them by Red List status as in Session 1.
+- The model includes both covariates, and estimates the effect of each with the other held fixed.
+- Session 2 could not answer the question for the dhole alone. Here we ask it of every species.
+
+The next chunk prepares the effects for plotting.
+
+- The model reports the reserve as `streamOriginoutsideGLGS`: outside compared with inside. We flip its sign, so a positive value means a species is more likely to be present where the stream rises inside the reserve.
+- We keep only the species whose chains settled.
+- We group the species by Red List status, as in Session 1.
 
 ```{r reserve-effects}
 reserve_effects <- fit$effects |>
   filter(covariate %in% c("streamOriginoutsideGLGS", "Human_modification_1km")) |>
-  mutate(sign = if_else(covariate == "streamOriginoutsideGLGS", -1, 1),     # flip outside to inside
+  # flip outside-vs-inside to inside-vs-outside; flipping swaps the ends of the interval
+  mutate(sign = if_else(covariate == "streamOriginoutsideGLGS", -1, 1),
          estimate = sign * mean,
          lower = pmin(sign * lo, sign * hi),
          upper = pmax(sign * lo, sign * hi),
          covariate = if_else(covariate == "Human_modification_1km",
-                             "More human modification", "Stream rises inside the reserve")) |>
-  left_join(status |> select(otu_id, iucn, china_red_list, local_status, body_mass), by = "otu_id") |>
+                             "More human modification",
+                             "Stream rises inside the reserve")) |>
+  left_join(status |> select(otu_id, iucn, china_red_list, local_status, body_mass),
+            by = "otu_id") |>
+  # keep only the species whose chains settled
   left_join(conv |> select(otu_id, settled), by = "otu_id") |>
   filter(settled) |>
-  mutate(red_list = coalesce(iucn, china_red_list),        # IUCN first, then the China Red List
+  # IUCN first, then the China Red List
+  mutate(red_list = coalesce(iucn, china_red_list),
          red_list = case_when(red_list %in% c("VU", "EN", "CR") ~ "threatened (VU, EN, CR)",
                               red_list %in% c("LC", "NT") ~ "not threatened (LC, NT)",
                               .default = "not assessed, or data deficient"))
@@ -279,23 +367,30 @@ reserve_effects <- fit$effects |>
 Each row of the figure is a species, with its effect and 95% interval. Points right of the dashed line mean more likely present; intervals that cross the line cannot be told apart from no effect.
 
 ```{r reserve-plot, fig.height = 11}
-red_list_colours <- c("threatened (VU, EN, CR)" = "firebrick",          # as in Session 1
+# the same colours as in Session 1
+red_list_colours <- c("threatened (VU, EN, CR)" = "firebrick",
                       "not threatened (LC, NT)" = "grey50",
                       "not assessed, or data deficient" = "steelblue")
 
 reserve_effects |>
-  mutate(species = fct_reorder(species, if_else(covariate == "Stream rises inside the reserve", estimate, NA),
+  # order the species by their reserve effect, in both panels
+  mutate(species = fct_reorder(species,
+                               if_else(covariate == "Stream rises inside the reserve", estimate, NA),
                                .na_rm = TRUE)) |>
   ggplot(aes(estimate, species, colour = red_list)) +
   geom_vline(xintercept = 0, linetype = 2, colour = "grey50") +
   geom_pointrange(aes(xmin = lower, xmax = upper), size = 0.2) +
   facet_wrap(~ covariate) +
   scale_colour_manual(values = red_list_colours, name = "Red List") +
-  labs(x = "Effect on the log-odds of presence", y = NULL,
+  labs(x = "Effect on the log-odds of presence",
+       y = NULL,
        title = "Most species are more likely present inside the reserve") +
   theme_minimal() +
-  theme(axis.text.y = element_text(size = 6, face = "italic"), legend.position = "bottom")
+  theme(axis.text.y = element_text(size = 6, face = "italic"),
+        legend.position = "bottom")
 ```
+
+The tables below count, for each group of species, how many effects are credibly positive (the interval is above zero) or credibly negative (below zero).
 
 ```{r reserve-summary}
 reserve_effects |>
@@ -306,45 +401,69 @@ reserve_effects |>
             mean_effect = round(mean(estimate), 2),
             .groups = "drop")
 
-reserve_only <- reserve_effects |> filter(covariate == "Stream rises inside the reserve")
+reserve_only <- reserve_effects |>
+  filter(covariate == "Stream rises inside the reserve")
+
 reserve_only |>
   group_by(local_status) |>
-  summarise(species = n(), credibly_positive = sum(lower > 0), mean_effect = round(mean(estimate), 2))
+  summarise(species = n(),
+            credibly_positive = sum(lower > 0),
+            mean_effect = round(mean(estimate), 2))
+
+# body mass, on a log scale
 reserve_only |>
-  summarise(correlation_with_body_mass = round(cor(estimate, log10(body_mass)), 2))   # body mass, on a log scale
+  summarise(correlation_with_body_mass = round(cor(estimate, log10(body_mass)), 2))
 ```
 
 What the model says, with human modification held fixed:
 
-- Most wild species are more likely to be present where the stream rises inside the reserve, and for many of them the interval excludes zero. No species is credibly less likely to be there.
+- Most wild species are more likely to be present where the stream rises inside the reserve: for 51 of the 68 wild species the interval excludes zero. No species is credibly less likely to be there.
 - Threatened species are no different from common ones in this. The reserve seems to go with most of the mammal community, not with the threatened species in particular.
-- Larger species show weaker reserve effects, not stronger ones (the correlation with body mass is negative).
+- Larger species show weaker reserve effects, not stronger ones (the correlation with body mass is -0.37).
 - Domestic animals show little or no reserve effect, which is what we would expect if the effect is about wild mammals and not a quirk of the data.
-- With the reserve held fixed, human modification has no credible effect for almost any species.
+- With the reserve held fixed, human modification has a credible effect for only 1 of the 78 species.
 
 So the pattern that Session 1's ordination could not untangle is, in this model, mostly about the reserve.
 
-Be careful about what this does and does not show. `streamOrigin` records where a stream rises, and the eDNA in a stream comes from upstream. A stream that rises inside the reserve carries DNA from the reserve's forest, so part of the effect may be about where the DNA comes from, not only where the animals live. The reserve also differs from the land outside it in ways the model does not measure, such as terrain and access. The model shows that species are more often present at reserve sites. It cannot show that protection is the cause.
+Be careful about what this does and does not show.
+
+- `streamOrigin` records where a stream rises, and the eDNA in a stream comes from upstream. A stream that rises inside the reserve carries DNA from the reserve's forest, so part of the effect may be about where the DNA comes from, not only where the animals live.
+- The reserve also differs from the land outside it in ways the model does not measure, such as terrain and access.
+- The model shows that species are more often present at reserve sites. It cannot show that protection is the cause.
+
+> **Discussion.** A park manager reads this and says "the reserve works". What would you tell them?
 
 ## Which species go together?
 
-After the environment is accounted for, some species still occur together more than chance would suggest. The model estimates these residual associations as correlations. We keep only pairs whose 95% interval excludes zero.
+After the environment is accounted for, some species still occur together more than chance would suggest. The model estimates these residual associations as correlations. We keep only pairs whose 95% interval excludes zero, attach the species names, and list the ten strongest.
 
 ```{r associations}
 assoc <- fit$assoc |>
   filter(lo > 0 | hi < 0) |>
-  left_join(status |> select(otu_id, species_a = species), by = c("otu_a" = "otu_id")) |>
-  left_join(status |> select(otu_id, species_b = species), by = c("otu_b" = "otu_id"))
-assoc_counts <- assoc |>
-  summarise(credible_pairs = n(), positive = sum(median > 0), negative = sum(median < 0))
-assoc_counts
+  left_join(status |> select(otu_id, species_a = species),
+            by = c("otu_a" = "otu_id")) |>
+  left_join(status |> select(otu_id, species_b = species),
+            by = c("otu_b" = "otu_id"))
+
+assoc |>
+  summarise(credible_pairs = n(),
+            positive = sum(median > 0),
+            negative = sum(median < 0))
+
 assoc |>
   arrange(desc(median)) |>
   transmute(species_a, species_b, correlation = round(median, 2)) |>
   head(10)
 ```
 
-A correlation of 1 would mean two species are always found together, after the covariates and hidden site effects are allowed for; 0 means knowing one tells you nothing about the other. Of the `r assoc_counts$credible_pairs` pairs whose interval excludes zero, `r assoc_counts$negative` are negative: no pair is credibly less likely to co-occur than chance. The strongest are between close relatives (the *Rattus* species), between livestock (cattle and buffalo), and between the dhole and *Canis lupus*, a name that also covers domestic dogs. An association is not an interaction. Two species can co-occur because they share an unmeasured habitat, because DNA from both is washed into the same water, or because they really do interact. The table is a place to start asking, not an answer.
+A correlation of 1 would mean two species are always found together, after the covariates and hidden site effects are allowed for; 0 means knowing one tells you nothing about the other.
+
+- 225 pairs have an interval that excludes zero, and none of them is negative: no pair is credibly less likely to co-occur than chance.
+- The strongest are between close relatives (the *Rattus* species), between livestock (cattle and buffalo), and between the dhole and *Canis lupus*, a name that also covers domestic dogs.
+
+An association is not an interaction. Two species can co-occur because they share an unmeasured habitat, because DNA from both is washed into the same water, or because they really do interact. The table is a place to start asking, not an answer.
+
+> Click on `assoc` in the Environment tab and look for the dhole (*Cuon alpinus*). Which species go with it, and which of the three explanations above seems most likely for each?
 
 ```{r mcp, echo = FALSE, results = "asis", eval = !mcp_off}
 cat('**Ask the assistant.** Posit Assistant can help you write R against the tables above. Try these, and read the code it writes before you run it.
