@@ -41,8 +41,15 @@ sites <- info |>
   distinct(Site, .keep_all = TRUE) |>                  # one row per site, as in Session 1
   select(-Sample, -Primer, -Filter_vol, -PrevDayRain) |>
   arrange(Site)
-presence <- (rowsum(OTU, info$Site) > 0) * 1   # as in Session 1: 1 if any PCR at the site was positive
-sites_detected <- colSums(presence)            # the number of sites where each species was detected
+presence <- info |>
+  select(Site) |>
+  bind_cols(as_tibble(OTU)) |>
+  pivot_longer(-Site, names_to = "otu_id", values_to = "positive") |>
+  group_by(Site, otu_id) |>
+  summarise(present = as.numeric(any(positive > 0)), .groups = "drop")   # as in Session 1: 1 if any PCR at the site was positive
+sites_detected <- presence |>
+  group_by(otu_id) |>
+  summarise(sites_detected = sum(present))    # the number of sites where each species was detected
 names(fit)
 ```
 
@@ -64,8 +71,11 @@ fit_full <- readRDS("fit_Mammal_d4_fixed.rds")     # the full mammal fit, 236 MB
 # one row per site, one column per species
 cond <- computeConditionalOccupancyProbs(fit_full)
 psi <- computePredictiveOccupancyProbs(fit_full)
-occ <- tibble(Site = rep(rownames(cond), ncol(cond)), otu_id = rep(colnames(cond), each = nrow(cond)),
-              cond_mean = as.vector(cond), psi_mean = as.vector(psi))
+occ <- as_tibble(cond, rownames = "Site") |>
+  pivot_longer(-Site, names_to = "otu_id", values_to = "cond_mean") |>
+  left_join(as_tibble(psi, rownames = "Site") |>
+              pivot_longer(-Site, names_to = "otu_id", values_to = "psi_mean"),
+            by = c("Site", "otu_id"))
 
 # Detection rates: posterior draws in fit_full$results_output$p_output and q_output, as in Session 2
 
@@ -98,8 +108,8 @@ With 108 species there are hundreds of parameters. For each species we take the 
 
 ```{r convergence}
 conv <- fit$diagnostics |>
-  mutate(sites_detected = sites_detected[otu_id],
-         detection_settled = rhat_detection <= 1.1,
+  left_join(sites_detected, by = "otu_id") |>
+  mutate(detection_settled = rhat_detection <= 1.1,
          effects_settled = rhat_effects <= 1.1,
          settled = detection_settled & effects_settled)
 conv |> count(detection_settled, effects_settled)
@@ -109,11 +119,14 @@ conv |>
   select(species, sites_detected, rhat_detection, rhat_effects)
 
 # Numbers used in the text below
-n_detection_unsettled <- sum(!conv$detection_settled)
-n_effects_unsettled <- sum(!conv$effects_settled)
-n_unsettled <- sum(!conv$settled)
-n_unsettled_rare <- sum(!conv$settled & conv$sites_detected <= 6)
-rattus_sites <- conv$sites_detected[conv$species == "Rattus tanezumi"]
+unsettled <- conv |>
+  summarise(detection = sum(!detection_settled),
+            effects = sum(!effects_settled),
+            either = sum(!settled),
+            rare = sum(!settled & sites_detected <= 6))
+rattus_sites <- conv |>
+  filter(species == "Rattus tanezumi") |>
+  pull(sites_detected)
 ```
 
 Each panel below is a histogram of species. Species to the right of the red dashed line have at least one parameter whose chains have not settled.
@@ -130,9 +143,9 @@ conv |>
   theme_minimal()
 ```
 
-Detection has settled for all but `r n_detection_unsettled` species. The covariate effects are worse: for `r n_effects_unsettled` species at least one effect has not settled, and `r n_unsettled` species fail one check or the other. `r n_unsettled_rare` of those `r n_unsettled` were detected at six sites or fewer, where there is little information, but the list also includes common species such as *Rattus tanezumi*, detected at `r rattus_sites` sites. The dhole passes both checks.
+Detection has settled for all but `r unsettled$detection` species. The covariate effects are worse: for `r unsettled$effects` species at least one effect has not settled, and `r unsettled$either` species fail one check or the other. `r unsettled$rare` of those `r unsettled$either` were detected at six sites or fewer, where there is little information, but the list also includes common species such as *Rattus tanezumi*, detected at `r rattus_sites` sites. The dhole passes both checks.
 
-The cure is a longer run, which takes too long for class. Until then, do not read the covariate effects of these `r n_unsettled` species, and treat their probabilities of presence with care, because those probabilities are built from the same effects. This is a limit of this fit, not a reason to drop the whole analysis.
+The cure is a longer run, which takes too long for class. Until then, do not read the covariate effects of these `r unsettled$either` species, and treat their probabilities of presence with care, because those probabilities are built from the same effects. This is a limit of this fit, not a reason to drop the whole analysis.
 
 ## How reliable is each species' detection?
 
@@ -168,7 +181,8 @@ ggplot(profile, aes(q_mean, p_mean, colour = local_status)) +
 ```{r worst-fp}
 profile |>
   arrange(desc(q_mean)) |>
-  transmute(species, local_status, sites_detected = sites_detected[otu_id],
+  left_join(sites_detected, by = "otu_id") |>
+  transmute(species, local_status, sites_detected,
             false_positive = round(q_mean, 3), true_positive = round(p_mean, 2)) |>
   head(10)
 ```
@@ -206,7 +220,7 @@ The raw count of species detected at a site and the model's expected number of s
 richness <- occ |>
   group_by(Site) |>
   summarise(expected = sum(cond_mean), .groups = "drop") |>
-  mutate(detected = rowSums(presence)[Site]) |>
+  left_join(presence |> group_by(Site) |> summarise(detected = sum(present)), by = "Site") |>   # species detected at each site
   left_join(sites, by = "Site")
 
 richness |>
@@ -296,7 +310,8 @@ reserve_only <- reserve_effects |> filter(covariate == "Stream rises inside the 
 reserve_only |>
   group_by(local_status) |>
   summarise(species = n(), credibly_positive = sum(lower > 0), mean_effect = round(mean(estimate), 2))
-round(cor(reserve_only$estimate, log10(reserve_only$body_mass)), 2)   # body mass, on a log scale
+reserve_only |>
+  summarise(correlation_with_body_mass = round(cor(estimate, log10(body_mass)), 2))   # body mass, on a log scale
 ```
 
 What the model says, with human modification held fixed:
@@ -320,15 +335,16 @@ assoc <- fit$assoc |>
   filter(lo > 0 | hi < 0) |>
   left_join(status |> select(otu_id, species_a = species), by = c("otu_a" = "otu_id")) |>
   left_join(status |> select(otu_id, species_b = species), by = c("otu_b" = "otu_id"))
-n_negative <- sum(assoc$median < 0)
-c(credible_pairs = nrow(assoc), positive = sum(assoc$median > 0), negative = n_negative)
+assoc_counts <- assoc |>
+  summarise(credible_pairs = n(), positive = sum(median > 0), negative = sum(median < 0))
+assoc_counts
 assoc |>
   arrange(desc(median)) |>
   transmute(species_a, species_b, correlation = round(median, 2)) |>
   head(10)
 ```
 
-A correlation of 1 would mean two species are always found together, after the covariates and hidden site effects are allowed for; 0 means knowing one tells you nothing about the other. Of the `r nrow(assoc)` pairs whose interval excludes zero, `r n_negative` are negative: no pair is credibly less likely to co-occur than chance. The strongest are between close relatives (the *Rattus* species), between livestock (cattle and buffalo), and between the dhole and *Canis lupus*, a name that also covers domestic dogs. An association is not an interaction. Two species can co-occur because they share an unmeasured habitat, because DNA from both is washed into the same water, or because they really do interact. The table is a place to start asking, not an answer.
+A correlation of 1 would mean two species are always found together, after the covariates and hidden site effects are allowed for; 0 means knowing one tells you nothing about the other. Of the `r assoc_counts$credible_pairs` pairs whose interval excludes zero, `r assoc_counts$negative` are negative: no pair is credibly less likely to co-occur than chance. The strongest are between close relatives (the *Rattus* species), between livestock (cattle and buffalo), and between the dhole and *Canis lupus*, a name that also covers domestic dogs. An association is not an interaction. Two species can co-occur because they share an unmeasured habitat, because DNA from both is washed into the same water, or because they really do interact. The table is a place to start asking, not an answer.
 
 ```{r mcp, echo = FALSE, results = "asis", eval = !mcp_off}
 cat('**Ask the assistant.** Posit Assistant can help you write R against the tables above. Try these, and read the code it writes before you run it.

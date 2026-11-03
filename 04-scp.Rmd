@@ -45,9 +45,9 @@ sites <- info |>
   distinct(Site, .keep_all = TRUE) |>                  # one row per site, as in Session 1
   select(-Sample, -Primer, -Filter_vol, -PrevDayRain) |>
   arrange(Site)
-occ_in <- occ[, c("Site", "species", "cond_mean")]
-cost_equal <- tibble(Site = sites$Site, cost = 1)
-cost_human <- tibble(Site = sites$Site, cost = sites$Human_modification_1km)
+occ_in <- occ |> select(Site, species, cond_mean)
+cost_equal <- sites |> transmute(Site, cost = 1)
+cost_human <- sites |> transmute(Site, cost = Human_modification_1km)
 budget_frac <- 0.2
 target <- 0.5
 ```
@@ -67,7 +67,7 @@ pu <- occ_in |>
   arrange(Site) |>
   mutate(id = row_number())          # prioritizr needs a numeric id for each planning unit
 dim(pu)
-pu[1:3, c("Site", "cost", "id", "Cuon alpinus", "Sus scrofa")]
+pu |> select(Site, cost, id, `Cuon alpinus`, `Sus scrofa`) |> head(3)
 ```
 
 `pu` has `r nrow(pu)` rows, one per site, and `r ncol(pu)` columns: `Site`, one column per species holding its probability of presence at that site, `cost`, and `id`. `prioritizr` needs the numeric `id` column, and it reads the feature columns by name, so the species names in `pu` must match those in the weights table below exactly.
@@ -75,7 +75,7 @@ pu[1:3, c("Site", "cost", "id", "Cuon alpinus", "Sus scrofa")]
 Every species gets weight 1, so a shortfall for any species counts the same.
 
 ```{r baseline}
-w_equal <- tibble(species = status$species, weight = 1)
+w_equal <- status |> transmute(species, weight = 1)
 
 problem_equal <- problem(pu, features = w_equal$species, cost_column = "cost") |>
   add_min_shortfall_objective(budget = budget_frac * nrow(pu)) |>   # get as close to every target as the budget allows
@@ -85,8 +85,8 @@ problem_equal <- problem(pu, features = w_equal$species, cost_column = "cost") |
   add_highs_solver(gap = 0.01, time_limit = 30, verbose = FALSE)    # a near-best answer, within 30 seconds
 
 solution <- solve(problem_equal, run_checks = FALSE)
-plan_equal <- tibble(Site = solution$Site, selected = solution$solution_1 == 1)
-sum(plan_equal$selected)
+plan_equal <- solution |> transmute(Site, selected = solution_1 == 1)
+count(plan_equal, selected)
 ```
 
 We will build several plans, changing one ingredient at a time. So we put the same steps in a function. A species with weight 0 is left out of the plan altogether.
@@ -107,7 +107,7 @@ make_plan <- function(weights, cost, budget) {
     add_binary_decisions() |>
     add_highs_solver(gap = 0.01, time_limit = 30, verbose = FALSE) |>
     solve(run_checks = FALSE)
-  tibble(Site = solution$Site, selected = solution$solution_1 == 1)
+  solution |> transmute(Site, selected = solution_1 == 1)
 }
 ```
 
@@ -147,7 +147,7 @@ ggplot(cov_equal, aes(held)) +
   labs(x = "Share of the species' presence held in protected sites", y = "Number of species",
        title = "Within this budget, many species fall short of the target") +
   theme_minimal()
-c(met = sum(cov_equal$held >= target - 1e-9), of = nrow(cov_equal))
+cov_equal |> summarise(met = sum(held >= target - 1e-9), of = n())
 ```
 
 ## Some species matter more
@@ -155,17 +155,18 @@ c(met = sum(cov_equal$held >= target - 1e-9), of = nrow(cov_equal))
 The Red List says that some species are closer to extinction. We can ask the plan to care more about them. Species are weighted by their IUCN category: Critically Endangered 5, Endangered 4, Vulnerable 3, Near Threatened 2, Least Concern and Data Deficient 1. As in Sessions 1 and 3, where IUCN has no entry we use the China Red List, and where neither has one we give weight 1. A weight of 3 or more is therefore what those sessions called threatened (VU, EN, CR).
 
 ```{r weights}
-category_weight <- c(CR = 5, EN = 4, VU = 3, NT = 2, LC = 1, DD = 1)
+category_weights <- tibble(category = c("CR", "EN", "VU", "NT", "LC", "DD"),
+                           weight   = c(5, 4, 3, 2, 1, 1))
 w_redlist <- status |>
-  mutate(category = coalesce(iucn, china_red_list),          # IUCN first, then the China Red List
-         weight = unname(category_weight[category]))
+  mutate(category = coalesce(iucn, china_red_list)) |>        # IUCN first, then the China Red List
+  left_join(category_weights, by = "category")
 
 w_redlist |> filter(is.na(weight)) |> select(species, iucn, china_red_list)   # no usable status
 
 w_redlist <- w_redlist |>
   mutate(weight = replace_na(weight, 1)) |>
   select(species, weight)
-table(w_redlist$weight)
+count(w_redlist, weight)
 ```
 
 ```{r weighted-plan}
@@ -176,10 +177,15 @@ plot_plan(plan_redlist, "Plan 2: Red List weights, equal costs")
 How much did the choice of sites change, and who gained?
 
 ```{r compare-weights}
-shared <- sum(plan_equal$selected & plan_redlist$selected)
-c(only_plan_1 = sum(plan_equal$selected) - shared, shared = shared, only_plan_2 = sum(plan_redlist$selected) - shared)
+plan_equal |>
+  left_join(plan_redlist, by = "Site", suffix = c("_1", "_2")) |>
+  summarise(only_plan_1 = sum(selected_1 & !selected_2),
+            shared = sum(selected_1 & selected_2),
+            only_plan_2 = sum(!selected_1 & selected_2))
 
-threatened <- w_redlist$species[w_redlist$weight >= 3]   # Vulnerable or worse, on either Red List
+threatened <- w_redlist |>
+  filter(weight >= 3) |>                         # Vulnerable or worse, on either Red List
+  pull(species)
 bind_rows(
   coverage(plan_equal) |> mutate(plan = "Plan 1: equal weights"),
   coverage(plan_redlist) |> mutate(plan = "Plan 2: Red List weights")
@@ -233,12 +239,14 @@ Cattle, buffalo and goats are in the data, and they are not conservation targets
 
 ```{r wild-plan}
 w_wild <- w_redlist |>
-  left_join(status[, c("species", "local_status")], by = "species") |>
+  left_join(status |> select(species, local_status), by = "species") |>
   mutate(weight = if_else(local_status == "dom", 0, weight)) |>
   select(species, weight)
 plan_wild <- make_plan(w_wild, cost_human, budget = budget_human)
-c(species_in_plan = sum(w_wild$weight > 0),
-  sites_changed_from_plan_3 = sum(plan_wild$selected != plan_cost$selected))
+w_wild |> summarise(species_in_plan = sum(weight > 0))
+plan_wild |>
+  left_join(plan_cost, by = "Site", suffix = c("_4", "_3")) |>
+  summarise(sites_changed_from_plan_3 = sum(selected_4 != selected_3))
 plot_plan(plan_wild, "Plan 4: wild species only, Red List weights, cost = human modification")
 ```
 
@@ -247,7 +255,9 @@ plot_plan(plan_wild, "Plan 4: wild species only, Red List weights, cost = human 
 Session 3 found that most species are more likely to be present where the stream rises inside the reserve. So we might expect the plans to pick reserve sites. Do they?
 
 ```{r reserve-overlap}
-inside_reserve <- sites$Site[sites$streamOrigin == "insideGLGS"]
+inside_reserve <- sites |>
+  filter(streamOrigin == "insideGLGS") |>
+  pull(Site)
 bind_rows(
   plan_equal |> mutate(plan = "Plan 1: equal weights, equal costs"),
   plan_redlist |> mutate(plan = "Plan 2: Red List weights, equal costs"),
@@ -260,7 +270,7 @@ bind_rows(
             inside_reserve = sum(Site %in% inside_reserve),
             share_inside = round(mean(Site %in% inside_reserve), 2), 
             .groups = "drop")
-c(sites_inside_reserve = length(inside_reserve), of = nrow(sites))
+sites |> summarise(sites_inside_reserve = sum(streamOrigin == "insideGLGS"), of = n())
 ```
 
 **Discuss.** If most of a plan's sites are already inside the reserve, the plan mainly says "keep protecting what is protected". The sites it picks outside the reserve are the new proposals. Which are they, and which species do they serve? Is a reserve site worth paying for, if it is protected already?

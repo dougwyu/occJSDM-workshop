@@ -148,18 +148,24 @@ count(species, order, sort = TRUE)
 
 Each box is a taxonomic order, its area set by the number of species detected. The small boxes inside are families. We detected a wide range of mammals, and many species were rodents.
 
-## Summary 3: an ordination
+## Summary 3: ordination analysis
 
 An ordination puts sites and species on a map where similar ones sit close together. We use `ecoCopula`, a model-based ordination package, on site-by-species presence and absence. We do not use NMDS, the usual choice, because distance-based methods like it can mistake differences in how common species are for differences in where they occur (Warton et al. 2012, *Methods in Ecology and Evolution*). A species counts as present at a site if any of its 18 PCRs was positive. Species detected at fewer than 5 sites are dropped, because there is too little information to place them.
 
 First, turn the PCR rows into one row per site.
 
 ```{r presence}
-presence <- rowsum(OTU, info$Site) > 0    # TRUE if any of a site's 18 PCRs was positive
-presence <- presence * 1      # as 1 and 0: sites in rows, species in columns
-keep <- colSums(presence) >= 5  # keep only species detected at 5 or more sites because ordination is more robust when one removes rare species
-y <- as.data.frame(presence[, keep])
-c(kept = sum(keep), dropped = sum(!keep)) # we kept 80 species and dropped 28
+presence <- info |>
+  select(Site) |>
+  bind_cols(as_tibble(OTU)) |>                             # add the species columns to each PCR row
+  group_by(Site) |>
+  summarise(across(everything(), \(x) as.numeric(any(x > 0))))   # 1 if any of a site's 18 PCRs was positive, else 0
+
+y <- presence |>
+  column_to_rownames("Site") |>                            # ecoCopula wants the sites as row names
+  select(where(\(x) sum(x) >= 5))   # keep only species detected at 5 or more sites because ordination is more robust when one removes rare species
+
+c(kept = ncol(y), dropped = ncol(presence) - 1 - ncol(y)) # we kept 80 species and dropped 28
 ```
 
 View `presence` as a dataframe.
@@ -170,7 +176,7 @@ View `presence` as a dataframe.
 set.seed(2026)   # an ordination normally starts from random values. In this class, we use set.seed() so that all students will get the same output
 sdm <- stackedsdm(y, 
                   formula_X = ~ 1, 
-                  data = data.frame(site = rownames(y)), 
+                  data = tibble(site = rownames(y)), 
                   family = "binomial", 
                   ncores = 1
                   )
@@ -189,7 +195,7 @@ species_scores <- tibble(otu_id = colnames(y),
   left_join(species, by = "otu_id")
 
 # Stretch the species arrows to the scale of the sites, so both show on one plot.
-k <- 0.9 * max(abs(c(site_scores$LV1, site_scores$LV2))) / max(abs(c(species_scores$LV1, species_scores$LV2)))
+k <- 0.9 * max(abs(select(site_scores, LV1, LV2))) / max(abs(select(species_scores, LV1, LV2)))
 ```
 
 We now use ggplot2 to draw a biplot. Sites are filled circles, and species are arrows. Colours show site covariates (on the circles) or species characteristics (on the arrows).
@@ -206,10 +212,9 @@ How to read a biplot:
 To make that last point concrete, we add a dashed arrow that shows the direction in which human modification increases across the plot. Its two coordinates are the correlations of `Human_modification_1km` with each latent variable. The longer the dashed arrow, the more closely the covariate lines up with the pattern of detections.
 
 ```{r modification-direction}
-modification <- c(LV1 = cor(site_scores$Human_modification_1km,
-                            site_scores$LV1),
-                  LV2 = cor(site_scores$Human_modification_1km,
-                            site_scores$LV2))
+modification <- site_scores |>
+  summarise(LV1 = cor(Human_modification_1km, LV1),
+            LV2 = cor(Human_modification_1km, LV2))
 modification
 ```
 
@@ -224,8 +229,8 @@ The next chunk does three things.
 ```{r toward-modification}
 species_scores <- species_scores |>
   mutate(toward_modification = 
-           (LV1 * modification["LV1"] + 
-              LV2 * modification["LV2"]) / sqrt(sum(modification^2)))
+           (LV1 * modification$LV1 + 
+              LV2 * modification$LV2) / sqrt(modification$LV1^2 + modification$LV2^2))
 
 ends <- species_scores |>
   filter(rank(toward_modification) <= 8 | rank(-toward_modification) <= 8 |
@@ -239,7 +244,7 @@ status_labels <- c(wild = "wild",
                    dom = "domestic", 
                    wild_or_dom = "wild or domestic")
 
-r <- max(abs(c(site_scores$LV1, site_scores$LV2)))   # stretch the dashed arrow to the edge of the sites
+r <- max(abs(select(site_scores, LV1, LV2)))   # stretch the dashed arrow to the edge of the sites
 ```
 
 ```{r biplot-modification, fig.height = 7}
@@ -252,12 +257,12 @@ ggplot() +
                    yend = LV2 * k, colour = local_status),
                alpha = 0.7, arrow = arrow(length = unit(0.12, "cm"))) +
   annotate("segment", x = 0, y = 0, 
-           xend = modification["LV1"] * r, 
-           yend = modification["LV2"] * r,
+           xend = modification$LV1 * r, 
+           yend = modification$LV2 * r,
            linetype = 2, linewidth = 0.8, 
            arrow = arrow(length = unit(0.25, "cm"))) +
-  annotate("label", x = modification["LV1"] * r, 
-           y = modification["LV2"] * r, 
+  annotate("label", x = modification$LV1 * r, 
+           y = modification$LV2 * r, 
            label = "more human\nmodification", 
            hjust = -0.1, size = 3.2, border.colour = NA) +   # NA: no box around the label
   geom_text_repel(data = ends, 
@@ -301,9 +306,10 @@ species_scores <- species_scores |>
                               red_list %in% c("LC", "NT") ~ "not threatened (LC, NT)",
                               .default = "not assessed, or data deficient"))
 
-inside <- site_scores$streamOrigin == "insideGLGS"
-reserve <- c(LV1 = cor(inside, site_scores$LV1), 
-             LV2 = cor(inside, site_scores$LV2))
+reserve <- site_scores |>
+  mutate(inside = streamOrigin == "insideGLGS") |>
+  summarise(LV1 = cor(inside, LV1), 
+            LV2 = cor(inside, LV2))
 
 threatened <- species_scores |> filter(red_list == "threatened (VU, EN, CR)")
 ```
@@ -318,12 +324,12 @@ ggplot() +
                    yend = LV2 * k, colour = red_list),
                alpha = 0.8, arrow = arrow(length = unit(0.12, "cm"))) +
   annotate("segment", x = 0, y = 0, 
-           xend = reserve["LV1"] * r, yend = reserve["LV2"] * r,
+           xend = reserve$LV1 * r, yend = reserve$LV2 * r,
            linetype = 2, linewidth = 0.8, 
            arrow = arrow(length = unit(0.25, "cm"))) +
   annotate("label", 
-           x = reserve["LV1"] * r, 
-           y = reserve["LV2"] * r, 
+           x = reserve$LV1 * r, 
+           y = reserve$LV2 * r, 
            label = "reserve\nsites", 
            hjust = -0.1, 
            size = 3.2,
@@ -374,7 +380,9 @@ The dhole (*Cuon alpinus*) is an Endangered wild dog. Neither the composition ch
 To see what lies behind each detection, we lay out the data the way they were collected, as in Figure 1 of Ji et al. ([2025](https://doi.org/10.1111/ele.70302){.uri}). First we count the positive PCRs in each field sample (out of 6), and then in each site (out of 18).
 
 ```{r dhole-samples}
-dhole <- species$otu_id[species$species == "Cuon alpinus"]
+dhole <- species |>
+  filter(species == "Cuon alpinus") |>
+  pull(otu_id)                                               # the dhole's column name in OTU
 
 dhole_samples <- info |>
   mutate(positive = OTU[, dhole]) |>
@@ -531,12 +539,13 @@ ggplot(sim_sites, aes(Xs.1, Xs.2, fill = status)) +
 ```
 
 ```{r simulated-numbers, include = FALSE}
-n_present <- sum(sim_sites$present)
-n_missed <- sum(sim_sites$status == "present, missed")
-n_absent <- sum(sim_sites$status == "absent")
+sim_counts <- sim_sites |>
+  summarise(present = sum(present),
+            missed = sum(status == "present, missed"),
+            absent = sum(status == "absent"))
 ```
 
-The species lives at `r n_present` sites, and the survey missed it at `r n_missed` of them (orange). In the survey data, those `r n_missed` sites look exactly like the `r n_absent` sites where it is absent (empty circles): all are (0, 0, 0). Nothing in a raw map could tell them apart.
+The species lives at `r sim_counts$present` sites, and the survey missed it at `r sim_counts$missed` of them (orange). In the survey data, those `r sim_counts$missed` sites look exactly like the `r sim_counts$absent` sites where it is absent (empty circles): all are (0, 0, 0). Nothing in a raw map could tell them apart.
 
 These are the false negatives we could only argue for in the dhole data, made visible. And this survey has no false positives, so every red circle is a real presence. The dhole data have both kinds of error.
 

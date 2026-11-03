@@ -43,7 +43,7 @@ We read the same CSV files as in Session 1, keep all of `info` and only the dhol
 info <- read.csv("data-derived/info.csv")
 OTU <- as.matrix(read.csv("data-derived/OTU.csv"))
 
-dhole_col <- grep("Cuon_alpinus", colnames(OTU), value = TRUE)   # the dhole's column name in OTU
+dhole_col <- str_subset(colnames(OTU), "Cuon_alpinus")   # the dhole's column name in OTU
 
 d <- list(info = info,
           OTU = OTU[, dhole_col, drop = FALSE])
@@ -62,7 +62,11 @@ Click on `d` in the Environment tab to open it.
 Here is one site, laid out as the model sees it: three field samples, six PCRs each.
 
 ```{r one-site}
-site_with_hits <- names(which.max(tapply(d$OTU[, 1], d$info$Site, sum)))
+site_with_hits <- d$info |>
+  mutate(positive = d$OTU[, 1]) |>
+  count(Site, wt = positive) |>                 # positive PCRs per site
+  slice_max(n, n = 1, with_ties = FALSE) |>     # the site with the most
+  pull(Site)
 
 d$info |>
   mutate(positive = d$OTU[, 1]) |>
@@ -187,15 +191,16 @@ if (is.null(sim_fit)) sim_fit <- readRDS("data-derived/simulated_fit.rds")
 `computeConditionalOccupancyProbs()` gives, for each site, the probability that the species is present there, given what was detected. We put it next to the truth.
 
 ```{r simulated-check}
-sim_prob <- computeConditionalOccupancyProbs(sim_fit)   # one row per site, one column per species
+sim_prob <- computeConditionalOccupancyProbs(sim_fit)   # a matrix: one row per site, one column per species
+sim_prob <- tibble(Site = rownames(sim_prob), probability = sim_prob[, 1])
 
 sim_check <- sim_pcrs |>
   group_by(Site) |>
   summarise(present = first(present), positive = sum(positive)) |>   # positive PCRs, out of 18
   mutate(status = case_when(present == 0 ~ "absent",
                             positive > 0 ~ "present, detected",
-                            TRUE         ~ "present, missed"),
-         probability = sim_prob[Site, 1])
+                            TRUE         ~ "present, missed")) |>
+  left_join(sim_prob, by = "Site")
 
 sim_check |>
   group_by(status) |>
@@ -214,10 +219,13 @@ ggplot(sim_check, aes(probability, status, colour = status)) +
 ```
 
 ```{r simulated-numbers, include = FALSE}
-sim_means <- tapply(sim_check$probability, sim_check$status, mean)
-sim_present <- sum(sim_check$present)
-sim_detected <- sum(sim_check$positive > 0)
-sim_expected <- sum(sim_check$probability)
+sim_means <- sim_check |>
+  group_by(status) |>
+  summarise(mean = mean(probability)) |>
+  deframe()                                  # a named vector: one mean per status
+
+sim_totals <- sim_check |>
+  summarise(present = sum(present), detected = sum(positive > 0), expected = sum(probability))
 ```
 
 How did the model do?
@@ -225,7 +233,7 @@ How did the model do?
 - **Where the species was detected**, the model is nearly sure it is present (`r sprintf("%.2f", sim_means[["present, detected"]])` on average). That is right. It does not say exactly 1, because the model allows for false positives, even though this survey has none.
 - **Where it was missed** (orange), the model cannot know that the species is there: those sites look exactly like absences in the data. But it does not treat them as absences either. It gives them `r sprintf("%.2f", sim_means[["present, missed"]])` on average, against `r sprintf("%.2f", sim_means[["absent"]])` at the sites where the species is really absent. It can do this for two reasons. From the detected sites, where some samples came up empty, it has learned how often an occupied site is missed altogether. And it has learned that the species prefers forest, so it raises the probability at well-forested sites with no detection.
 - **But it cannot tell which of those sites are the missed ones.** Some well-forested sites where the species is truly absent get as high a probability as the missed sites (the grey dots near 0.4). Nothing in the data separates them, so the model gives both the same "maybe".
-- **Add up the probabilities** over all sites, and the model expects the species at about `r round(sim_expected)` sites. The truth is `r sim_present`. The raw detections give only `r sim_detected`.
+- **Add up the probabilities** over all sites, and the model expects the species at about `r round(sim_totals$expected)` sites. The truth is `r sim_totals$present`. The raw detections give only `r sim_totals$detected`.
 
 So the model does not turn the orange sites red. It says "maybe" wherever the species could be, and in total it gets about the right amount. It also recovers the rates we used to make the survey:
 
@@ -249,11 +257,17 @@ sites <- info |>
   select(-Sample, -Primer, -Filter_vol, -PrevDayRain) |>
   arrange(Site)
 
-positive_pcrs <- tapply(d$OTU[, 1], d$info$Site, sum)  # positive PCRs per site, out of 18
+positive_pcrs <- d$info |>
+  mutate(positive = d$OTU[, 1]) |>
+  count(Site, wt = positive, name = "positive_pcrs")   # positive PCRs per site, out of 18
+
+model_probs <- tibble(Site = rownames(cond), model = cond[, 1])   # cond as a table, one row per site
 
 map_data <- sites |>
-  mutate(raw = as.numeric(positive_pcrs[Site]) / 18,   # share of PCRs positive
-         model = as.numeric(cond[Site, 1]))            # match by site name
+  left_join(positive_pcrs, by = "Site") |>             # match by site name
+  left_join(model_probs, by = "Site") |>
+  mutate(raw = positive_pcrs / 18, .before = model) |>   # share of PCRs positive
+  select(-positive_pcrs)
 ```
 
 Here are the raw detections from Session 1 beside the model's answer, drawn the same way. Empty circles are sites with no detection (raw) or where the dhole is almost certainly absent, with a probability below 0.1 (model). Filled circles are shaded from pale to dark red.
@@ -326,20 +340,23 @@ map_data |>
 
 # Sites with no detection: how many does the model expect to hold the dhole?
 undetected <- filter(map_data, raw == 0)
-c(undetected_sites = nrow(undetected),
-  expected_occupied = round(sum(undetected$model), 1),
-  highest_probability = round(max(undetected$model), 2))
+undetected |>
+  summarise(undetected_sites = n(),
+            expected_occupied = round(sum(model), 1),
+            highest_probability = round(max(model), 2))
 ```
 
 ```{r false-negative-numbers, include = FALSE}
-expected_missed <- round(sum(undetected$model), 1)
-n_detected <- sum(map_data$raw > 0)
-expected_total <- round(sum(map_data$model))
+false_negatives <- map_data |>
+  summarise(expected_missed = round(sum(model[raw == 0]), 1),
+            undetected = sum(raw == 0),
+            detected = sum(raw > 0),
+            expected_total = round(sum(model)))
 ```
 
 - **The four possible false positives** from Session 1, each with a single positive PCR, all get a probability of a few percent at most. The model concludes they are false positives.
 - **GLG39**, with two good samples and one empty one, gets a high probability: the empty sample was a false negative, and the model looks past it. **GLG28**, positive in all 18 PCRs, is certain.
-- **The false negatives.** The model expects about `r expected_missed` of the `r nrow(undetected)` sites with no detection to hold the dhole. Adding up the probabilities over all sites, it expects the dhole at about `r expected_total` sites, against the `r n_detected` where it was detected.
+- **The false negatives.** The model expects about `r false_negatives$expected_missed` of the `r false_negatives$undetected` sites with no detection to hold the dhole. Adding up the probabilities over all sites, it expects the dhole at about `r false_negatives$expected_total` sites, against the `r false_negatives$detected` where it was detected.
 
 ### Two kinds of occupancy probability
 
@@ -350,7 +367,8 @@ occJSDM gives two probabilities for each site, and they answer different questio
 
 ```{r two-probabilities}
 pred <- computePredictiveOccupancyProbs(fit)
-map_data <- map_data |> mutate(predictive = as.numeric(pred[Site, 1]))
+map_data <- map_data |>
+  left_join(tibble(Site = rownames(pred), predictive = pred[, 1]), by = "Site")
 
 ggplot(map_data, aes(predictive, model, shape = raw > 0)) +
   geom_abline(colour = "grey60") +
@@ -370,8 +388,11 @@ Each point is a site. Where the dhole was not detected (open circles), the condi
 `returnOccupancyRates()` gives the dhole's **baseline occupancy**: the chance that it occupies a site with average values of the numeric covariates, in the East, with a stream rising inside the reserve (the reference levels of the two categories). It returns one value for each of the model's draws, so we can report a mean and a 95% interval.
 
 ```{r baseline}
-baseline <- returnOccupancyRates(fit)[, 1]          # one value per draw
-round(c(mean = mean(baseline), quantile(baseline, c(0.025, 0.975))), 2)
+baseline <- tibble(draw = returnOccupancyRates(fit)[, 1])   # one row per posterior draw
+
+baseline |>
+  summarise(mean = mean(draw), lower = quantile(draw, 0.025), upper = quantile(draw, 0.975)) |>
+  round(2)
 ```
 
 ## How well is the dhole's DNA collected and detected?
@@ -384,19 +405,22 @@ Detection happens in two stages, and each can go wrong in both directions.
 `returnPosteriorDraws()` returns the draws of any parameter. We summarise each of the four with its mean and 95% interval.
 
 ```{r detection}
-summarise_draws <- function(x) c(mean = mean(x), lower = unname(quantile(x, 0.025)), upper = unname(quantile(x, 0.975)))
+# The mean and 95% interval of a set of posterior draws, as a one-row table
+summarise_draws <- function(x) tibble(mean = mean(x), lower = quantile(x, 0.025), upper = quantile(x, 0.975))
 
 collection_draws <- plogis(returnPosteriorDraws(fit, "beta_theta")["(Intercept)", 1, , ])   # at average collection covariates
 detection_draws <- returnPosteriorDraws(fit, "p")[1, 1, , ]
 field_fp_draws <- returnPosteriorDraws(fit, "theta0")[1, 1, , ]
 lab_fp_draws <- returnPosteriorDraws(fit, "q")[1, 1, , ]
 
-rates <- rbind(
+rates <- bind_rows(
   "Field: collection probability" = summarise_draws(collection_draws),
   "Field: false-positive rate" = summarise_draws(field_fp_draws),
   "Lab: detection probability per PCR" = summarise_draws(detection_draws),
-  "Lab: false-positive rate per PCR" = summarise_draws(lab_fp_draws))
-round(rates, 3)
+  "Lab: false-positive rate per PCR" = summarise_draws(lab_fp_draws),
+  .id = "rate")                               # the names become a column
+
+rates |> mutate(across(where(is.numeric), \(x) round(x, 3)))
 ```
 
 A sample from a site with the dhole catches its DNA about seven times in ten, and a PCR on such a sample detects it about six times in ten. Both false-positive rates are a few percent. That sounds small, but with 18 PCRs at each of 101 sites, a few percent is enough to produce scattered single positives at sites where the dhole does not live.
@@ -407,9 +431,10 @@ The collection covariates change the collection probability. Each point is the e
 
 ```{r collection-covariates, fig.height = 3}
 collection_effects <- returnPosteriorDraws(fit, "beta_theta")
-effect_table <- t(sapply(c("Filter_vol", "PrevDayRain"),
-                         function(k) summarise_draws(collection_effects[k, 1, , ])))
-effect_table <- as_tibble(effect_table, rownames = "covariate")
+effect_table <- bind_rows(
+  Filter_vol = summarise_draws(collection_effects["Filter_vol", 1, , ]),
+  PrevDayRain = summarise_draws(collection_effects["PrevDayRain", 1, , ]),
+  .id = "covariate")
 
 ggplot(effect_table, aes(mean, covariate)) +
   geom_vline(xintercept = 0, linetype = 2, colour = "grey50") +
@@ -431,10 +456,10 @@ detect_site <- function(M, K) {
 }
 
 expand_grid(field_samples = c(1, 2, 3, 6), pcrs_per_sample = c(1, 3, 6, 12)) |>
-  rowwise() |>
-  mutate(detection = list(summarise_draws(detect_site(field_samples, pcrs_per_sample)))) |>
-  unnest_wider(detection) |>
-  mutate(across(c(mean, lower, upper), ~ round(.x, 2)))
+  mutate(detection = map2(field_samples, pcrs_per_sample,
+                          \(M, K) summarise_draws(detect_site(M, K)))) |>   # one summary per design
+  unnest(detection) |>
+  mutate(across(c(mean, lower, upper), \(x) round(x, 2)))
 ```
 
 With this survey's design (3 samples, 6 PCRs each), the dhole is detected at about 96% of the sites where it lives. That is why the model expects so few false negatives. Going beyond 6 PCRs adds almost nothing, because once a sample has the DNA, six PCRs nearly always find it; what limits detection is whether the sample catches the DNA at all. More field samples would help more than more PCRs.
@@ -457,8 +482,9 @@ ggplot(effects, aes(mean, covariate)) +
        title = "Where the data are weak, intervals are wide") +
   theme_minimal()
 
-crossing <- sum(effects$lower < 0 & effects$upper > 0)
-c(effects = nrow(effects), intervals_crossing_zero = crossing)
+effect_counts <- effects |>
+  summarise(effects = n(), intervals_crossing_zero = sum(lower < 0 & upper > 0))
+effect_counts
 ```
 
 How to read this figure:
@@ -468,7 +494,7 @@ How to read this figure:
 - For a category, the effect compares one level with a reference level that does not get a row. `streamOriginoutsideGLGS` compares sites whose stream rises outside the Gaoligongshan reserve with those whose stream rises inside it. `Regional_DivisionNorthwest` and `Regional_DivisionSouthwest` compare those regions with the East.
 - An interval that crosses the dashed line means we cannot tell whether the covariate matters.
 
-`r crossing` of the `r nrow(effects)` intervals cross the line. Effects on the log-odds scale are hard to picture, so `plotOccupancyGradient()` draws one of them as a probability, holding the other covariates at typical values:
+`r effect_counts$intervals_crossing_zero` of the `r effect_counts$effects` intervals cross the line. Effects on the log-odds scale are hard to picture, so `plotOccupancyGradient()` draws one of them as a probability, holding the other covariates at typical values:
 
 ```{r gradient}
 plotOccupancyGradient(fit, covName = "Human_modification_1km")
@@ -484,7 +510,7 @@ The mammal-wide fit of Session 3 does put one of the dhole's effects clearly awa
 joint_effects <- read_fit_summary()$effects |>
   filter(species == "Cuon alpinus") |>
   select(covariate, mean, lo, hi) |>
-  mutate(across(where(is.numeric), ~ round(.x, 2)))
+  mutate(across(where(is.numeric), \(x) round(x, 2)))
 
 joint_effects
 ```
@@ -510,7 +536,7 @@ ggplot(both, aes(joint, single)) +
   theme_minimal() +
   coord_equal()
 
-round(cor(both$joint, both$single), 2)
+both |> summarise(correlation = round(cor(joint, single), 2))
 ```
 
 ## Can we trust the computation?
@@ -522,9 +548,10 @@ Every result above comes from the model's MCMC draws. Before reporting any of th
 ```{r diagnostics}
 head(diag)
 
-c(parameters = nrow(diag),
-  rhat_above_1.01 = sum(diag$rhat > 1.01, na.rm = TRUE),
-  ess_below_400 = sum(diag$ess < 400, na.rm = TRUE))
+diag |>
+  summarise(parameters = n(),
+            rhat_above_1.01 = sum(rhat > 1.01, na.rm = TRUE),
+            ess_below_400 = sum(ess < 400, na.rm = TRUE))
 
 flagged <- diag |>
   filter(rhat > 1.01 | ess < 400) |>
@@ -587,7 +614,7 @@ coll_covs <- c("Filter_vol", "PrevDayRain")
 The takin (*Budorcas taxicolor*) lives only in the north of the study area. Ji et al. (2025) found a few weak takin detections in the south, where it is known not to live. Fit the same model to the takin.
 
 ```{r exercise-takin, eval = FALSE}
-takin_col <- grep("Budorcas_taxicolor", colnames(OTU), value = TRUE)
+takin_col <- str_subset(colnames(OTU), "Budorcas_taxicolor")
 d_takin <- list(info = info, OTU = OTU[, takin_col, drop = FALSE])
 
 set.seed(2026)
@@ -597,12 +624,15 @@ fit_takin <- runOccJSDM(data = d_takin, listParams = list(n_factors = 0), thresh
                         MCMCparams = list(nchain = 2, nburn = 5000, niter = 5000, nthin = 1, ncores = 2),
                         summarisedLatentPresences = TRUE)
 
-takin_positive <- tapply(d_takin$OTU[, 1], info$Site, sum)
-takin_probability <- computeConditionalOccupancyProbs(fit_takin)[, 1]
+takin_positive <- info |>
+  mutate(positive = d_takin$OTU[, 1]) |>
+  count(Site, wt = positive, name = "positive_pcrs")
+takin_probability <- computeConditionalOccupancyProbs(fit_takin)
+takin_probability <- tibble(Site = rownames(takin_probability), probability = round(takin_probability[, 1], 3))
 
 takin <- sites |>
-  mutate(positive_pcrs = as.numeric(takin_positive[Site]),
-         probability = round(as.numeric(takin_probability[Site]), 3))
+  left_join(takin_positive, by = "Site") |>
+  left_join(takin_probability, by = "Site")
 
 takin |>
   filter(positive_pcrs > 0) |>
@@ -624,7 +654,7 @@ first_two <- info |>
   mutate(keep = Sample %in% unique(Sample)[1:2]) |>   # the first two samples of each site
   pull(keep)
 
-d_two <- list(info = info[first_two, ],
+d_two <- list(info = filter(info, first_two),
               OTU = d$OTU[first_two, , drop = FALSE])
 
 set.seed(2026)
@@ -634,11 +664,11 @@ fit_two <- runOccJSDM(data = d_two, listParams = list(n_factors = 0), threshold 
                       MCMCparams = list(nchain = 2, nburn = 5000, niter = 5000, nthin = 1, ncores = 2),
                       summarisedLatentPresences = TRUE)
 
-two_probability <- computeConditionalOccupancyProbs(fit_two)[, 1]
+two_probability <- computeConditionalOccupancyProbs(fit_two)
 
 compare_two <- map_data |>
   select(Site, pattern, three_samples = model) |>
-  mutate(two_samples = as.numeric(two_probability[Site]))
+  left_join(tibble(Site = rownames(two_probability), two_samples = two_probability[, 1]), by = "Site")
 
 ggplot(compare_two, aes(three_samples, two_samples)) +
   geom_abline(colour = "grey60") +
@@ -648,7 +678,7 @@ ggplot(compare_two, aes(three_samples, two_samples)) +
 
 compare_two |>
   filter(abs(three_samples - two_samples) > 0.2) |>   # the sites that moved most
-  mutate(across(c(three_samples, two_samples), ~ round(.x, 2)))
+  mutate(across(c(three_samples, two_samples), \(x) round(x, 2)))
 ```
 
 - Which sites moved most? Look at their `pattern`: which sample was dropped, and what did it contain?
@@ -667,17 +697,19 @@ fit_no_rain <- runOccJSDM(data = d, listParams = list(n_factors = 0), threshold 
                           MCMCparams = list(nchain = 2, nburn = 5000, niter = 5000, nthin = 1, ncores = 2),
                           summarisedLatentPresences = TRUE)
 
-no_rain_probability <- computeConditionalOccupancyProbs(fit_no_rain)[, 1]
-rain <- tapply(info$PrevDayRain, info$Site, mean)        # rain the day before sampling, per site
+no_rain_probability <- computeConditionalOccupancyProbs(fit_no_rain)
+rain <- info |>
+  group_by(Site) |>
+  summarise(rain_mm = mean(PrevDayRain))                 # rain the day before sampling, per site
 
 compare_rain <- map_data |>
   select(Site, pattern, with_rain = model) |>
-  mutate(without_rain = as.numeric(no_rain_probability[Site]),
-         rain_mm = as.numeric(rain[Site]))
+  left_join(tibble(Site = rownames(no_rain_probability), without_rain = no_rain_probability[, 1]), by = "Site") |>
+  left_join(rain, by = "Site")
 
 compare_rain |>
   filter(abs(with_rain - without_rain) > 0.1) |>     # the sites that moved most
-  mutate(across(c(with_rain, without_rain), ~ round(.x, 2)))
+  mutate(across(c(with_rain, without_rain), \(x) round(x, 2)))
 ```
 
 - Which sites changed most? How much rain fell before they were sampled, and how many PCRs were positive there?
