@@ -611,7 +611,7 @@ coll_covs <- c("Filter_vol", "PrevDayRain")
 
 ### Exercise 1: a species whose range we know
 
-The takin (*Budorcas taxicolor*) lives only in the north of the study area. Ji et al. (2025) found a few weak takin detections in the south, where it is known not to live. Fit the same model to the takin.
+The takin (*Budorcas taxicolor*) lives only in the north of the study area. Ji et al. (2025, [doi:10.1111/ele.70302](https://doi.org/10.1111/ele.70302){.uri}) found a few weak takin detections in the south, where it is known not to live. Fit the same model to the takin.
 
 ```{r exercise-takin, eval = FALSE}
 takin_col <- str_subset(colnames(OTU), "Budorcas_taxicolor")

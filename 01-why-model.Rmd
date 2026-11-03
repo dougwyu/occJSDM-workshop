@@ -31,7 +31,7 @@ library(ggrepel)      # labels that do not overlap, in ggplot2
 
 ## The survey and the questions
 
-In 2023 a team sampled water at 101 river sites across the Gaoligongshan protected area complex in Yunnan and sequenced the eDNA for vertebrates (Ji et al. 2025, *Ecology Letters*). For this workshop, we use the mammals from the survey: 108 species.
+In 2023 a team sampled water at 101 river sites across the Gaoligongshan protected area complex in Yunnan and sequenced the eDNA for vertebrates (Ji et al. 2025, *Ecology Letters*, [doi:10.1111/ele.70302](https://doi.org/10.1111/ele.70302){.uri}). For this workshop, we use the mammals from the survey: 108 species.
 
 Three questions matter to a manager.
 
@@ -62,10 +62,10 @@ data_schematic()   # a drawing of the two tables, made in R/schematic.R
 ```
 
 - **Sample replicates.** Each site has several field samples, each with its own name in `Sample` (here `GLG01-1` and `GLG01-2`, shaded differently).
-- **Primer replicates.** Each sample can be amplified with more than one primer, named in `Primer`. Our workshop data will only use 12S.
-- **PCR replicates have no column.** Rows with the same `Site`, `Sample` and `Primer` are PCR replicates of one another, and occJSDM counts them from the rows. The grey PCR numbers are only there to help you read the table.
-- **Site covariates** repeat on every row of a site, and **collection covariates** on every row of a sample.
-- `OTU` has the same rows, in the same order, and one column per species. Each cell is the number of reads of that species in that PCR, straight from the OTU table that your bioinformatics pipeline produces. occJSDM turns the counts into detections (e.g. 0/1), using its `threshold` argument (Session 2), so **do not remove low counts from your OTU table**. Also, for simplicity, our workshop `OTU` table already only holds 1s and 0s.
+- **Primer replicates.** Each sample can be amplified with more than one primer, named in `Primer`. This column is optional; for example, our workshop data will only use 12S.
+- **PCR replicates have no column.** Rows with the same `Site`, `Sample` and `Primer` are PCR replicates of one another, and occJSDM counts them from the rows. The PCR column is only there to help you read the table.
+- **Site covariates** repeat on every row of a *site*, and **collection covariates** on every row of a *sample*.
+- `OTU` has the same rows, in the same order, with one column per species. Each cell is the number of reads of that species in that PCR, straight from the OTU table that your bioinformatics pipeline produces. occJSDM turns the counts into detections (e.g. 0/1), using its `threshold` argument (Session 2), so **do not remove low counts from your OTU table**. Also, for simplicity, our workshop `OTU` table already only holds 1s and 0s.
 
 The optional `traits` table has one row per species.
 
@@ -73,8 +73,8 @@ The optional `traits` table has one row per species.
 traits_schematic()   # a drawing of the traits table, made in R/schematic.R
 ```
 
-- **The row names are the species**, spelled exactly as the column names of `OTU`. occJSDM matches each species to its traits by name, so the rows can be in any order, but every `OTU` column must have a row.
-- **Traits can be numeric** (body mass) **or categorical** (diet, nocturnal or not).
+- **The row names are the species**, **spelled exactly as the column names of `OTU`**. occJSDM matches each species to its traits by name, so the rows can be in any order, but every `OTU` column must have a row. The names must not be an ordinary column, because occJSDM treats every column as a trait. You usually create a traits table with a `species` column. To prepare it for occJSDM use, move your species column into the rowname as the last step: `column_to_rownames(traits, "species")`.
+- **Traits can be numeric** (body mass) **or categorical** (diet, nocturnal/diurnal).
 - A trait describes the species, not the site or the sample, so it does not repeat across rows the way covariates do in `info`.
 
 For this workshop, we read `info` and `OTU` from CSV files, as you would read your own. We also read a species table with each species' taxonomy and Red List status. It is not a model input. We use it only to label and summarise results.
@@ -103,7 +103,7 @@ Click on the `OTU`, `info`, and `species` data frames in the Environment tab to 
 
 - `OTU` has 1,818 rows, one per PCR replicate, and 108 columns, one per species. A 1 means that PCR was positive for that species.
 
-- `species` has taxonomic and trait descriptors for each of the 108 species, and if needed, we can extract the information needed to make a `traits` table.
+- `species` has taxonomic *and* trait descriptors for each of the 108 species, and if needed, we can extract the information needed to make a `traits` table.
 
 Finally, to make it more convenient to create maps and plots in R, we need a table that describes each site once per row. The `info` table repeats the site information once per PCR (18 in this study) so we use `distinct()` to transform `info` into `sites`, and we drop the columns that describe a sample rather than a site.
 
@@ -150,7 +150,7 @@ Each box is a taxonomic order, its area set by the number of species detected. T
 
 ## Summary 3: ordination analysis
 
-An ordination puts sites and species on a map where similar ones sit close together. We use `ecoCopula`, a model-based ordination package, on site-by-species presence and absence. We do not use NMDS, the usual choice, because distance-based methods like it can mistake differences in how common species are for differences in where they occur (Warton et al. 2012, *Methods in Ecology and Evolution*). A species counts as present at a site if any of its 18 PCRs was positive. Species detected at fewer than 5 sites are dropped, because there is too little information to place them.
+An ordination puts sites and species on a map where similar ones sit close together. We use `ecoCopula`, a model-based ordination package, on site-by-species presence and absence. We do not use NMDS, the usual choice, because distance-based methods like it can mistake differences in how common species are for differences in where they occur (Warton et al. 2012, *Methods in Ecology and Evolution*, [doi:10.1111/j.2041-210X.2011.00127.x](https://doi.org/10.1111/j.2041-210X.2011.00127.x){.uri}). A species counts as present at a site if any of its 18 PCRs was positive. Species detected at fewer than 5 sites are dropped, because there is too little information to place them.
 
 First, turn the PCR rows into one row per site.
 
@@ -377,7 +377,7 @@ So treat these patterns as ideas to test, not as results. Session 3 tests them w
 
 The dhole (*Cuon alpinus*) is an Endangered wild dog. Neither the composition chart nor the ordination can say where it is. Its raw detections look as if they might.
 
-To see what lies behind each detection, we lay out the data the way they were collected, as in Figure 1 of Ji et al. ([2025](https://doi.org/10.1111/ele.70302){.uri}). First we count the positive PCRs in each field sample (out of 6), and then in each site (out of 18).
+To see what lies behind each detection, we lay out the data the way they were collected, as in Figure 1 of Ji et al. (2025, [doi:10.1111/ele.70302](https://doi.org/10.1111/ele.70302){.uri}). First we count the positive PCRs in each field sample (out of 6), and then in each site (out of 18).
 
 ```{r dhole-samples}
 dhole <- species |>
