@@ -261,7 +261,7 @@ Click on `occ` in the Environment tab to view it. It has 10,908 rows. Can you wo
 It has two probabilities of presence:
 
 - `cond_mean` is the probability of presence given the detections. Use it to ask "is species X at site 12?".
-- `psi_mean` is the probability of presence before this species' own detections at the site are weighed. It comes from the site's covariates plus the hidden site effects, which were estimated from the survey itself. So it is not a prediction for a site nobody surveyed.
+- `psi_mean` is the probability of presence before this species' own detections at the site are weighed. It comes from the site's occupancy covariates plus the hidden site effects, which were estimated from the survey itself. So it is not a prediction for a site nobody surveyed.
 - Both are posterior means. The package does not yet return intervals for them, which we come back to in Session 4.
 
 The histogram below counts site-species pairs, on a log scale because most of them pile up near zero. Pairs at either end are settled; pairs in the middle are ones the data cannot decide.

@@ -1,4 +1,4 @@
-# Data layer: the mammal input, species status, and site covariates.
+# Data layer: the mammal input, species status, and occupancy covariates.
 # Everything is joined by name, never by row position.
 
 workshop_root <- function(start = getwd()) {

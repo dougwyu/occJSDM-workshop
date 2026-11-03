@@ -18,6 +18,7 @@ source("setup/pins.R")
 use_workshop_lib()              # use the packages installed for the workshop
 source("R/data.R")              # derived_path(), used by read_fit_summary()
 source("R/fit.R")               # read_fit_summary(): saved results of the model fitted to all mammals
+source("R/schematic.R")         # data_schematic() and traits_schematic(): drawings of the tables
 mcp_off <- Sys.getenv("WORKSHOP_NO_MCP") == "1"
 live_fit <- Sys.getenv("WORKSHOP_LIVE_FIT", unset = "1") != "0"
 ```
@@ -60,33 +61,15 @@ dim(d$OTU) # 1818 rows X 1 species, same row order as info
 
 Click on `d` in the Environment tab to view it. Do you understand why `d$OTU` has the same number of rows as `d$info`?
 
-- `d$info` is the table from Session 1, unchanged: one row per PCR replicate, with `Site`, `Sample`, the site covariates and the collection covariates.
+- `d$info` is the table from Session 1, unchanged: one row per PCR replicate, with `Site`, `Sample`, the occupancy covariates and the collection covariates.
+  - **Occupancy covariates** are also known as **Site covariates** and **Environmental covariates**. They describe the site (climate, forest, human modification, region, and whether the stream rises inside the nature reserve). They can change whether the dhole lives there.
+  - **Collection covariates** describe how a sample was taken (the volume of water filtered, rain the previous day). They can change whether a sample catches the dhole's DNA, if the dhole is there.
 - `d$OTU` is a matrix with the same 1,818 rows and a single column, the dhole. A 1 means the PCR was positive. It must stay a matrix with a column name, even with one species, which is why we write `drop = FALSE`.
 - The rows of the two tables must be in the same order. Here they are, because both come from the same files.
 
-Here is one site, laid out as the model sees it: three field samples, six PCRs each.
-
-```{r one-site}
-site_with_hits <- d$info |>
-  mutate(positive = d$OTU[, 1]) |>
-  count(Site, wt = positive) |>                 # positive PCRs per site
-  slice_max(n, n = 1, with_ties = FALSE) |>     # the site with the most
-  pull(Site)
-
-d$info |>
-  mutate(positive = d$OTU[, 1]) |>
-  filter(Site == site_with_hits) |>
-  group_by(Sample) |>
-  summarise(pcrs = n(), positive = sum(positive), .groups = "drop")
+```{r}
+data_schematic()
 ```
-
-> Which pattern of positive PCRs would make you doubt that the dhole lives at a site? Which would make you sure?
-
-There are two kinds of covariates.
-
-- **Occupancy covariates** describe the site (climate, forest, human modification, region, and whether the stream rises inside the nature reserve). They can change whether the dhole lives there.
-
-- **Collection covariates** describe how a sample was taken (the volume of water filtered, rain the previous day). They can change whether a sample catches the dhole's DNA, if the dhole is there.
 
 ## Fit the model
 
@@ -404,7 +387,7 @@ map_data |>
 occJSDM gives two probabilities for each site, and they answer different questions.
 
 - The **conditional** probability (`computeConditionalOccupancyProbs()`), which we used above, takes into account what was detected at that site. Use it to ask whether the dhole is actually at a surveyed site.
-- The **predictive** probability (`computePredictiveOccupancyProbs()`) comes only from the site's covariates. It is what the model would expect at a site like this one before looking at its own detections. Use it to compare habitats.
+- The **predictive** probability (`computePredictiveOccupancyProbs()`) comes only from the site's occupancy covariates. It is what the model would expect at a site like this one before looking at its own detections. Use it to compare habitats.
 
 ```{r two-probabilities}
 pred <- computePredictiveOccupancyProbs(fit)
@@ -534,7 +517,7 @@ expand_grid(field_samples = c(1, 2, 3, 6),
 
 ## What explains where the dhole is?
 
-The harder question is why. We look at the effect of each site covariate on the chance the dhole is present.
+The harder question is why. We look at the effect of each occupancy covariate on the chance the dhole is present.
 
 ```{r effects}
 # one row per parameter, with its summary; more on this table below

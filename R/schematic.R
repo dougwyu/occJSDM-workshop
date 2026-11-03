@@ -24,7 +24,7 @@ data_schematic <- function() {
     kableExtra::column_spec(1, color = "grey55", italic = TRUE) |>
     kableExtra::column_spec(8, border_left = "2px solid #444") |>
     kableExtra::row_spec(5:8, background = "#f2f2f2") |>
-    kableExtra::add_header_above(c("not a column" = 1, "where the row belongs" = 3, "site covariates" = 2,
+    kableExtra::add_header_above(c("not a column" = 1, "where the row belongs" = 3, "occupancy covariates" = 2,
                                    "collection covariate" = 1, "one column per species" = 4)) |>
     kableExtra::add_header_above(c(" " = 1, "info" = 6, "OTU" = 4), font_size = 15, bold = TRUE)
 }

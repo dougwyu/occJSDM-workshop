@@ -65,7 +65,7 @@ data_schematic()   # a drawing of the two tables, made in R/schematic.R
 - **Sample replicates.** Each site has several field samples, each with its own name in `Sample` (here `GLG01-1` and `GLG01-2`, shaded differently).
 - **Primer replicates.** Each sample can be amplified with more than one primer, named in `Primer`. occJSDM needs this column even when only one primer was used, as in our workshop data, where every row says 12S.
 - **PCR replicates have no column.** Rows with the same `Site`, `Sample` and `Primer` are PCR replicates of one another, and occJSDM counts them from the rows. The PCR column is only there to help you read the table.
-- **Site covariates** repeat on every row of a *site*, and **collection covariates** on every row of a *sample*.
+- **Occupancy covariates** repeat on every row of a *site*, and **collection covariates** on every row of a *sample*.
 - `OTU` has the same rows, in the same order, with one column per species. Each cell is the number of reads of that species in that PCR, straight from the OTU table that your bioinformatics pipeline produces. occJSDM turns the counts into detections (e.g. 0/1), using its `threshold` argument (Session 2), so **do not remove low counts from your OTU table**. Also, for simplicity, our workshop `OTU` table already only holds 1s and 0s.
 
 The optional `traits` table has one row per species.
@@ -96,7 +96,7 @@ Click on the `OTU`, `info`, and `species` data frames in the Environment tab to 
 
   - There are 6 rows per Sample/Site combination, which stand for the 6 PCRs. In this dataset, there is only one primer used, 12S, but occJSDM can analyse datasets that used multiple primers.
 
-  - `annual_precipitation` to `Regional_Division` are environmental covariates, which describe site conditions. These values therefore repeat over the 18 rows of each site. For example, `Human_modification_1km` describes how much people have changed the land within 1 km of each site.
+  - `annual_precipitation` to `Regional_Division` are occupancy covariates, which describe site conditions. These values therefore repeat over the 18 rows of each site. For example, `Human_modification_1km` describes how much people have changed the land within 1 km of each site.
 
   - `Filter_vol` is a collection covariate and describes how much water was filtered into each sample, which can change how much DNA was caught. `PrevDayRain`, the rain on the previous day, is also a collection covariate. These values change from sample to sample and therefore repeat over only the 6 rows of each sample.
 
@@ -245,7 +245,7 @@ What can we read from this plain version?
 - Almost no arrow points to the lower left. Many species were detected at the sites to the right, which is where most arrows point, and far fewer at the sites in the lower left. So part of what this plot shows is simply how many species were detected at each site.
 - The sites in the upper left form a small group of their own.
 
-What we cannot read is which species make up each bundle, or what the sites in each group have in common. To find out, we decorate the plot. We colour the sites by a site covariate, colour the arrows by a species characteristic, label some species, and add a dashed arrow for the direction in which the covariate increases.
+What we cannot read is which species make up each bundle, or what the sites in each group have in common. To find out, we decorate the plot. We colour the sites by an occupancy covariate, colour the arrows by a species characteristic, label some species, and add a dashed arrow for the direction in which the covariate increases.
 
 ### Which species go with human modification?
 
@@ -339,7 +339,7 @@ This time, we ask whether Red-Listed species are more likely to be found in natu
 
 - Our `species` table categorises species in two ways: `iucn` is the IUCN Red List category. `china_red_list` is the category on the China Biodiversity Red List. We colour the species arrow red if it is Vulnerable, Endangered or Critically Endangered under the IUCN category (plus the China Red List when IUCN has no category).
 
-- Our `info` table has an environmental covariate that categorises streams by whether they originate inside a nature reserve in Gaoligongshan (`streamOrigin = insideGLGS`). We colour the sites by `streamOrigin`.
+- Our `info` table has an occupancy covariate that categorises streams by whether they originate inside a nature reserve in Gaoligongshan (`streamOrigin = insideGLGS`). We colour the sites by `streamOrigin`.
 
 - We also create a dashed arrow for the direction of the reserve sites, made the same way as before.
 
