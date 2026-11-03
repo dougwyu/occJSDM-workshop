@@ -28,3 +28,22 @@ data_schematic <- function() {
                                    "collection covariate" = 1, "one column per species" = 4)) |>
     kableExtra::add_header_above(c(" " = 1, "info" = 6, "OTU" = 4), font_size = 15, bold = TRUE)
 }
+
+# The optional traits table: one row per species, named like the OTU columns.
+traits_schematic <- function() {
+  traits <- data.frame(
+    species = c("OTU_1", "OTU_2", "OTU_3"),
+    body_mass_kg = c(15.2, 0.4, 230),
+    diet = c("carnivore", "omnivore", "herbivore"),
+    nocturnal = c("no", "yes", "no")
+  )
+  traits <- rbind(traits, c("⋮", "⋮", "⋮", "⋮"))   # one row for every OTU column
+
+  knitr::kable(traits, align = "c", col.names = c("", names(traits)[-1])) |>
+    kableExtra::kable_styling(full_width = FALSE, font_size = 13) |>
+    kableExtra::column_spec(1:4, extra_css = "white-space: nowrap;") |>
+    kableExtra::column_spec(1, color = "grey55", italic = TRUE) |>
+    kableExtra::column_spec(2, border_left = "2px solid #444") |>
+    kableExtra::add_header_above(c("row names" = 1, "numeric" = 1, "categorical" = 2)) |>
+    kableExtra::add_header_above(c(" " = 1, "traits" = 3), font_size = 15, bold = TRUE)
+}

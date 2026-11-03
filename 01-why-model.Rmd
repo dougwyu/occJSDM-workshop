@@ -11,12 +11,12 @@ output:
 knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE, fig.width = 8, fig.height = 5.5)
 ```
 
-The first code chunk is only for the workshop. It points R at the workshop's package library and loads a function that draws a schematic below. You would not need it in a project of your own.
+The first code chunk is only for the workshop. It points R at the workshop's package library and loads two functions that draw the schematics below. You would not need it in a project of your own.
 
 ```{r workshop-setup}
 source("setup/pins.R")
 use_workshop_lib()              # use the packages installed for the workshop
-source("R/schematic.R")         # data_schematic(): a drawing of the info and OTU tables
+source("R/schematic.R")         # data_schematic() and traits_schematic(): drawings of the tables
 mcp_off <- Sys.getenv("WORKSHOP_NO_MCP") == "1"
 ```
 
@@ -66,6 +66,16 @@ data_schematic()   # a drawing of the two tables, made in R/schematic.R
 - **PCR replicates have no column.** Rows with the same `Site`, `Sample` and `Primer` are PCR replicates of one another, and occJSDM counts them from the rows. The grey PCR numbers are only there to help you read the table.
 - **Site covariates** repeat on every row of a site, and **collection covariates** on every row of a sample.
 - `OTU` has the same rows, in the same order, and one column per species. Each cell is the number of reads of that species in that PCR, straight from the OTU table that your bioinformatics pipeline produces. occJSDM turns the counts into detections (e.g. 0/1), using its `threshold` argument (Session 2), so **do not remove low counts from your OTU table**. Also, for simplicity, our workshop `OTU` table already only holds 1s and 0s.
+
+The optional `traits` table has one row per species.
+
+```{r traits-schematic}
+traits_schematic()   # a drawing of the traits table, made in R/schematic.R
+```
+
+- **The row names are the species**, spelled exactly as the column names of `OTU`. occJSDM matches each species to its traits by name, so the rows can be in any order, but every `OTU` column must have a row.
+- **Traits can be numeric** (body mass) **or categorical** (diet, nocturnal or not).
+- A trait describes the species, not the site or the sample, so it does not repeat across rows the way covariates do in `info`.
 
 For this workshop, we read `info` and `OTU` from CSV files, as you would read your own. We also read a species table with each species' taxonomy and Red List status. It is not a model input. We use it only to label and summarise results.
 
