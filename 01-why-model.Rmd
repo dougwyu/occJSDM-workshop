@@ -116,18 +116,20 @@ sites <- info |>
 
 ## Summary 1: the study design
 
-Here is the study design in one table: the sites, the number of field samples per site (M) and the number of PCR replicates per sample (K). Every site has M = 3 and K = 6, so this design is balanced. The sites are spread over three regions, most of them in the Southwest.
+Here is the study design in one table: the sites, the number of field samples per site (M), the primers used on each sample, and the number of PCR replicates per sample and primer (K). Every site has M = 3 and K = 6, so this design is balanced. The sites are spread over three regions, most of them in the Southwest.
 
-Click on the `design` data frame in the Environment tab to view it. Notice that we only used one primer.
+Click on the `design` data frame in the Environment tab to view it. Notice that we only used one primer, 12S.
 
 ```{r design}
 design <- info |>
-  count(Site, Sample, name = "K") |>    # PCR replicates in each field sample
+  count(Site, Sample, Primer, name = "K") |>    # PCR replicates for each field sample and primer
   group_by(Site) |>
-  summarise(M = n(), K = first(K)) |>   # field samples at the site; K is the same for each of them here
+  summarise(M = n_distinct(Sample),             # field samples at the site
+            Primer = paste(unique(Primer), collapse = ", "),   # the primers used
+            K = first(K)) |>                    # K is the same for every sample here
   left_join(sites |> select(Site, Regional_Division), by = "Site")
 
-design |> count(Regional_Division, M, K, name = "sites")
+design |> count(Regional_Division, M, Primer, K, name = "sites")
 ```
 
 ## Summary 2: what was detected, by taxonomic order
@@ -163,14 +165,14 @@ Each box is a taxonomic order, its area set by the number of species detected. T
 
 ## Summary 3: ordination analysis
 
-An ordination puts sites and species on a map where similar ones sit close together. We use `ecoCopula`, a model-based ordination package, on site-by-species presence and absence. We do not use NMDS, the usual choice, because distance-based methods like it can mistake differences in how common species are for differences in where they occur (Warton et al. 2012, *Methods in Ecology and Evolution*, [doi:10.1111/j.2041-210X.2011.00127.x](https://doi.org/10.1111/j.2041-210X.2011.00127.x){.uri}). A species counts as present at a site if any of its 18 PCRs was positive. Species detected at fewer than 5 sites are dropped, because there is too little information to place them.
+An ordination puts sites and species on a map where similar ones sit close together. We use `ecoCopula`, a model-based ordination package, on site-by-species presence and absence. We do not use NMDS, which is the usual choice, because it is not reliable (Warton et al. 2012, *Meth Ecol Evol*, [doi:10.1111/j.2041-210X.2011.00127.x](https://doi.org/10.1111/j.2041-210X.2011.00127.x){.uri}). In ordination, a species counts as present at a site **if** **any of its 18 PCRs was positive**. Following standard practice, we omit species that were detected at fewer than 5 sites, because there is too little information to place them correctly in the ordination.
 
 First, turn the PCR rows into one row per site.
 
 ```{r presence}
 presence <- info |>
   select(Site) |>
-  bind_cols(as_tibble(OTU)) |>                             # add the species columns to each PCR row
+  bind_cols(as_tibble(OTU)) |>   # add the species columns to each PCR row
   group_by(Site) |>
   summarise(across(everything(), \(x) as.numeric(any(x > 0))))   # 1 if any of a site's 18 PCRs was positive, else 0
 
@@ -181,7 +183,7 @@ y <- presence |>
 c(kept = ncol(y), dropped = ncol(presence) - 1 - ncol(y)) # we kept 80 species and dropped 28
 ```
 
-Click on the `presence` data frame in the Environment tab to view it.
+Click on the `presence` data frame in the Environment tab to view it. Do you understand why we went from 1818 rows in the `info` table to 101 rows in the `design` table?
 
 `ecoCopula::stackedsdm()` fits a simple model to each species on its own, here with no covariates (`~ 1`). `ecoCopula::cord()` then finds two latent variables, which are chosen to best explain which species turn up together at the same sites. ecoCopula requires a bit of R code to get the outputs into shape for plotting with `ggplot2`.
 
