@@ -14,7 +14,8 @@ chunk <- function(label) {   # the code of one chunk, whether or not it is evalu
 }
 
 s2 <- new.env()
-withr::with_dir(root, withr::with_envvar(c(WORKSHOP_NO_MCP = "1", WORKSHOP_LIVE_FIT = "0"), {
+s2$runOccJSDM <- saved_fits_runOccJSDM(root)   # saved session fits; the exercises refit live
+withr::with_dir(root, withr::with_envvar(c(WORKSHOP_NO_MCP = "1"), {
   grDevices::pdf(NULL)
   suppressMessages(sys.source(code, envir = s2))
   for (label in c("exercise-takin", "exercise-two-samples", "exercise-no-rain")) {

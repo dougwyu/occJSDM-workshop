@@ -19,8 +19,8 @@ use_workshop_lib()              # use the packages installed for the workshop
 source("R/data.R")              # derived_path(), used by read_fit_summary()
 source("R/fit.R")               # read_fit_summary(): saved results of the model fitted to all mammals
 source("R/schematic.R")         # data_schematic() and traits_schematic(): drawings of the tables
+source("R/session1.R")          # session1_dhole_map(): Session 1's dhole figure, redrawn
 mcp_off <- Sys.getenv("WORKSHOP_NO_MCP") == "1"
-live_fit <- Sys.getenv("WORKSHOP_LIVE_FIT", unset = "1") != "0"
 ```
 
 The second loads the packages.
@@ -36,7 +36,7 @@ Session 1 ended with a map of raw dhole detections. Some detections may be false
 
 > For each site, how likely is it that the dhole is really there, given everything we detected?
 
-Before we run the dhole model, we first check the model on the imaginary species from the end of Session 1, where we know the truth.
+Before we run the dhole model, we first check the model on the simulated species from the end of Session 1, where we know the truth.
 
 In this session, we do things a bit backwards. We first look at the model's results, because this is easier for learning, and then we check that the fit can be trusted at the end. **In your own work, you should check the fit before you read any results**.
 
@@ -68,69 +68,59 @@ Click on `d` in the Environment tab to view it. Do you understand why `d$OTU` ha
 - The rows of the two tables must be in the same order. Here they are, because both come from the same files.
 
 ```{r}
+# remind yourself how info and OTU are structured
 data_schematic()
 ```
 
 ## Fit the model
 
-A fit for one species takes about a minute, so we run it live. If the fit fails for any reason, the chunk says so and loads a saved copy of exactly the same fit, so you can carry on.
+A fit for one species takes about a minute, so we run it live. If the fit fails for any reason, uncomment the last line of the chunk and run it, to load a saved copy of exactly the same fit, so you can carry on.
 
 ```{r fit, message = TRUE}
-fit <- NULL
+# so that every student gets the same fit
+set.seed(2026)
 
-if (live_fit) {
-  # try the live fit; on an error, run the second part
-  fit <- tryCatch({
-    # so that every student gets the same fit
-    set.seed(2026)
+fit <- runOccJSDM(
+  data = d,
+  # one species, so no shared hidden factors
+  listParams = list(n_factors = 0),
+  # a replicate is positive if its value is at least 1
+  threshold = 1,
+  occCovariates = c("annual_precipitation",
+                    "mean_temperature",
+                    "Human_modification_1km",
+                    "Percent_of_forest_cover_1km",
+                    "Patch_density_1km",
+                    "Edge_density_1km",
+                    "streamOrigin",
+                    "Regional_Division"),
+  collCovariates = c("Filter_vol",
+                     "PrevDayRain"),
+  spatCovariates = character(),
+  MCMCparams = list(nchain = 2,     # two independent series of draws (chains)
+                    nburn = 5000,   # draws thrown away at the start of each chain
+                    niter = 5000,   # draws kept from each chain
+                    nthin = 1,      # keep every draw
+                    ncores = 2),    # run the two chains at the same time
+  summarisedLatentPresences = TRUE
+)
 
-    runOccJSDM(
-      data = d,
-      # one species, so no shared hidden factors
-      listParams = list(n_factors = 0),
-      # a replicate is positive if its value is at least 1
-      threshold = 1,
-      occCovariates = c("annual_precipitation",
-                        "mean_temperature",
-                        "Human_modification_1km",
-                        "Percent_of_forest_cover_1km",
-                        "Patch_density_1km",
-                        "Edge_density_1km",
-                        "streamOrigin",
-                        "Regional_Division"),
-      collCovariates = c("Filter_vol",
-                         "PrevDayRain"),
-      spatCovariates = character(),
-      MCMCparams = list(nchain = 2,    # two independent series of draws (chains)
-                        nburn = 5000,  # draws thrown away at the start of each chain
-                        niter = 5000,  # draws kept from each chain
-                        nthin = 1,     # keep every draw
-                        ncores = 2),   # run the two chains at the same time
-      summarisedLatentPresences = TRUE
-    )
-
-  }, error = function(e) {
-    message("The live fit failed: ", conditionMessage(e),
-            "\nUsing the saved copy of the same fit instead.")
-    NULL
-  })
-}
-
-if (is.null(fit)) fit <- readRDS("data-derived/dhole_fit.rds")
+# if runOccJSDM() fails, you can uncomment this command and load a saved fit
+# fit <- readRDS("data-derived/dhole_fit.rds")
 ```
 
 What the arguments mean:
 
 - `occCovariates` and `collCovariates` name the columns of `info` to use for occupancy and for collection.
-- `threshold`: a PCR counts as a detection if its value is at least this. Our `OTU` holds 0s and 1s, so 1 is right. With read counts you would also use 1, and you should not remove low read counts first: the model needs the weak detections to estimate false positives.
-- `n_factors` is the number of hidden environmental covariates shared by several species. With one species there is nothing to share, so it is 0. Session 3 uses them.
+- `threshold`: a PCR counts as a detection if its value is at least this. Our `OTU` holds 0s and 1s, so 1 is right. With read counts you normally would also use 1, and you should not remove low read counts first: the model needs the weak detections to estimate false positives. However, we do provide the option to set threshold higher.
+- `n_factors` is the number of hidden environmental covariates shared by several species. With one species there is nothing to share, so it is 0. Session 3 uses this.
 - `spatCovariates = character()` leaves out the spatial part of the model, which needs far more sites than most surveys have.
 - `MCMCparams` sets how long the model runs. The model is fitted by MCMC, which takes a long series of random draws of the parameters. The comments in the code say what each setting does.
 - `summarisedLatentPresences = TRUE` keeps only the average of each site's presence or absence, which keeps the fit small.
 
 ## First, check the model where we know the answer
 
-Before we read the dhole's results, we try the model on the imaginary species from the end of Session 1. We know where it really lives, so we can check the model's answers. This is the same code as in Session 1, with the same seed, so it makes the same survey.
+Before we read the dhole's results, we try the model on the simulated species from the end of Session 1. We know where it lives, because it is simulated, so we can check the model's answers. This is the same code as in Session 1, with the same seed, so it makes the same survey.
 
 ```{r simulate-survey}
 set.seed(2026)   # so that every student gets the same "random" survey
@@ -155,6 +145,14 @@ sim_pcrs <- info |>
   mutate(positive = dna * rbinom(n(), 1, 0.6))
 ```
 
+Click on `sim_pcrs` in the Environment pane to view it.
+
+`sim_pcrs` is the simulated survey, one row per PCR, like `info`:
+
+- `present` is the truth: 1 if the species lives at the site, 0 if not.
+- `dna` is 1 if the field sample caught the species' DNA (a 40% chance when the species is present).
+- `positive` is the simulated detection: 1 if the PCR detected the DNA (a 60% chance when the DNA is in the sample).
+
 occJSDM needs the detections laid out like `OTU`: a matrix with one row per PCR, in the same order as `info`, and one named column for the species.
 
 ```{r simulated-otu}
@@ -165,47 +163,46 @@ sim_OTU <- matrix(sim_pcrs$positive, ncol = 1,
 We fit it with the same call as the dhole, with two differences. The only occupancy covariate is forest cover, which is what the species responds to. And there are no collection covariates, because in our survey every sample has the same chance of catching DNA. The fit takes a few seconds.
 
 ```{r simulated-fit, message = TRUE}
-sim_fit <- NULL
+# so that every student gets the same fit
+set.seed(2026)
 
-if (live_fit) {
-  sim_fit <- tryCatch({
-    set.seed(2026)
+sim_fit <- runOccJSDM(
+  data = list(info = info,
+              OTU = sim_OTU),
+  listParams = list(n_factors = 0),
+  threshold = 1,
+  occCovariates = "Percent_of_forest_cover_1km",
+  collCovariates = character(),
+  spatCovariates = character(),
+  MCMCparams = list(nchain = 2,
+                    nburn = 5000,
+                    niter = 5000,
+                    nthin = 1,
+                    ncores = 2),
+  summarisedLatentPresences = TRUE
+)
 
-    runOccJSDM(
-      data = list(info = info,
-                  OTU = sim_OTU),
-      listParams = list(n_factors = 0),
-      threshold = 1,
-      occCovariates = "Percent_of_forest_cover_1km",
-      collCovariates = character(),
-      spatCovariates = character(),
-      MCMCparams = list(nchain = 2,
-                        nburn = 5000,
-                        niter = 5000,
-                        nthin = 1,
-                        ncores = 2),
-      summarisedLatentPresences = TRUE
-    )
-
-  }, error = function(e) {
-    message("The live fit failed: ", conditionMessage(e),
-            "\nUsing the saved copy of the same fit instead.")
-    NULL
-  })
-}
-
-if (is.null(sim_fit)) sim_fit <- readRDS("data-derived/simulated_fit.rds")
+# if runOccJSDM() fails, you can uncomment this command and load a saved fit
+# sim_fit <- readRDS("data-derived/simulated_fit.rds")
 ```
 
-`computeConditionalOccupancyProbs()` gives, for each site, the probability that the species is present there, given what was detected. We put it next to the truth.
+The command `computeConditionalOccupancyProbs()` gives, for each site, occJSDM's estimated probability that the species is present there, given what was detected.
 
 ```{r simulated-check}
 # a matrix: one row per site, one column per species
 sim_prob <- computeConditionalOccupancyProbs(sim_fit)
-# turn it into a table, so we can join it to the truth by site name
+
+# turn sim_prob into a table, so we can join it to the truth by site name
 sim_prob <- tibble(Site = rownames(sim_prob),
                    probability = sim_prob[, 1])
+```
 
+Click on `sim_prob` in the Environment pane to view it.
+
+For each site, use the known truth in `sim_pcrs` (in column `present`) to classify each site by whether the species was correctly judged to be absent or present, or whether it was present but missed (false negatives). Then join this to occJSDM's estimated probabilities of presence.
+
+```{r simulated-classify}
+# classify sim_pcrs and join to sim_prob
 sim_check <- sim_pcrs |>
   group_by(Site) |>
   summarise(present = first(present), positive = sum(positive)) |>   # positive PCRs, out of 18
@@ -222,7 +219,7 @@ sim_check |>
             highest = round(max(probability), 2))
 ```
 
-Now we plot each site's probability, grouped by the truth.
+Now we plot `sim_check`.
 
 ```{r simulated-plot, fig.height = 3.5}
 ggplot(sim_check, aes(probability, status, colour = status)) +
@@ -238,16 +235,24 @@ ggplot(sim_check, aes(probability, status, colour = status)) +
   theme_minimal()
 ```
 
-How did the model do?
+How did the model do? There are three rows:
 
-- **Where the species was detected**, the model is nearly sure it is present (0.98 on average). That is right. It does not say exactly 1, because the model allows for false positives, even though this survey has none.
-- **Where it was missed** (orange), the model cannot know that the species is there: those sites look exactly like absences in the data. But it does not treat them as absences either. It gives them about 0.4 on average, against 0.14 at the sites where the species is really absent. It has learned how often an occupied site is missed altogether, and that the species prefers forest, so it raises the probability at well-forested sites with no detection.
-- **But it cannot tell which of those sites are the missed ones.** Some well-forested sites where the species is truly absent get as high a probability as the missed sites (the grey dots between 0.4 and 0.5). Nothing in the data separates them, so the model gives both the same "maybe".
-- **Add up the probabilities** over all sites, and the model expects the species at about 47 sites. The truth is 46. The raw detections give only 37.
+- **absent**: the species was truly absent from those sites in the simulation.
+  - In these 55 sites, occJSDM estimated that the species was present with an average of only 0.14 probability (from 0.01 to 0.48). This makes sense.
+- **present, detected**: the species was truly present at those sites in the simulation.
+  - In these 37 sites, occJSDM estimated that the species was present with an average of 0.98 probability (from 0.85 to 1.00). This again makes sense.
+  - occJSDM does not estimate exactly 1.0 because occJSDM thinks there is a low possibility of false positives.
+- **present, missed**: the species was truly present at those sites but detection failed.
+  - In these 9 sites, occJSDM estimated that the species was present with an average of 0.40 probability (from 0.20 to 0.49).
+  - Note that these 9 sites *look* like true absences (0, 0, 0), but occJSDM learned from the **present, detected** sites that the species is more likely to be found in forested sites, and it calculated approximately how many absent sites are probably false negatives. It puts these two facts together to choose the probable false-negative sites.
+  - Of course, it cannot be certain, and it only gives a "maybe" probability of presence.
+  - It also cannot tell which sites are the missed ones. Some well-forested sites where the species is truly absent get as high a probability as the missed sites (the grey dots between 0.4 and 0.5). Nothing in the data separates them.
+
+**Add up the probabilities** over all sites, and the model expects the species at about 47 sites. The truth is 46. Not bad! The raw detections give only 37.
 
 > Look at the orange dots. If this were a real survey, could you point to the sites where the species was missed?
 
-The model also recovers the rates we used to make the survey.
+The model can also recover the collection and PCR-detection rates we used to make the survey.
 
 ```{r simulated-rates}
 c(collection = mean(sim_fit$results_output$theta_output),   # we used 0.4
@@ -256,40 +261,45 @@ c(collection = mean(sim_fit$results_output$theta_output),   # we used 0.4
 
 ### What did we just do?
 
-- We fitted the occupancy model to a survey where we know the truth.
-- The model does not turn the orange sites red. It says "maybe" wherever the species could be, and in total it gets about the right number of sites.
+- We fitted occJSDM to a survey where we know the truth.
+- The model does not turn the orange sites red. It says "maybe" (mean prob = 0.40) wherever the species could be, and in total it gets about the right number of sites.
 - It also recovers how often a sample catches the DNA and how often a PCR detects it.
 
-Now we read the dhole's results the same way, except that there, nobody knows the truth.
+Now we read the dhole's results the same way, except that this is a real dataset so we do not know the truth. (We use simulations and additional fieldwork to test occupancy models).
 
-## Is the dhole at each site?
+## What is the dhole's probability of presence at each site?
 
-As for the imaginary species, `computeConditionalOccupancyProbs()` returns a matrix with one row per site and one column per species (here only the dhole). Each value is the probability that the dhole is present at the site, given what was detected there.
+Like we did with the simulated species, `computeConditionalOccupancyProbs()` returns a matrix with one row per site and one column per species (here only the dhole). Each value is the probability that the dhole is present at the site, given what was detected there.
 
 ```{r probability}
 cond <- computeConditionalOccupancyProbs(fit)
 
 sites <- info |>
-  distinct(Site, .keep_all = TRUE) |>                  # one row per site, as in Session 1
+  distinct(Site, .keep_all = TRUE) |>                  
+    # one row per site, as in Session 1
   select(-Sample, -Primer, -Filter_vol, -PrevDayRain) |>
   arrange(Site)
 
 positive_pcrs <- d$info |>
   mutate(positive = d$OTU[, 1]) |>
-  count(Site, wt = positive, name = "positive_pcrs")   # positive PCRs per site, out of 18
+  count(Site, wt = positive, name = "positive_pcrs")   
+    # positive PCRs per site, out of 18
 
-model_probs <- tibble(Site = rownames(cond), model = cond[, 1])   # cond as a table, one row per site
+model_probs <- tibble(Site = rownames(cond), model = cond[, 1])   
+  # cond as a table, one row per site
 
 map_data <- sites |>
-  left_join(positive_pcrs, by = "Site") |>             # match by site name
+  left_join(positive_pcrs, by = "Site") |>      
+    # match by site name
   left_join(model_probs, by = "Site") |>
-  mutate(raw = positive_pcrs / 18, .before = model) |>   # share of PCRs positive
+  mutate(raw = positive_pcrs / 18, .before = model) |>   
+    # share of PCRs positive
   select(-positive_pcrs)
 ```
 
-Click on `cond` and then on `map_data` in the Environment tab to view them. Which column of `map_data` came from `cond`?
+Click on `cond` and then on `map_data` in the Environment tab to view them. Which column in `map_data` came from `cond`?
 
-Here are the raw detections from Session 1 beside the model's answer, drawn the same way. Empty circles are sites with no detection (raw) or where the dhole is almost certainly absent, with a probability below 0.1 (model). Filled circles are shaded from pale to dark red.
+Here are the raw detections from Session 1 next to the model's estimates, drawn the same way. Empty circles are sites with no detection (raw map) or where occJSDM thinks that the dhole is almost certainly absent (probability \< 0.1) (model map).
 
 ```{r maps, fig.width = 9, fig.height = 7}
 map_long <- map_data |>
@@ -303,7 +313,7 @@ map_long <- map_data |>
                          value))
 
 ggplot(map_long, aes(Xs.1, Xs.2)) +
-  geom_point(data = filter(map_long, is.na(value)),
+  geom_point(data = filter(map_long, is.na(value)), 
              shape = 21, size = 2.2, colour = "grey55", fill = NA) +
   geom_point(data = filter(map_long, !is.na(value)),
              aes(fill = value),
@@ -319,10 +329,12 @@ ggplot(map_long, aes(Xs.1, Xs.2)) +
   theme(legend.position = "bottom")
 ```
 
-- The model map has fewer filled circles. Almost every site with a single positive PCR out of 18 is gone, most of them in the south: the model judges them to be false positives.
-- Sites with several positive PCRs mostly get darker, in the north and in the middle of the eastern strip. There the model is surer of the dhole than the raw share of positive PCRs suggests.
+- The model map (right side) has fewer filled circles. Almost every site with a single positive PCR out of 18 is gone, most of them in the south: the model thinks that they are false positives.
+- Sites with several positive PCRs mostly get darker, in the north and in the middle of the eastern strip. There the model is even more sure that the dhole is present than the raw data suggests.
 
-**Discussion.** If you were the park manager, which map would you use to decide where to look for dholes? Why?
+> **Discussion**
+>
+> If you were the park manager, which map would you use to decide where to look for dholes? Why? What additional checks might you run?
 
 Each bar of the histogram below counts sites. Bars at the left are sites where the dhole is almost certainly absent, bars at the right where it is almost certainly present, and bars in the middle are sites the data cannot settle.
 
@@ -343,13 +355,19 @@ map_data |>
   count(verdict)
 ```
 
-The model has not become vague. It has become sure about most sites, which is the kind of certainty the data support.
+### Back to Session 1's dhole map
 
-### Back to Session 1's doubts
+In Session 1, we created a map of dhole detections. Here it is again:
 
-Session 1 pointed at sites that might be false positives (one positive PCR out of 18) and argued that some sites with no detection might be false negatives. Here is what the model says about them. `pattern` is the number of positive PCRs in each of the site's three field samples.
+```{r session1-map, fig.width = 8, fig.height = 10}
+# runs Session 1's own code for this figure, so you do not need to rerun Session 1
+session1_dhole_map()
+```
+
+We pointed at 4 sites (GLG23055, GLG23052, GLG23053, GLG23064) that are likely **false positives** (0,0,1) and one site (GLG39) that is a likely **true detection**. What does occJSDM think about these sites? Also, of the 60 sites that had no detections (0,0,0), how many sites does occJSDM think are **false negatives**?
 
 ```{r session1-sites}
+# patterns is the number of positive PCRs (e.g. 2,2,1 or 0,3,2) in every sample.
 patterns <- d$info |>
   mutate(positive = d$OTU[, 1]) |>
   group_by(Site, Sample) |>
@@ -360,62 +378,50 @@ patterns <- d$info |>
 map_data <- map_data |> left_join(patterns, by = "Site")
 
 map_data |>
-  filter(Site %in% c("GLG23055", "GLG23052", "GLG23053", "GLG23064",   # Session 1's arrows
+  # Session 1's arrows, GLG39 and GLG28
+  filter(Site %in% c("GLG23055", "GLG23052", "GLG23053", "GLG23064",
                      "GLG39", "GLG28")) |>
   select(Site, pattern, probability = model) |>
   mutate(probability = round(probability, 3)) |>
   arrange(probability)
+```
 
+- **The four possible false positives** from Session 1 (GLG23055, GLG23052, GLG23053, GLG23064), each with a detection pattern of (0,0,1), all get a probability of a few percent at most. This means that occJSDM concluded that they are false positives.
+- **GLG39**, with two good samples and one empty one (0,2,3), gets a high probability: the empty sample was a false negative, and the model looks past it.
+- **GLG28**, positive in all 18 PCRs (6,6,6), is certain.
+
+Adding up the probabilities gives the expected number of sites with the dhole. We do this for the sites with no detection, and then for all 101 sites.
+
+```{r expected-sites}
 # Sites with no detection: how many does the model expect to hold the dhole?
-# Adding up the probabilities gives the expected number of sites.
 map_data |>
   filter(raw == 0) |>
   summarise(undetected_sites = n(),
             expected_occupied = round(sum(model), 1),
             highest_probability = round(max(model), 2))
+
+# All sites: how many detected, and how many does the model expect to hold the dhole?
+map_data |>
+  summarise(sites = n(),
+            detected = sum(raw > 0),
+            expected_occupied = round(sum(model), 1))
 ```
 
-- **The four possible false positives** from Session 1, each with a single positive PCR, all get a probability of a few percent at most. The model concludes they are false positives.
-- **GLG39**, with two good samples and one empty one, gets a high probability: the empty sample was a false negative, and the model looks past it. **GLG28**, positive in all 18 PCRs, is certain.
-- **The false negatives.** Session 1 asked how many of the 60 empty circles are false negatives. The model's answer is about 1.7 sites.
-- **In total**, adding up the probabilities over all 101 sites, the model expects the dhole at about 17 sites, against the 41 where it was detected.
+- **The false negatives.** Session 1 asked how many of the 60 empty circles are false negatives. The model's answer is about 1.7 sites (`expected_occupied` in the first table).
+- **In total**, adding up the probabilities over all 101 sites, the model expects the dhole at about 17 sites, against the 41 where it was detected (the second table).
 
-> The model expects the dhole at fewer sites than the raw map shows. Which kind of error, false positives or false negatives, is the bigger problem in the raw dhole map?
-
-### Two kinds of occupancy probability
-
-occJSDM gives two probabilities for each site, and they answer different questions.
-
-- The **conditional** probability (`computeConditionalOccupancyProbs()`), which we used above, takes into account what was detected at that site. Use it to ask whether the dhole is actually at a surveyed site.
-- The **predictive** probability (`computePredictiveOccupancyProbs()`) comes only from the site's occupancy covariates. It is what the model would expect at a site like this one before looking at its own detections. Use it to compare habitats.
-
-```{r two-probabilities}
-pred <- computePredictiveOccupancyProbs(fit)
-map_data <- map_data |>
-  left_join(tibble(Site = rownames(pred), predictive = pred[, 1]),
-            by = "Site")
-
-# one point per site; filled if the dhole was detected there
-ggplot(map_data, aes(predictive, model, shape = raw > 0)) +
-  geom_abline(colour = "grey60") +
-  geom_point(size = 2) +
-  scale_shape_manual(values = c(`TRUE` = 16, `FALSE` = 1),
-                     labels = c(`TRUE` = "yes", `FALSE` = "no"),
-                     name = "Detected") +
-  labs(x = "Predictive probability (covariates only)",
-       y = "Conditional probability (covariates and detections)") +
-  theme_minimal()
-```
-
-Each point is a site. Points below the grey line get a lower probability once the model has seen the site's detections.
-
-- Where the dhole was not detected (open circles), the conditional probability falls below the predictive one, because 18 negative PCRs are evidence of absence.
-- Where it was detected (filled circles), the detections pull the probability up to near 1 at strong sites, but not at weak ones, which the model puts down to contamination.
-- Both probabilities are averages over the model's draws. The package does not yet give intervals for them.
+> **Discussion**
+>
+> The model expects the dhole at fewer sites than the raw map shows. What does this mean about which kind of error, false positives or false negatives, is the bigger problem in the dhole dataset?
 
 ## How widespread is the dhole?
 
-`returnOccupancyRates()` gives the dhole's **baseline occupancy**: the chance that it occupies a site with average values of the numeric covariates, in the East, with a stream rising inside the reserve (the reference levels of the two categories). It returns one value for each of the model's draws, so we can report a mean and a 95% interval.
+`returnOccupancyRates()` gives the dhole's **baseline occupancy**: the chance that it occupies an "average" site. Here that means:
+
+- **Average values of the six numeric occupancy covariates** (climate, forest, human modification, patch and edge density). `runOccJSDM()` rescales each one to an average of 0 before fitting, so the baseline sits at their averages.
+- **The reference level of the two category covariates**, which have no average: in the East, with a stream rising inside the reserve.
+
+It returns one value for each of the model's draws, so we can report a mean and a 95% interval.
 
 ```{r baseline}
 # one row per posterior draw
@@ -428,7 +434,7 @@ baseline |>
   round(2)
 ```
 
-Such a site has about a one-in-five chance (0.20) of holding the dhole, but the 95% interval runs from 0.08 to 0.37. One species at 101 sites does not pin its baseline down tightly.
+Such a site has about a one-in-five chance (0.20) of holding the dhole, but the 95% interval runs from 0.08 to 0.37.
 
 ## How well is the dhole's DNA collected and detected?
 
@@ -447,11 +453,17 @@ summarise_draws <- function(x) {
          upper = quantile(x, 0.975))
 }
 
+# returnPosteriorDraws() gives a 4-way array: primer (or covariate), species, iteration, chain.
+# [1, 1, , ] takes the one primer and the one species, and keeps all draws from both chains.
+
 # the collection probability at average values of the collection covariates;
 # plogis() turns the log-odds into a probability
 collection_draws <- plogis(returnPosteriorDraws(fit, "beta_theta")["(Intercept)", 1, , ])
+
 detection_draws <- returnPosteriorDraws(fit, "p")[1, 1, , ]
+
 field_fp_draws <- returnPosteriorDraws(fit, "theta0")[1, 1, , ]
+
 lab_fp_draws <- returnPosteriorDraws(fit, "q")[1, 1, , ]
 
 rates <- bind_rows(
@@ -657,11 +669,11 @@ What to do about a flagged parameter:
 
 ## Save the results
 
-Every result above is an ordinary R table, so `write.csv()` saves it for a report or a supplement. For example, one row per site with the raw detections and both probabilities:
+Every result above is an ordinary R table, so `write.csv()` saves it for a report or a supplement. For example, one row per site with the raw detections and the model's probability:
 
 ```{r save, eval = FALSE}
 map_data |>
-  select(Site, Xs.1, Xs.2, pattern, raw, conditional = model, predictive) |>
+  select(Site, Xs.1, Xs.2, pattern, raw, probability = model) |>
   write.csv("dhole_by_site.csv", row.names = FALSE)
 ```
 

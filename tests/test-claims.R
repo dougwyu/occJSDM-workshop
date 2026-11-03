@@ -26,7 +26,7 @@ test_that("Session 1: taxonomic orders use current names", {
   expect_false("Soricomorpha" %in% status$order)
 })
 
-test_that("Sessions 1 and 2: the imaginary species supports the text", {
+test_that("Sessions 1 and 2: the simulated species supports the text", {
   suppressPackageStartupMessages({ library(occJSDM); library(tidyverse) })
   chunk <- function(file, label) {   # the code of one chunk, as in test-session2-exercises.R
     rmd <- readLines(file.path(workshop_root(), file))
@@ -42,7 +42,9 @@ test_that("Sessions 1 and 2: the imaginary species supports the text", {
   sim$info <- read.csv(derived_path("info.csv"))
   sim$sim_fit <- readRDS(derived_path("simulated_fit.rds"))
   eval(parse(text = chunk("02-dhole.Rmd", "simulate-survey")), envir = sim)
-  invisible(capture.output(eval(parse(text = chunk("02-dhole.Rmd", "simulated-check")), envir = sim)))
+  for (label in c("simulated-check", "simulated-classify")) {
+    invisible(capture.output(eval(parse(text = chunk("02-dhole.Rmd", label)), envir = sim)))
+  }
   s <- sim$sim_check
 
   expect_true(all(s$positive[s$present == 0] == 0))              # "no false positives"

@@ -13,17 +13,14 @@ for (rmd in sessions) {
   })
 }
 
-test_that("Session 2 falls back to the saved fit when the live fit fails", {
-  skip_if(Sys.getenv("WORKSHOP_SKIP_RENDER") == "1", "render tests skipped")
+test_that("Session 2's commented-out fallback lines load the saved fits", {
   root <- normalizePath(testthat::test_path(".."), mustWork = TRUE)
-  out <- withr::local_tempdir()
-  withr::local_envvar(WORKSHOP_NO_MCP = "1")
-  # Chunks run in this environment, so this runOccJSDM is found before the package's own.
+  rmd <- readLines(file.path(root, "02-dhole.Rmd"))
+  fallback <- sub("^# ", "", grep("^# (sim_)?fit <- readRDS\\(", rmd, value = TRUE))
+  expect_equal(fallback, c('fit <- readRDS("data-derived/dhole_fit.rds")',
+                           'sim_fit <- readRDS("data-derived/simulated_fit.rds")'))
   env <- new.env()
-  env$runOccJSDM <- function(...) stop("simulated failure")
-  expect_no_error(rmarkdown::render(file.path(root, "02-dhole.Rmd"), output_dir = out, intermediates_dir = out,
-                                    knit_root_dir = root, envir = env, quiet = TRUE))
-  html <- paste(readLines(file.path(out, "02-dhole.html"), warn = FALSE), collapse = "\n")
-  expect_match(html, "simulated failure")
-  expect_match(html, "Using the saved copy of the same fit instead")
+  withr::with_dir(root, for (line in fallback) eval(parse(text = line), envir = env))
+  expect_false(is.null(env$fit$results_output))
+  expect_false(is.null(env$sim_fit$results_output))
 })

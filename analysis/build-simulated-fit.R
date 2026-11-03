@@ -1,4 +1,4 @@
-# Rebuild data-derived/simulated_fit.rds, Session 2's saved copy of its fit to the imaginary
+# Rebuild data-derived/simulated_fit.rds, Session 2's saved copy of its fit to the simulated
 # species. It runs Session 2's own chunks, so the survey, call, settings and seed cannot drift
 # from the live fit. Run from the project root.
 source("setup/pins.R")
@@ -16,7 +16,6 @@ chunk <- function(label) {   # the code of one chunk of 02-dhole.Rmd
 }
 
 info <- read.csv("data-derived/info.csv")
-live_fit <- TRUE
 eval(parse(text = chunk("simulate-survey")))
 eval(parse(text = chunk("simulated-otu")))
 eval(parse(text = chunk("simulated-fit")))
