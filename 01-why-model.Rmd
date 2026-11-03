@@ -53,7 +53,7 @@ These are real survey data, archived on Zenodo ([doi:10.5281/zenodo.17113196](ht
 occJSDM needs two tables from you, and optionally a third.
 
 - `info`: one row per PCR replicate. `Site` and `Sample` say where the replicate belongs, and the other columns are covariates.
-- `OTU`: the detections. It has the same rows as `info` and one column per species, with a 1 where the PCR was positive.
+- `OTU`: the detections. It has the same rows as `info` and one column per species, with the number of reads (or a 1 for a positive PCR).
 - `traits` (optional): one row per species, with characteristics such as body mass that may explain why species respond differently. This workshop does not use traits.
 
 This schematic shows how the `info` and `OTU` tables fit together, with made-up values. Each row is one PCR replicate.
@@ -184,7 +184,7 @@ y <- presence |>
 c(kept = ncol(y), dropped = ncol(presence) - 1 - ncol(y)) # we kept 80 species and dropped 28
 ```
 
-Click on the `presence` data frame in the Environment tab to view it. Do you understand why we went from 1818 rows in the `info` table to 101 rows in the `design` table?
+Click on the `presence` data frame in the Environment tab to view it. Do you understand why we went from 1818 rows in the `info` table to 101 rows in the `presence` table?
 
 `ecoCopula::stackedsdm()` fits a simple model to each species on its own, here with no covariates (`~ 1`). `ecoCopula::cord()` then finds two latent variables, which are chosen to best explain which species turn up together at the same sites. ecoCopula requires a bit of R code to get the outputs into shape for plotting with `ggplot2`.
 
@@ -277,7 +277,7 @@ ends <- species_scores |>
            species %in% c("Bos grunniens", "Equus caballus", "Felis catus"))   # yak, horse, cat
 
 status_colours <- c(wild = "grey35", 
-                    dom = "firebrick", 
+                    dom = "purple3",    # not red: red means threatened in the next biplot
                     wild_or_dom = "darkorange")
 
 status_labels <- c(wild = "wild", 
@@ -329,7 +329,7 @@ p1 <- ggplot() +
 
 Domestic buffalo (*Bubalus bubalis*), goats (*Capra hircus*) and sheep (*Ovis aries*) point toward modified sites (down), with two rats that live alongside people (*Rattus tanezumi* and *Rattus nitidus*) and the common palm civet (*Paradoxurus hermaphroditus*).
 
-At the other end (up) are species of little-disturbed forest: three shrews (*Episoriculus leucops*, *E. caudatus* and *E. macrurus*), the Gongshan muntjac (*Muntiacus gongshanensis*), the takin (*Budorcas taxicolor*) and the Gaoligong pika (*Ochotona gaoligongensis*). We also see that three domestic species are also more associated with less modified sites: yak (*Bos grunniens*), horse (*Equus caballus*) and cat (*Felis catus*).
+At the other end (up) are species of little-disturbed forest: three shrews (*Episoriculus leucops*, *E. caudatus* and *E. macrurus*), the Gongshan muntjac (*Muntiacus gongshanensis*), the takin (*Budorcas taxicolor*) and the Gaoligong pika (*Ochotona gaoligongensis*). We also see that three domestic species are more associated with less modified sites: yak (*Bos grunniens*), horse (*Equus caballus*) and cat (*Felis catus*).
 
 ### Are threatened species found in the nature reserve?
 
@@ -337,7 +337,7 @@ Let's try another biplot.
 
 This time, we ask whether Red-Listed species are more likely to be found in nature reserves.
 
-- Our `species` table categorises species in two ways: `iucn` is the IUCN Red List category. `china_red_list` is the same under Chinese law. We colour the species arrow red if it is Vulnerable, Endangered or Critically Endangered under the IUCN category (plus the China Red List when IUCN has no category).
+- Our `species` table categorises species in two ways: `iucn` is the IUCN Red List category. `china_red_list` is the category on the China Biodiversity Red List. We colour the species arrow red if it is Vulnerable, Endangered or Critically Endangered under the IUCN category (plus the China Red List when IUCN has no category).
 
 - Our `info` table has an environmental covariate that categorises streams by whether they originate inside a nature reserve in Gaoligongshan (`streamOrigin = insideGLGS`). We colour the sites by `streamOrigin`.
 
@@ -409,8 +409,8 @@ p2 <- ggplot() +
 
 Most threatened species, including the dhole (*Cuon alpinus*), point up, toward the reserve sites. **But so do many common species.**
 
-```{r}
-p1 / p2
+```{r biplots-together, fig.height = 13}
+p1 / p2   # patchwork: one plot above the other
 ```
 
 **Discussion.** Look at the two biplots. Write down one thing you could tell a park manager from these figures, and one thing you could not.
@@ -424,8 +424,8 @@ Patterns we can see:
 
 However, we do not know how reliable these patterns are:
 
-- The plot is built from raw detections: a species counts as present at a site if even one of its 18 PCRs was positive. The ordination therefore contains false positives (detections from contamination) and false negatives (missed detections where it is present).
-- Human modification and reserve status are only two covariates that change from the top to the bottom. If you create other ordinations (or map the sites), you fill find that latitude, temperature, forest cover, and region also change from top to bottom.
+- The plot is built from raw detections: a species counts as present at a site if even one of its 18 PCRs was positive. The ordination therefore contains false positives (detections from contamination) and false negatives (missed detections where the species is present).
+- Human modification and reserve status are only two covariates that change from the top to the bottom. If you create other ordinations (or map the sites), you will find that latitude, temperature, forest cover, and region also change from top to bottom.
 
 So ordinations give us ideas, but they are not real tests. In Session 3, we test hypotheses with a model that accounts for both false positives and false negatives.
 
@@ -457,6 +457,8 @@ dhole_sites <- dhole_samples |>
 Then we make a figure that includes both a map and a table.
 
 ```{r dhole-figure, fig.width = 8, fig.height = 10}
+# Technical trick: to draw the table on the same plot as the map, we give each cell a position in map units: the three sample columns sit just east of the map, and the rows are spread evenly from the northernmost site to the southernmost.
+
 # Rows of the table: detecting sites from north to south, spread over the map's latitudes
 rows <- dhole_sites |>
   filter(site_total > 0) |>
@@ -472,8 +474,6 @@ cells <- dhole_samples |>
   inner_join(rows |> select(Site, row_y), by = "Site") |>
   mutate(cell_x = col_x[sample],
          share = if_else(positive == 0, NA, positive / 6))   # 0 positive: a white cell
-
-# Technical trick: to draw the table on the same plot as the map, we give each cell a position in map units: the three sample columns sit just east of the map, and the rows are spread evenly from the northernmost site to the southernmost.
 
 # Four possible false positives: the southernmost sites with 1 positive PCR out of 18
 flagged <- rows |>
@@ -573,10 +573,6 @@ sim_pcrs <- info |>
   select(Site, Sample) |>
   left_join(sim_samples, by = c("Site", "Sample")) |>
   mutate(positive = dna * rbinom(n(), 1, 0.6))
-
-# The detections table, laid out like OTU (Session 2 fits the model to it)
-sim_OTU <- matrix(sim_pcrs$positive, ncol = 1, 
-                  dimnames = list(NULL, "simulated"))
 ```
 
 Now we compare what the survey detected with the (simulated) truth.
@@ -594,6 +590,8 @@ sim_sites <- sim_pcrs |>
 count(sim_sites, status)
 ```
 
+Click on `sim_sites` in the Environment tab to view it.
+
 ```{r simulated-map, fig.width = 6, fig.height = 7}
 ggplot(sim_sites, aes(Xs.1, Xs.2, fill = status)) +
   geom_point(shape = 21, size = 3, colour = "grey25", stroke = 0.3) +
@@ -609,20 +607,23 @@ ggplot(sim_sites, aes(Xs.1, Xs.2, fill = status)) +
   theme(legend.position = "bottom")
 ```
 
-```{r simulated-numbers, include = FALSE}
-sim_counts <- sim_sites |>
-  summarise(present = sum(present),
-            missed = sum(status == "present, missed"),
-            absent = sum(status == "absent"))
-```
+The species is present in 46 sites, but the survey only detected it in 37 sites. Therefore, we have 9 false-negative sites where the species is present, but all three samples failed, either in collection or in the PCRs.
 
-The species lives at `r sim_counts$present` sites, and the survey missed it at `r sim_counts$missed` of them (orange). In the survey data, those `r sim_counts$missed` sites look exactly like the `r sim_counts$absent` sites where it is absent (empty circles): all are (0, 0, 0). Nothing in a raw map could tell them apart.
+### What did we just do?
 
-These are the false negatives we could only argue for in the dhole data, made visible. And this survey has no false positives, so every red circle is a real presence. The dhole data have both kinds of error.
+- We simulated a species, and the simulation put the species in 46 sites.
 
-## Next: an occupancy model
+- We then simulated a survey that has only a 40% chance of collecting the species' DNA into a sample and only a 60% chance of a PCR detecting the DNA in a sample.
 
-Session 2 starts by fitting an occupancy model to this imaginary species, where we can check its answers against the truth: can it find the orange sites? Then we fit the same model to the dhole data. The model uses all the sites together to estimate how often false negatives and false positives happen, and corrects for both, to give the probability that the species is really present at each site.
+- Our experience tells us that these are realistic numbers for some species (Ji et al. 2025).
+
+- With these realistic numbers, a survey produces 9 false-negative errors. Thus, we can be very sure that similar false-negative errors exist in real surveys.
+
+## Next session: an occupancy model
+
+Session 2 starts by fitting an occupancy model to this imaginary species, where we can check its answers against the truth: **Can it find the orange sites?**
+
+Then we fit the same model to the real dhole data and try to find the false-negative sites. We will also try to find the false-positive sites.
 
 ## What you take away
 

@@ -156,7 +156,7 @@ The model gives each species its own true-positive and false-positive rates. In 
 - The best place to be is the top left. We label the six species with the highest false-positive rates.
 
 ```{r detection-profile}
-status_colours <- c(wild = "grey35", dom = "firebrick", wild_or_dom = "darkorange")   # as in Session 1
+status_colours <- c(wild = "grey35", dom = "purple3", wild_or_dom = "darkorange")   # as in Session 1
 status_labels <- c(wild = "wild", dom = "domestic", wild_or_dom = "wild or domestic")
 
 profile <- fit$params |>

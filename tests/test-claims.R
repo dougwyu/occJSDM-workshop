@@ -46,6 +46,9 @@ test_that("Sessions 1 and 2: the imaginary species supports the text", {
   s <- sim$sim_check
 
   expect_true(all(s$positive[s$present == 0] == 0))              # "no false positives"
+  expect_equal(sum(s$present), 46)                              # "present in 46 sites"
+  expect_equal(sum(s$positive > 0), 37)                         # "only detected it in 37 sites"
+  expect_equal(sum(s$present == 1 & s$positive == 0), 9)        # "9 false-negative sites"
   expect_gte(sum(s$present == 1 & s$positive == 0), 5)          # enough orange sites to see
   means <- tapply(s$probability, s$status, mean)
   expect_gt(means[["present, detected"]], 0.95)                  # "nearly sure"

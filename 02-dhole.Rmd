@@ -29,7 +29,11 @@ library(occJSDM)
 
 ## What we want to know
 
-Session 1 ended with a map of raw dhole detections and two doubts. Some detections may be false positives, and some sites with no detection may be false negatives. This session fits an occupancy model that allows for both. For each site, how likely is it that the dhole is really there, given everything we detected? Before we read the dhole's answer, we check the model on the imaginary species from the end of Session 1, where we know the truth.
+Session 1 ended with a map of raw dhole detections. Some detections may be false positives, and some sites with no detection may be false negatives. This session fits an occupancy model that allows for both and answers this question:
+
+> For each site, how likely is it that the dhole is really there, given everything we detected?
+
+Before we run the dhole model, we first check the model on the imaginary species from the end of Session 1, where we know the truth.
 
 We do things in an unusual order. We look at the model's results first, because they are what the model is for, and check that the fit can be trusted at the end. **In your own work, check the fit first**, before you read or report any result.
 
@@ -154,8 +158,11 @@ sim_pcrs <- info |>
   select(Site, Sample) |>
   left_join(sim_samples, by = c("Site", "Sample")) |>
   mutate(positive = dna * rbinom(n(), 1, 0.6))
+```
 
-# The detections table, laid out like OTU (Session 2 fits the model to it)
+occJSDM needs the detections laid out like `OTU`: a matrix with one row per PCR, in the same order as `info`, and one named column for the species.
+
+```{r simulated-otu}
 sim_OTU <- matrix(sim_pcrs$positive, ncol = 1, 
                   dimnames = list(NULL, "simulated"))
 ```
