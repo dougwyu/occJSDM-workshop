@@ -11,11 +11,12 @@ output:
 knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE, fig.width = 8, fig.height = 5.5)
 ```
 
-The first code chunk is only for the workshop. It points R at the workshop's package library. You would not need it in a project of your own.
+The first code chunk is only for the workshop. It points R at the workshop's package library and loads a function that draws a schematic below. You would not need it in a project of your own.
 
 ```{r workshop-setup}
 source("setup/pins.R")
 use_workshop_lib()              # use the packages installed for the workshop
+source("R/schematic.R")         # data_schematic(): a drawing of the info and OTU tables
 mcp_off <- Sys.getenv("WORKSHOP_NO_MCP") == "1"
 ```
 
@@ -54,7 +55,17 @@ occJSDM needs two tables from you, and optionally a third.
 - `OTU`: the detections. It has the same rows as `info` and one column per species, with a 1 where the PCR was positive.
 - `traits` (optional): one row per species, with characteristics such as body mass that may explain why species respond differently. This workshop does not use traits.
 
-<!--# schematic here -->
+This schematic shows how the `info` and `OTU` tables fit together, with made-up values. Each row is one PCR replicate.
+
+```{r schematic}
+data_schematic()   # a drawing of the two tables, made in R/schematic.R
+```
+
+- **Sample replicates.** Each site has several field samples, each with its own name in `Sample` (here `GLG01-1` and `GLG01-2`, shaded differently).
+- **Primer replicates.** Each sample can be amplified with more than one primer, named in `Primer`. Our workshop data will only use 12S.
+- **PCR replicates have no column.** Rows with the same `Site`, `Sample` and `Primer` are PCR replicates of one another, and occJSDM counts them from the rows. The grey PCR numbers are only there to help you read the table.
+- **Site covariates** repeat on every row of a site, and **collection covariates** on every row of a sample.
+- `OTU` has the same rows, in the same order, and one column per species. Each cell is the number of reads of that species in that PCR, straight from the OTU table that your bioinformatics pipeline produces. occJSDM turns the counts into detections (e.g. 0/1), using its `threshold` argument (Session 2), so **do not remove low counts from your OTU table**. Also, for simplicity, our workshop `OTU` table already only holds 1s and 0s.
 
 For this workshop, we read `info` and `OTU` from CSV files, as you would read your own. We also read a species table with each species' taxonomy and Red List status. It is not a model input. We use it only to label and summarise results.
 
@@ -533,4 +544,3 @@ Session 2 starts by fitting an occupancy model to this imaginary species, where 
 ```{r mcp-note, echo = FALSE, results = "asis", eval = !mcp_off}
 cat("**Optional: ask the assistant.** In Posit Assistant, try: *Using the objects in my session, make the same map and table for the takin, Budorcas taxicolor.* The assistant helps you write R here. It does not use the occJSDM tools yet.\n")
 ```
-
