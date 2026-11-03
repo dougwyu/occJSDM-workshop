@@ -27,6 +27,7 @@ library(tidyverse)
 library(ecoCopula)    # model-based ordination
 library(treemapify)   # treemaps drawn with ggplot2
 library(ggrepel)      # labels that do not overlap, in ggplot2
+library(patchwork)    # to make composite figures
 ```
 
 ## The survey and the questions
@@ -167,7 +168,7 @@ Each box is a taxonomic order, its area set by the number of species detected. T
 
 An ordination puts sites and species on a map where similar ones sit close together. We use `ecoCopula`, a model-based ordination package, on site-by-species presence and absence. We do not use NMDS, which is the usual choice, because it is not reliable (Warton et al. 2012, *Meth Ecol Evol*, [doi:10.1111/j.2041-210X.2011.00127.x](https://doi.org/10.1111/j.2041-210X.2011.00127.x){.uri}). In ordination, a species counts as present at a site **if** **any of its 18 PCRs was positive**. Following standard practice, we omit species that were detected at fewer than 5 sites, because there is too little information to place them correctly in the ordination.
 
-First, turn the PCR rows into one row per site.
+First, turn the multiple rows per site in `info` into one row per site.
 
 ```{r presence}
 presence <- info |>
@@ -195,7 +196,7 @@ sdm <- stackedsdm(y,
                   family = "binomial", 
                   ncores = 1
                   )
-ord <- cord(sdm, nlv = 2) # this is how ecoCopula creates the ordination
+ord <- cord(sdm, nlv = 2) # this is how ecoCopula creates the ordination. it sometimes takes a few minutes. ord is the output of ecoCopula. 
 
 # extract site scores from ord
 site_scores <- tibble(Site = rownames(y), 
@@ -213,18 +214,42 @@ species_scores <- tibble(otu_id = colnames(y),
 k <- 0.9 * max(abs(select(site_scores, LV1, LV2))) / max(abs(select(species_scores, LV1, LV2)))
 ```
 
-We now use ggplot2 to draw a biplot. Sites are filled circles, and species are arrows. Colours show site covariates (on the circles) or species characteristics (on the arrows).
+We now use ggplot2 to draw a biplot. Sites are points, and species are arrows from the centre. We start with the plainest version.
+
+```{r biplot-plain, fig.height = 7}
+ggplot() +
+  geom_point(data = site_scores, 
+             aes(LV1, LV2), 
+             colour = "grey40", size = 2) +
+  geom_segment(data = species_scores, 
+               aes(x = 0, y = 0, xend = LV1 * k, yend = LV2 * k),
+               colour = "steelblue", alpha = 0.6, 
+               arrow = arrow(length = unit(0.12, "cm"))) +
+  coord_equal() +
+  labs(x = "Latent variable 1", 
+       y = "Latent variable 2", 
+       title = "Sites (points) and species (arrows)") +
+  theme_minimal()
+```
 
 How to read a biplot:
 
-- A species' arrow points toward the sites where it was detected more often. Sites far out in the direction of an arrow are where that species usually turned up; sites on the opposite side are where it rarely did.
+- A species' **arrow** points toward the sites where it was detected more often. Sites far out in the direction of an arrow are where that species usually turned up; sites on the opposite side are where it rarely did.
 - Two species whose arrows point the same way tend to be detected at the same sites. Arrows pointing in opposite directions belong to species that seldom turn up together.
 - A long arrow means the species' detections follow the pattern in the plot closely. A short arrow, near the centre, means the ordination has little to say about that species.
 - The axes have no units and no meaning of their own. We give them meaning by colouring the sites by a covariate and seeing where the colours fall. Unlike a PCA, the first axis is not more important than the second, and a pattern that runs diagonally across the plot is just as real as one along an axis.
 
+What can we read from this plain version?
+
+- The arrows fall into two bundles: one points up, and the other points to the right and down to the right. Species in the same bundle tend to turn up at the same sites, so there seem to be at least two groups of species.
+- Almost no arrow points to the lower left. Many species were detected at the sites to the right, which is where most arrows point, and far fewer at the sites in the lower left. So part of what this plot shows is simply how many species were detected at each site.
+- The sites in the upper left form a small group of their own.
+
+What we cannot read is which species make up each bundle, or what the sites in each group have in common. To find out, we decorate the plot. We colour the sites by a site covariate, colour the arrows by a species characteristic, label some species, and add a dashed arrow for the direction in which the covariate increases.
+
 ### Which species go with human modification?
 
-To make that last point concrete, we add a dashed arrow that shows the direction in which human modification increases across the plot. Its two coordinates are the correlations of `Human_modification_1km` with each latent variable. The longer the dashed arrow, the more closely the covariate lines up with the pattern of detections.
+We start with human modification. We colour the sites by it, and draw a dashed arrow that points the way human modification increases across the plot. The arrow ends at the correlations of `Human_modification_1km` with the two latent variables.
 
 ```{r modification-direction}
 modification <- site_scores |>
@@ -233,17 +258,17 @@ modification <- site_scores |>
 modification
 ```
 
-Human modification increases mostly downward, along latent variable 2. Next, we measure how far each species' arrow reaches along the dashed arrow. A positive value means the species turns up more at modified sites, a negative value at less modified ones. We label the eight species at each end, and three domestic animals.
+The arrow ends at (`r round(modification$LV1, 2)`, `r round(modification$LV2, 2)`): down, and slightly to the right. So the more modified sites are mostly at the bottom of the plot.
 
-The next chunk does three things.
+Next we find the species that are most associated with (and most *not* associated with) human modification. The chunk below does three things.
 
-- It gives every species a score, `toward_modification`. Think of the dashed arrow as a ruler laid across the plot from the centre. For each species, we drop a line from the tip of its arrow straight onto the ruler and read off where it lands. A species whose arrow points along the dashed arrow scores high, one pointing the opposite way scores low (negative), and one pointing across it scores near zero. The formula multiplies each arrow's two coordinates by the dashed arrow's two coordinates, adds them, and divides by the dashed arrow's length.
-- It picks the eight species with the lowest scores and the eight with the highest, plus three domestic animals (yak, horse and cat) that we discuss below (`ends`). These are the ones we will label on the plot.
-- It sets the colours and legend labels for wild and domestic species, and `r`, a scale factor that stretches the dashed arrow so that it reaches the edge of the sites.
+- It scores each species by how far its arrow reaches in the direction of the dashed arrow (`toward_modification`). The score is positive for species of modified sites and negative for species of less modified sites.
+- It picks the eight species at each end, plus yak, horse and cat, which we discuss below (`ends`). These are the species we label.
+- It sets the colours for wild and domestic species, and `r`, which stretches the dashed arrow to the edge of the sites.
 
 ```{r toward-modification}
 species_scores <- species_scores |>
-  mutate(toward_modification = 
+  mutate(toward_modification =     # how far each arrow reaches along the dashed arrow
            (LV1 * modification$LV1 + 
               LV2 * modification$LV2) / sqrt(modification$LV1^2 + modification$LV2^2))
 
@@ -262,8 +287,10 @@ status_labels <- c(wild = "wild",
 r <- max(abs(select(site_scores, LV1, LV2)))   # stretch the dashed arrow to the edge of the sites
 ```
 
+Now we make the decorated biplot!
+
 ```{r biplot-modification, fig.height = 7}
-ggplot() +
+p1 <- ggplot() +
   geom_point(data = site_scores, 
              aes(LV1, LV2, fill = Human_modification_1km), 
              shape = 21, colour = "white", size = 3) +
@@ -297,16 +324,24 @@ ggplot() +
        fill = "Human\nmodification", 
        colour = "Species",
        title = "Sites coloured by human modification, species arrows by wild or domestic") +
-  theme_minimal()
+  theme_minimal(); p1
 ```
 
-Domestic buffalo (*Bubalus bubalis*), goats (*Capra hircus*) and sheep (*Ovis aries*) point toward modified sites, with two rats that live alongside people (*Rattus tanezumi* and *Rattus nitidus*) and the common palm civet (*Paradoxurus hermaphroditus*). Not every domestic animal does: yak (*Bos grunniens*), horse (*Equus caballus*) and cat (*Felis catus*) point the other way, toward the higher and less modified sites where they are kept or roam.
+Domestic buffalo (*Bubalus bubalis*), goats (*Capra hircus*) and sheep (*Ovis aries*) point toward modified sites (down), with two rats that live alongside people (*Rattus tanezumi* and *Rattus nitidus*) and the common palm civet (*Paradoxurus hermaphroditus*).
 
-At the other end are species of little-disturbed forest: three shrews (*Episoriculus leucops*, *E. caudatus* and *E. macrurus*), the Gongshan muntjac (*Muntiacus gongshanensis*), the takin (*Budorcas taxicolor*) and the Gaoligong pika (*Ochotona gaoligongensis*).
+At the other end (up) are species of little-disturbed forest: three shrews (*Episoriculus leucops*, *E. caudatus* and *E. macrurus*), the Gongshan muntjac (*Muntiacus gongshanensis*), the takin (*Budorcas taxicolor*) and the Gaoligong pika (*Ochotona gaoligongensis*). We also see that three domestic species are also more associated with less modified sites: yak (*Bos grunniens*), horse (*Equus caballus*) and cat (*Felis catus*).
 
 ### Are threatened species found in the nature reserve?
 
-Now we colour the sites by whether their stream rises inside the Gaoligongshan nature reserve (`streamOrigin`), and colour the arrows by Red List status. A species counts as threatened if it is Vulnerable, Endangered or Critically Endangered, taking the IUCN category and falling back on the China Red List where IUCN has none. We label the threatened species and add a dashed arrow for the direction of the reserve sites, made the same way as before.
+Let's try another biplot.
+
+This time, we ask whether Red-Listed species are more likely to be found in nature reserves.
+
+- Our `species` table categorises species in two ways: `iucn` is the IUCN Red List category. `china_red_list` is the same under Chinese law. We colour the species arrow red if it is Vulnerable, Endangered or Critically Endangered under the IUCN category (plus the China Red List when IUCN has no category).
+
+- Our `info` table has an environmental covariate that categorises streams by whether they originate inside a nature reserve in Gaoligongshan (`streamOrigin = insideGLGS`). We colour the sites by `streamOrigin`.
+
+- We also create a dashed arrow for the direction of the reserve sites, made the same way as before.
 
 The next chunk prepares the second biplot, in the same way as the first.
 
@@ -329,8 +364,10 @@ reserve <- site_scores |>
 threatened <- species_scores |> filter(red_list == "threatened (VU, EN, CR)")
 ```
 
+Now we make the second decorated biplot.
+
 ```{r biplot-reserve, fig.height = 7}
-ggplot() +
+p2 <- ggplot() +
   geom_point(data = site_scores, 
              aes(LV1, LV2, fill = streamOrigin), 
              shape = 21, colour = "white", size = 3) +
@@ -367,59 +404,57 @@ ggplot() +
        fill = "Stream rises in\nthe nature reserve", 
        colour = "Red List",
        title = "Sites coloured by protection, species arrows by Red List status") +
-  theme_minimal()
+  theme_minimal(); p2
 ```
 
 Most threatened species, including the dhole (*Cuon alpinus*), point up, toward the reserve sites. **But so do many common species.**
 
-**Exercise.** Look at the two biplots. Which sites sit together? Which groups of species point the same way? Write down one thing you could tell a park manager from these figures, and one thing you could not.
+```{r}
+p1 / p2
+```
 
-### What the ordination shows, and why we cannot trust it yet
+**Discussion.** Look at the two biplots. Write down one thing you could tell a park manager from these figures, and one thing you could not.
+
+### What the ordination shows, and why we cannot trust it
 
 Patterns we can see:
 
-- The clearest pattern runs from the top to the bottom of the plot. At the top are the Northwest and the less modified, more forested sites, most of them with streams rising inside the reserve. At the bottom are the more modified sites of the Southwest, most of them outside it.
-- Species sort along that pattern. Shrews, the takin, the muntjac and the pika of little-disturbed forest point up. Livestock, the rats that live with people and the palm civet point down.
+- The clearest pattern runs from the top to the bottom of the plot. At the top are the less human-modified sites, mostly in nature reserves. At the bottom are the more human-modified sites, mostly outside nature reserves.
+- Species sort along that pattern. Shrews, the takin, the muntjac and the pika of little-disturbed forest have arrows that point up. Livestock, the rats that live with people and the palm civet have arrows that point down.
 
-Why we do not know how reliable these patterns are:
+However, we do not know how reliable these patterns are:
 
-- The plot is built from raw detections: a species counts as present at a site if any one of its 18 PCRs was positive. Every arrow therefore includes false positives (detections where the species is absent) and false negatives (missed detections where it is present). The dhole example below shows both kinds of error.
-- Many site features change together from the top of the plot to the bottom: latitude, temperature, forest cover, human modification, region and the reserve. So we cannot tell which of them the species are responding to.
+- The plot is built from raw detections: a species counts as present at a site if even one of its 18 PCRs was positive. The ordination therefore contains false positives (detections from contamination) and false negatives (missed detections where it is present).
+- Human modification and reserve status are only two covariates that change from the top to the bottom. If you create other ordinations (or map the sites), you fill find that latitude, temperature, forest cover, and region also change from top to bottom.
 
-So treat these patterns as ideas to test, not as results. Session 3 tests them with a model that allows for both kinds of error.
+So ordinations give us ideas, but they are not real tests. In Session 3, we test hypotheses with a model that accounts for both false positives and false negatives.
 
 ## A single species: Where is the dhole?
 
-The dhole (*Cuon alpinus*) is an Endangered wild dog. Neither the composition chart nor the ordination can say where it is. Its raw detections look as if they might.
+The dhole (*Cuon alpinus*) is an endangered wild dog. Neither the composition chart nor the ordination can say where it is. Its raw detections look as if they might.
 
 To see what lies behind each detection, we lay out the data the way they were collected, as in Figure 1 of Ji et al. (2025, [doi:10.1111/ele.70302](https://doi.org/10.1111/ele.70302){.uri}). First we count the positive PCRs in each field sample (out of 6), and then in each site (out of 18).
 
 ```{r dhole-samples}
 dhole <- species |>
   filter(species == "Cuon alpinus") |>
-  pull(otu_id)                                               # the dhole's column name in OTU
+  pull(otu_id)      # the dhole's column name in OTU
 
 dhole_samples <- info |>
   mutate(positive = OTU[, dhole]) |>
   group_by(Site, Sample) |>
   summarise(positive = sum(positive), .groups = "drop") |>   # positive PCRs, out of 6, per field sample
   group_by(Site) |>
-  mutate(sample = row_number(),                              # 1 to 3 within each site
-         site_total = sum(positive)) |>                      # positive PCRs, out of 18, per site
+  mutate(sample = row_number(),     # 1 to 3 within each site
+         site_total = sum(positive)) |>   # positive PCRs, out of 18, per site
   ungroup()
 
 dhole_sites <- dhole_samples |>
-  distinct(Site, site_total) |>                              # one row per site
+  distinct(Site, site_total) |>   # one row per site
   left_join(sites |> select(Site, Xs.1, Xs.2), by = "Site")
 ```
 
-The figure puts a map and a table in one picture, with north at the top.
-
-- The map on the left shows every site. Empty circles are sites with no positive PCR. Filled circles are sites with at least one, shaded from pale (1 of 18) to dark red (18 of 18).
-- The table on the right has one row for each site where the dhole was detected, ordered from north to south, and one column for each of its three field samples. Each cell is the number of that sample's six PCRs that were positive, shaded by the share that were positive, on the same scale as the map.
-- The blue arrows join four rows of the table to their sites on the map. Each of these sites has a single positive PCR out of 18: they are possible false positives.
-
-To draw the table on the same plot as the map, we give each cell a position in map units: the three sample columns sit just east of the map, and the rows are spread evenly from the northernmost site to the southernmost.
+Then we make a figure that includes both a map and a table.
 
 ```{r dhole-figure, fig.width = 8, fig.height = 10}
 # Rows of the table: detecting sites from north to south, spread over the map's latitudes
@@ -437,6 +472,8 @@ cells <- dhole_samples |>
   inner_join(rows |> select(Site, row_y), by = "Site") |>
   mutate(cell_x = col_x[sample],
          share = if_else(positive == 0, NA, positive / 6))   # 0 positive: a white cell
+
+# Technical trick: to draw the table on the same plot as the map, we give each cell a position in map units: the three sample columns sit just east of the map, and the rows are spread evenly from the northernmost site to the southernmost.
 
 # Four possible false positives: the southernmost sites with 1 positive PCR out of 18
 flagged <- rows |>
@@ -482,15 +519,20 @@ ggplot() +
   theme(panel.grid.minor = element_blank(), legend.position = "bottom")
 ```
 
-A few sites are dark all the way across: the dhole's DNA was detected in almost every PCR of every sample (e.g. GLG28). Many more are pale, resting on one or two positive PCRs out of 18.
+- The map on the left shows every site. Empty circles are sites with no positive PCRs. Filled circles are sites with at least one positive PCR, shaded from pale red (1 of 18) to dark red (18 of 18).
+- The table on the right has one row for each site where the dhole was detected, ordered from north to south, and one column for each of its three field samples. Each cell is the number of that sample's six PCRs that were positive, shaded by the share that were positive, on the same scale as the map.
+- The blue arrows point out **four possible false positives**. Each of these sites has one positive PCR out of 18.
+- A few sites are dark all the way across: the dhole's DNA was detected in almost every PCR of every sample (e.g. GLG28). Many more are pale, resting on one or two positive PCRs out of 18.
 
 The figure points to two kinds of error.
 
-**There are probably false negatives.** Look at GLG39 in the table. Field samples 2 and 3 had 2 and 3 positive PCRs out of 6, so the dhole's DNA was in the water there. But sample 1, taken at the same place, had none. If one sample can miss the dhole, then sometimes all three will.
+**There are probably false negatives.** Look at GLG39 in the table. Field samples 2 and 3 had 2 and 3 positive PCRs out of 6, so the dhole's DNA was almost certainly in the water there. But sample 1, taken at the same place, had none. ***If one sample can miss the dhole, then sometimes all three will.***
 
-> Thus, we think that some of the empty circles on the map are **false negatives**: sites where the dhole was present and we missed it in all 3 samples: (0, 0, 0).
+> This is super important because it tells us that some of the empty circles on the map are **false negatives**: sites where the dhole was present and we missed it in all 3 samples: (0, 0, 0).
+>
+> There are 60 empty circles on the map. How many of these are false negatives?
 
-**There are probably false positives.** The arrows point to sites with just 1 positive PCR out of 18. That could be a trace of real dhole DNA, or contamination in the field or the lab. From one site alone, we cannot tell. Ji et al. (2025) found the same pattern for the takin (*Budorcas taxicolor*): a few weak detections in the south, where the takin is known not to live.
+**There are also probably false positives.** The four arrows point to sites with just 1 positive PCR out of 18. That could be a trace of real dhole DNA, or contamination in the field or the lab. From one site alone, we cannot tell. Ji et al. (2025) found the same pattern for the takin (*Budorcas taxicolor*): a few weak detections in the south, where the takin is known not to live.
 
 > Thus, we think that some of the red circles on the map are **false positives**: some sites with a weak pattern like (0, 0, 1) may be sites where the dhole was absent and the DNA came from contamination.
 

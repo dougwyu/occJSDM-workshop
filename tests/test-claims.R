@@ -13,6 +13,7 @@ by_name <- function(x, sp) unname(x[status$otu_id[match(sp, status$species)]])
 
 test_that("Session 1: the dhole figure supports the text", {
   expect_equal(by_name(sites_detected, "Cuon alpinus"), 41)
+  expect_equal(nrow(site_presence(m)) - by_name(sites_detected, "Cuon alpinus"), 60)   # "60 empty circles"
   dhole <- status$otu_id[status$species == "Cuon alpinus"]
   per_sample <- tapply(m$OTU[, dhole], m$info$Sample, sum)
   glg39 <- per_sample[sort(unique(m$info$Sample[m$info$Site == "GLG39"]))]
