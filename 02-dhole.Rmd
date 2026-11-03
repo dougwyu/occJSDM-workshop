@@ -149,7 +149,7 @@ What the arguments mean:
 - `MCMCparams` sets how long the model runs. The model is fitted by MCMC, which takes a long series of random draws of the parameters. The comments in the code say what each setting does.
 - `summarisedLatentPresences = TRUE` keeps only the average of each site's presence or absence, which keeps the fit small.
 
-### something
+### Did the model find where the species truly is?
 
 The command `computeConditionalOccupancyProbs()` gives, for each site, occJSDM's estimated probability that the species is present there, given what was detected.
 
@@ -227,7 +227,7 @@ sim_check |>
 
 The model expects the species at about 47 or 48 sites. The truth is 46. Not bad! The raw detections give only 37.
 
-### something
+### Did the model recover the collection and PCR rates?
 
 The model can also recover the collection and PCR-detection rates we used to make the survey.
 
