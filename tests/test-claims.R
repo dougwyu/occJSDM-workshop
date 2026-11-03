@@ -25,6 +25,35 @@ test_that("Session 1: taxonomic orders use current names", {
   expect_false("Soricomorpha" %in% status$order)
 })
 
+test_that("Sessions 1 and 2: the imaginary species supports the text", {
+  suppressPackageStartupMessages({ library(occJSDM); library(tidyverse) })
+  chunk <- function(file, label) {   # the code of one chunk, as in test-session2-exercises.R
+    rmd <- readLines(file.path(workshop_root(), file))
+    start <- grep(paste0("^```\\{r ", label, "[,}]"), rmd)
+    end <- start + which(rmd[(start + 1):length(rmd)] == "```")[1]
+    rmd[(start + 1):(end - 1)]
+  }
+  expect_identical(chunk("01-why-model.Rmd", "simulate"), chunk("02-dhole.Rmd", "simulate"))   # "the same code"
+
+  sim <- new.env()
+  sim$info <- read.csv(derived_path("info.csv"))
+  sim$sim_fit <- readRDS(derived_path("simulated_fit.rds"))
+  eval(parse(text = chunk("02-dhole.Rmd", "simulate")), envir = sim)
+  invisible(capture.output(eval(parse(text = chunk("02-dhole.Rmd", "simulated-check")), envir = sim)))
+  s <- sim$sim_check
+
+  expect_true(all(s$positive[s$present == 0] == 0))              # "no false positives"
+  expect_gte(sum(s$present == 1 & s$positive == 0), 5)          # enough orange sites to see
+  means <- tapply(s$probability, s$status, mean)
+  expect_gt(means[["present, detected"]], 0.95)                  # "nearly sure"
+  expect_gt(means[["present, missed"]], 2 * means[["absent"]])   # missed sites get clearly more
+  expect_gte(sum(s$present == 0 & s$probability > min(s$probability[s$status == "present, missed"])), 3)   # "some ... absent get as high"
+  expect_lt(abs(sum(s$probability) - sum(s$present)), 3)        # "about the right amount"
+  expect_gt(sum(s$present) - sum(s$positive > 0), 5)            # raw count is clearly short
+  expect_equal(mean(sim$sim_fit$results_output$theta_output), 0.4, tolerance = 0.1)   # "recovers the rates"
+  expect_equal(mean(sim$sim_fit$results_output$p_output), 0.6, tolerance = 0.1)
+})
+
 test_that("Session 2: the results sections support the text", {
   suppressPackageStartupMessages(library(occJSDM))
   fit <- readRDS(derived_path("dhole_fit.rds"))
