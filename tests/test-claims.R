@@ -95,10 +95,10 @@ test_that("Session 2: the saved dhole fit supports the text", {
   cond <- computeConditionalOccupancyProbs(fit)[, 1]
   expect_gt(mean(cond < 0.1 | cond > 0.9), 0.5)     # "most sites are close to certain"
   joint <- f$occ[f$occ$species == "Cuon alpinus", ]
-  expect_gt(cor(cond[joint$Site], joint$cond_mean), 0.9)   # "both fits agree"
+  expect_gt(cor(cond[joint$Site], joint$cond_mean), 0.9)   # Session 3: "both fits agree"
 })
 
-test_that("Session 2: the mammal-wide Southwest effect excludes zero but is not more precise", {
+test_that("Session 3: the dhole's mammal-wide Southwest effect excludes zero but is not more precise", {
   eff <- readRDS(derived_path("dhole_check.rds"))$effects
   sw <- eff[eff$covariate == "Regional_DivisionSouthwest", ]
   expect_lt(sw$hi, 0)

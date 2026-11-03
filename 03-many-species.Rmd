@@ -24,6 +24,7 @@ mcp_off <- Sys.getenv("WORKSHOP_NO_MCP") == "1"
 ```{r packages}
 library(tidyverse)
 library(ggrepel)      # labels that do not overlap, in ggplot2
+library(occJSDM)      # to read Session 2's dhole fit
 ```
 
 ## From one species to a community
@@ -434,6 +435,49 @@ Be careful about what this does and does not show.
 - The model shows that species are more often present at reserve sites. It cannot show that protection is the cause.
 
 > **Discussion.** A park manager reads this and says "the reserve works". What would you tell them?
+
+### Back to the dhole
+
+In Session 2, the one-species fit could not tell whether any covariate matters for the dhole: all 9 intervals crossed zero. The mammal-wide fit does put one of the dhole's effects clearly away from zero.
+
+```{r joint-effects}
+joint_effects <- fit$effects |>
+  filter(species == "Cuon alpinus") |>
+  select(covariate, mean, lo, hi) |>
+  mutate(across(where(is.numeric), \(x) round(x, 2)))
+
+joint_effects
+```
+
+- Its Southwest effect is clearly below zero.
+- But do not set these numbers beside the one-species fit. They are measured after allowing for hidden site effects shared by all species, so they are on a different scale, and the intervals are mostly wider, not narrower.
+- Being sure where the dhole is does not require being sure why.
+
+Do the two fits at least agree about where the dhole is? We read Session 2's one-species fit from its saved copy. Each point below is a site. Points on the grey line get the same probability from both fits.
+
+```{r agreement}
+# Session 2's one-species fit: the probability of presence at each site
+dhole_fit <- readRDS("data-derived/dhole_fit.rds")
+single <- computeConditionalOccupancyProbs(dhole_fit)
+single <- tibble(Site = rownames(single),
+                 single = single[, 1])
+
+both <- occ |>
+  filter(species == "Cuon alpinus") |>
+  select(Site, joint = cond_mean) |>
+  left_join(single, by = "Site")
+
+ggplot(both, aes(joint, single)) +
+  geom_abline(colour = "grey60") +
+  geom_point(alpha = 0.7) +
+  labs(x = "Mammal-wide fit",
+       y = "One-species fit",
+       title = "Both fits agree about where the dhole is") +
+  theme_minimal() +
+  coord_equal()
+
+both |> summarise(correlation = round(cor(joint, single), 2))
+```
 
 ## Which species go together?
 

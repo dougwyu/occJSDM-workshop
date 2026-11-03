@@ -602,66 +602,33 @@ effects |>
 
 How to read this figure:
 
-- Each row is one covariate. The point is the best estimate of its effect, and the line is its 95% interval.
+- Each row is one occupancy covariate. The point is the best estimate of its effect, and the line is its 95% interval.
 - For a number, such as `Human_modification_1km`, the effect is per standard deviation of the covariate. A positive effect means the dhole is more likely to be present where the covariate is higher.
-- For a category, the effect compares one level with a reference level that does not get a row. `streamOriginoutsideGLGS` compares sites whose stream rises outside the Gaoligongshan reserve with those whose stream rises inside it. `Regional_DivisionNorthwest` and `Regional_DivisionSouthwest` compare those regions with the East.
-- An interval that crosses the dashed line means we cannot tell whether the covariate matters.
+- For a category, the effect compares one level with a reference level that does not get a row. `streamOriginoutsideGLGS` compares sites whose stream originates outside the Gaoligongshan reserve with those whose stream rises inside it. `Regional_DivisionNorthwest` and `Regional_DivisionSouthwest` compare those regions with the East.
+- An interval that crosses the dashed line means we cannot tell whether the covariate matters. All 9 intervals cross the line, so the detection data that we have for the dhole are insufficient to tell whether any of these covariates has an effect.
+- Testing for covariate effects is different from asking where a species is. As we will see in the next section ("Can we trust the computation?"), we can trust the occupancy results for the dhole.
 
-All 9 intervals cross the line. Effects on the log-odds scale are hard to picture, so `plotOccupancyGradient()` draws one of them as a probability, holding the other covariates at typical values:
+Effects on the log-odds scale are hard to picture, so `plotOccupancyGradient()` draws one of them as a probability, holding the other covariates at typical values:
 
 ```{r gradient}
 plotOccupancyGradient(fit, covName = "Human_modification_1km")
 ```
 
-The band is the 95% interval. It is wide enough to hold a flat line, which is what an interval crossing zero means.
+The shaded band is the 95% interval. You can draw a horizontal line through the band from left to right, and a horizontal line means the covariate has no effect. This is the same message as the effect’s interval crossing zero in the figure above.
 
-Session 1 left a question open.
+- In Session 1, the ordination suggested that dholes were found more often in sites inside the reserve and in sites with little human modification, but we could not say which one was more important for explaining the species distributions.
 
-- In the ordination, sites inside the reserve and sites with little human modification lay at the same end of the plot, so the figure could not say which one species respond to.
-- The model estimates the effect of each covariate with the others held fixed, so `streamOrigin` and `Human_modification_1km` are separated here.
-- For the dhole alone, the data are too thin to say which matters. Session 3 asks the same question of all 108 mammals at once.
+- A model can try to tell them apart, because it estimates the effect of each covariate while holding the others fixed. In effect, it compares sites that are equally modified but differ in whether their stream rises inside the reserve, and the reverse.
 
-The mammal-wide fit of Session 3 does put one of the dhole's effects clearly away from zero.
-
-```{r joint-effects}
-joint_effects <- read_fit_summary()$effects |>
-  filter(species == "Cuon alpinus") |>
-  select(covariate, mean, lo, hi) |>
-  mutate(across(where(is.numeric), \(x) round(x, 2)))
-
-joint_effects
-```
-
-- Its Southwest effect is clearly below zero.
-- But do not set these numbers beside the one-species fit. They are measured after allowing for hidden site effects shared by all species, so they are on a different scale, and the intervals are mostly wider, not narrower.
-- Being sure where the dhole is does not require being sure why.
-
-Do the two fits at least agree about where the dhole is? Each point below is a site. Points on the grey line get the same probability from both fits.
-
-```{r agreement}
-joint <- read_fit_summary()$occ |>
-  filter(species == "Cuon alpinus") |>
-  select(Site, joint = cond_mean)
-
-both <- map_data |>
-  select(Site, single = model) |>
-  left_join(joint, by = "Site")
-
-ggplot(both, aes(joint, single)) +
-  geom_abline(colour = "grey60") +
-  geom_point(alpha = 0.7) +
-  labs(x = "Mammal-wide fit",
-       y = "One-species fit",
-       title = "Both fits agree about where the dhole is") +
-  theme_minimal() +
-  coord_equal()
-
-both |> summarise(correlation = round(cor(joint, single), 2))
-```
+- For the dhole alone, there are too few detections to tell them apart: both intervals cross zero. Session 3 asks the same question of all 108 mammals at once.
 
 ## Can we trust the computation?
 
-Every result above comes from the model's MCMC draws. Before reporting any of them, check that the two chains agree. If they do, they have probably both found the same answer; if they do not, at least one of them has not finished exploring.
+All the above results come from the model's MCMC draws. Normally, the first thing one does after running `runOccJSDM()` is to check the model diagnostics. Here, we have left this step for the end, because we want to show what the model can do.
+
+What
+
+efore reporting any of them, check that the two chains agree. If they do, they have probably both found the same answer; if they do not, at least one of them has not finished exploring.
 
 We made `diag` with `returnConvergenceDiagnostics()` above, to read the covariate effects. Now we count the parameters that miss the usual rules, and list them.
 
