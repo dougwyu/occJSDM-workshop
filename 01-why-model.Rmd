@@ -62,7 +62,7 @@ data_schematic()   # a drawing of the two tables, made in R/schematic.R
 ```
 
 - **Sample replicates.** Each site has several field samples, each with its own name in `Sample` (here `GLG01-1` and `GLG01-2`, shaded differently).
-- **Primer replicates.** Each sample can be amplified with more than one primer, named in `Primer`. This column is optional; for example, our workshop data will only use 12S.
+- **Primer replicates.** Each sample can be amplified with more than one primer, named in `Primer`. occJSDM needs this column even when only one primer was used, as in our workshop data, where every row says 12S.
 - **PCR replicates have no column.** Rows with the same `Site`, `Sample` and `Primer` are PCR replicates of one another, and occJSDM counts them from the rows. The PCR column is only there to help you read the table.
 - **Site covariates** repeat on every row of a *site*, and **collection covariates** on every row of a *sample*.
 - `OTU` has the same rows, in the same order, with one column per species. Each cell is the number of reads of that species in that PCR, straight from the OTU table that your bioinformatics pipeline produces. occJSDM turns the counts into detections (e.g. 0/1), using its `threshold` argument (Session 2), so **do not remove low counts from your OTU table**. Also, for simplicity, our workshop `OTU` table already only holds 1s and 0s.
@@ -116,7 +116,9 @@ sites <- info |>
 
 ## Summary 1: the study design
 
-Here is the study design in one table: the site, the number of field samples per site (M) and the number of PCR replicates per sample (K). View `design` as a dataframe. Every site has M = 3 and K = 6, so this design is balanced. The sites are spread over three regions, most of them in the Southwest.
+Here is the study design in one table: the sites, the number of field samples per site (M) and the number of PCR replicates per sample (K). Every site has M = 3 and K = 6, so this design is balanced. The sites are spread over three regions, most of them in the Southwest.
+
+Click on the `design` data frame in the Environment tab to view it. Notice that we only used one primer.
 
 ```{r design}
 design <- info |>
@@ -124,8 +126,6 @@ design <- info |>
   group_by(Site) |>
   summarise(M = n(), K = first(K)) |>   # field samples at the site; K is the same for each of them here
   left_join(sites |> select(Site, Regional_Division), by = "Site")
-
-design
 
 design |> count(Regional_Division, M, K, name = "sites")
 ```
@@ -136,10 +136,23 @@ design |> count(Regional_Division, M, K, name = "sites")
 composition <- species |>
   count(order, family, name = "species")
 
-ggplot(composition, aes(area = species, fill = order, subgroup = order)) +
+ggplot(composition, aes(area = species, fill = order, subgroup = order, 
+                        label = family)) +
   geom_treemap(colour = "white") +
   geom_treemap_subgroup_border(colour = "white", size = 4) +
-  geom_treemap_subgroup_text(place = "centre", colour = "white", grow = TRUE, alpha = 0.85) +
+  geom_treemap_text(place = "topleft",    
+    # family names, in the small boxes
+                    colour = "white",
+                    size = 9,
+                    min.size = 4,         # a smaller box gets smaller text
+                    reflow = TRUE,        # wrap long names onto two lines
+                    padding.x = grid::unit(1.5, "mm"),
+                    padding.y = grid::unit(1.5, "mm")) +
+  geom_treemap_subgroup_text(place = "centre", 
+    # order names, large and faint, on top
+                             colour = "white",
+                             grow = TRUE,
+                             alpha = 0.5) +
   guides(fill = "none") +
   labs(title = "Rodents dominate the mammal list")
 
@@ -168,7 +181,7 @@ y <- presence |>
 c(kept = ncol(y), dropped = ncol(presence) - 1 - ncol(y)) # we kept 80 species and dropped 28
 ```
 
-View `presence` as a dataframe.
+Click on the `presence` data frame in the Environment tab to view it.
 
 `ecoCopula::stackedsdm()` fits a simple model to each species on its own, here with no covariates (`~ 1`). `ecoCopula::cord()` then finds two latent variables, which are chosen to best explain which species turn up together at the same sites. ecoCopula requires a bit of R code to get the outputs into shape for plotting with `ggplot2`.
 
