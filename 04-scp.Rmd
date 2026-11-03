@@ -54,8 +54,8 @@ sites <- info |>
 occ_in <- occ |> select(Site, species, cond_mean)
 
 # two ways to cost a site, one row per site
-cost_equal <- sites |> transmute(Site, cost = 1)
-cost_human <- sites |> transmute(Site, cost = Human_modification_1km)
+cost_equal <- sites |> select(Site) |> mutate(cost = 1)
+cost_human <- sites |> select(Site, cost = Human_modification_1km)
 
 # protect 20% of the sites, and aim for 50% of each species
 budget_frac <- 0.2
@@ -98,7 +98,7 @@ Click on `pu` in the Environment tab to view it.
 Every species gets weight 1, so a shortfall for any species counts the same. Now we set up the problem and solve it.
 
 ```{r baseline}
-w_equal <- status |> transmute(species, weight = 1)
+w_equal <- status |> select(species) |> mutate(weight = 1)
 
 problem_equal <- problem(pu, features = w_equal$species, cost_column = "cost") |>
   # get as close to every target as the budget allows
@@ -113,7 +113,7 @@ problem_equal <- problem(pu, features = w_equal$species, cost_column = "cost") |
   add_highs_solver(gap = 0.01, time_limit = 30, verbose = FALSE)
 
 solution <- solve(problem_equal, run_checks = FALSE)
-plan_equal <- solution |> transmute(Site, selected = solution_1 == 1)
+plan_equal <- solution |> mutate(selected = solution_1 == 1) |> select(Site, selected)
 count(plan_equal, selected)
 ```
 
@@ -137,7 +137,7 @@ make_plan <- function(weights, cost, budget) {
     add_binary_decisions() |>
     add_highs_solver(gap = 0.01, time_limit = 30, verbose = FALSE) |>
     solve(run_checks = FALSE)
-  solution |> transmute(Site, selected = solution_1 == 1)
+  solution |> mutate(selected = solution_1 == 1) |> select(Site, selected)
 }
 ```
 

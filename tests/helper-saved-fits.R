@@ -1,12 +1,15 @@
-# Session 2 fits the dhole and then the simulated species live. The text tests run the session
+# Session 2 fits the simulated species and the dhole live. The text tests run the session
 # with this stand-in for runOccJSDM() instead, which returns the saved copies of those two fits
 # (identical to the live fits with the session's seed) and passes any later call, such as an
-# exercise refit, to the real function.
+# exercise refit, to the real function. The fits are told apart by the OTU column, so the
+# order of the two in the session does not matter.
 saved_fits_runOccJSDM <- function(root) {
-  saved <- file.path(root, "data-derived", c("dhole_fit.rds", "simulated_fit.rds"))
-  calls <- 0
-  function(...) {
-    calls <<- calls + 1
-    if (calls <= 2) readRDS(saved[calls]) else occJSDM::runOccJSDM(...)
+  saved <- c(simulated = "simulated_fit.rds", dhole = "dhole_fit.rds")
+  used <- character()
+  function(data, ...) {
+    kind <- if (identical(colnames(data$OTU), "simulated")) "simulated" else "dhole"
+    if (kind %in% used) return(occJSDM::runOccJSDM(data = data, ...))
+    used <<- c(used, kind)
+    readRDS(file.path(root, "data-derived", saved[[kind]]))
   }
 }

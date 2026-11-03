@@ -17,8 +17,8 @@ test_that("Session 2's commented-out fallback lines load the saved fits", {
   root <- normalizePath(testthat::test_path(".."), mustWork = TRUE)
   rmd <- readLines(file.path(root, "02-dhole.Rmd"))
   fallback <- sub("^# ", "", grep("^# (sim_)?fit <- readRDS\\(", rmd, value = TRUE))
-  expect_equal(fallback, c('fit <- readRDS("data-derived/dhole_fit.rds")',
-                           'sim_fit <- readRDS("data-derived/simulated_fit.rds")'))
+  expect_setequal(fallback, c('fit <- readRDS("data-derived/dhole_fit.rds")',
+                              'sim_fit <- readRDS("data-derived/simulated_fit.rds")'))
   env <- new.env()
   withr::with_dir(root, for (line in fallback) eval(parse(text = line), envir = env))
   expect_false(is.null(env$fit$results_output))

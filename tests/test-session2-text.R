@@ -39,9 +39,9 @@ test_that("the simulated species: the model's counts, averages and ranges", {
   absent <- s$probability[s$status == "absent"]
   expect_gte(sum(absent > 0.4 & absent < 0.5), 3)                    # "grey dots between 0.4 and 0.5"
   expect_lt(max(absent), 0.5)
-  # "about 47 sites": 47.4 with the saved fit; a fit run inside rmarkdown::render() gives
+  # "about 47 or 48 sites": 47.4 with the saved fit; a fit run inside rmarkdown::render() gives
   # 47.8 (the dhole fit is identical either way), so allow both
-  expect_lt(abs(sum(s$probability) - 47), 1)
+  expect_true(sum(s$probability) > 47 & sum(s$probability) < 48)
   expect_equal(sum(s$present), 46)                                   # "The truth is 46"
   expect_equal(sum(s$positive > 0), 37)                              # "only 37"
 })

@@ -72,55 +72,9 @@ Click on `d` in the Environment tab to view it. Do you understand why `d$OTU` ha
 data_schematic()
 ```
 
-## Fit the model
+## First, fit the occJSDM model on the simulated data, where we know the answer
 
-A fit for one species takes about a minute, so we run it live. If the fit fails for any reason, uncomment the last line of the chunk and run it, to load a saved copy of exactly the same fit, so you can carry on.
-
-```{r fit, message = TRUE}
-# so that every student gets the same fit
-set.seed(2026)
-
-fit <- runOccJSDM(
-  data = d,
-  # one species, so no shared hidden factors
-  listParams = list(n_factors = 0),
-  # a replicate is positive if its value is at least 1
-  threshold = 1,
-  occCovariates = c("annual_precipitation",
-                    "mean_temperature",
-                    "Human_modification_1km",
-                    "Percent_of_forest_cover_1km",
-                    "Patch_density_1km",
-                    "Edge_density_1km",
-                    "streamOrigin",
-                    "Regional_Division"),
-  collCovariates = c("Filter_vol",
-                     "PrevDayRain"),
-  spatCovariates = character(),
-  MCMCparams = list(nchain = 2,     # two independent series of draws (chains)
-                    nburn = 5000,   # draws thrown away at the start of each chain
-                    niter = 5000,   # draws kept from each chain
-                    nthin = 1,      # keep every draw
-                    ncores = 2),    # run the two chains at the same time
-  summarisedLatentPresences = TRUE
-)
-
-# if runOccJSDM() fails, you can uncomment this command and load a saved fit
-# fit <- readRDS("data-derived/dhole_fit.rds")
-```
-
-What the arguments mean:
-
-- `occCovariates` and `collCovariates` name the columns of `info` to use for occupancy and for collection.
-- `threshold`: a PCR counts as a detection if its value is at least this. Our `OTU` holds 0s and 1s, so 1 is right. With read counts you normally would also use 1, and you should not remove low read counts first: the model needs the weak detections to estimate false positives. However, we do provide the option to set threshold higher.
-- `n_factors` is the number of hidden environmental covariates shared by several species. With one species there is nothing to share, so it is 0. Session 3 uses this.
-- `spatCovariates = character()` leaves out the spatial part of the model, which needs far more sites than most surveys have.
-- `MCMCparams` sets how long the model runs. The model is fitted by MCMC, which takes a long series of random draws of the parameters. The comments in the code say what each setting does.
-- `summarisedLatentPresences = TRUE` keeps only the average of each site's presence or absence, which keeps the fit small.
-
-## First, check the model where we know the answer
-
-Before we read the dhole's results, we try the model on the simulated species from the end of Session 1. We know where it lives, because it is simulated, so we can check the model's answers. This is the same code as in Session 1, with the same seed, so it makes the same survey.
+Before we read the dhole's results, we try the model on the simulated species from the end of Session 1. We know where it lives, because it is simulated, so we can check the model's answers. This is the same code as in Session 1, with the same seed, so it simulates the same survey.
 
 ```{r simulate-survey}
 set.seed(2026)   # so that every student gets the same "random" survey
@@ -186,6 +140,17 @@ sim_fit <- runOccJSDM(
 # sim_fit <- readRDS("data-derived/simulated_fit.rds")
 ```
 
+What the arguments mean:
+
+- `n_factors` is the number of hidden environmental covariates shared by several species. With one species there is nothing to share, so it is 0. Session 3 uses this.
+- `threshold`: a PCR counts as a detection if its value is at least this. Our `OTU` holds 0s and 1s, so 1 is right. With read counts you normally would also use 1, and you should not remove low read counts first: the model needs the weak detections to estimate false positives. However, we do provide the option to set threshold higher.
+- `occCovariates` and `collCovariates` name the columns of `info` to use for occupancy and for collection.
+- `spatCovariates = character()` leaves out the spatial part of the model, which needs far more sites than most surveys have.
+- `MCMCparams` sets how long the model runs. The model is fitted by MCMC, which takes a long series of random draws of the parameters. The comments in the code say what each setting does.
+- `summarisedLatentPresences = TRUE` keeps only the average of each site's presence or absence, which keeps the fit small.
+
+### something
+
 The command `computeConditionalOccupancyProbs()` gives, for each site, occJSDM's estimated probability that the species is present there, given what was detected.
 
 ```{r simulated-check}
@@ -219,6 +184,8 @@ sim_check |>
             highest = round(max(probability), 2))
 ```
 
+Click on `sim_check` in the Environment pane to view it.
+
 Now we plot `sim_check`.
 
 ```{r simulated-plot, fig.height = 3.5}
@@ -241,16 +208,26 @@ How did the model do? There are three rows:
   - In these 55 sites, occJSDM estimated that the species was present with an average of only 0.14 probability (from 0.01 to 0.48). This makes sense.
 - **present, detected**: the species was truly present at those sites in the simulation.
   - In these 37 sites, occJSDM estimated that the species was present with an average of 0.98 probability (from 0.85 to 1.00). This again makes sense.
-  - occJSDM does not estimate exactly 1.0 because occJSDM thinks there is a low possibility of false positives.
+  - occJSDM does not estimate exactly 1.0 because occJSDM thinks there is a small possibility of false positives.
 - **present, missed**: the species was truly present at those sites but detection failed.
   - In these 9 sites, occJSDM estimated that the species was present with an average of 0.40 probability (from 0.20 to 0.49).
   - Note that these 9 sites *look* like true absences (0, 0, 0), but occJSDM learned from the **present, detected** sites that the species is more likely to be found in forested sites, and it calculated approximately how many absent sites are probably false negatives. It puts these two facts together to choose the probable false-negative sites.
   - Of course, it cannot be certain, and it only gives a "maybe" probability of presence.
   - It also cannot tell which sites are the missed ones. Some well-forested sites where the species is truly absent get as high a probability as the missed sites (the grey dots between 0.4 and 0.5). Nothing in the data separates them.
 
-**Add up the probabilities** over all sites, and the model expects the species at about 47 sites. The truth is 46. Not bad! The raw detections give only 37.
+**Add up the probabilities** over all sites, and we get the number of sites where the model expects the species.
 
-> Look at the orange dots. If this were a real survey, could you point to the sites where the species was missed?
+```{r simulated-total}
+# adding up the probabilities gives the expected number of sites with the species
+sim_check |>
+  summarise(truly_present = sum(present),
+            detected = sum(positive > 0),
+            expected_present = round(sum(probability), 1))
+```
+
+The model expects the species at about 47 or 48 sites. The truth is 46. Not bad! The raw detections give only 37.
+
+### something
 
 The model can also recover the collection and PCR-detection rates we used to make the survey.
 
@@ -267,7 +244,46 @@ c(collection = mean(sim_fit$results_output$theta_output),   # we used 0.4
 
 Now we read the dhole's results the same way, except that this is a real dataset so we do not know the truth. (We use simulations and additional fieldwork to test occupancy models).
 
-## What is the dhole's probability of presence at each site?
+## Now fit the occJSDM to the dhole survey data
+
+### Fit the model
+
+A fit for one species takes about a minute, so we run it live. If the fit fails for any reason, uncomment the last line of the chunk and run it to load a saved copy of exactly the same fit, so you can continue.
+
+```{r fit, message = TRUE}
+# so that every student gets the same fit
+set.seed(2026)
+
+fit <- runOccJSDM(
+  data = d,
+  # one species, so no shared hidden factors
+  listParams = list(n_factors = 0),
+  # a replicate is positive if its value is at least 1
+  threshold = 1,
+  occCovariates = c("annual_precipitation",
+                    "mean_temperature",
+                    "Human_modification_1km",
+                    "Percent_of_forest_cover_1km",
+                    "Patch_density_1km",
+                    "Edge_density_1km",
+                    "streamOrigin",
+                    "Regional_Division"),
+  collCovariates = c("Filter_vol",
+                     "PrevDayRain"),
+  spatCovariates = character(),
+  MCMCparams = list(nchain = 2,     # two independent series of draws (chains)
+                    nburn = 5000,   # draws thrown away at the start of each chain
+                    niter = 5000,   # draws kept from each chain
+                    nthin = 1,      # keep every draw
+                    ncores = 2),    # run the two chains at the same time
+  summarisedLatentPresences = TRUE
+)
+
+# if runOccJSDM() fails, you can uncomment this command and load a saved fit
+# fit <- readRDS("data-derived/dhole_fit.rds")
+```
+
+### What is the dhole's probability of presence at each site?
 
 Like we did with the simulated species, `computeConditionalOccupancyProbs()` returns a matrix with one row per site and one column per species (here only the dhole). Each value is the probability that the dhole is present at the site, given what was detected there.
 
@@ -332,9 +348,7 @@ ggplot(map_long, aes(Xs.1, Xs.2)) +
 - The model map (right side) has fewer filled circles. Almost every site with a single positive PCR out of 18 is gone, most of them in the south: the model thinks that they are false positives.
 - Sites with several positive PCRs mostly get darker, in the north and in the middle of the eastern strip. There the model is even more sure that the dhole is present than the raw data suggests.
 
-> **Discussion**
->
-> If you were the park manager, which map would you use to decide where to look for dholes? Why? What additional checks might you run?
+> **Discuss.** If you were the park manager, which map would you use to decide where to look for dholes? Why? What additional checks might you run?
 
 Each bar of the histogram below counts sites. Bars at the left are sites where the dhole is almost certainly absent, bars at the right where it is almost certainly present, and bars in the middle are sites the data cannot settle.
 
@@ -364,7 +378,11 @@ In Session 1, we created a map of dhole detections. Here it is again:
 session1_dhole_map()
 ```
 
-We pointed at 4 sites (GLG23055, GLG23052, GLG23053, GLG23064) that are likely **false positives** (0,0,1) and one site (GLG39) that is a likely **true detection**. What does occJSDM think about these sites? Also, of the 60 sites that had no detections (0,0,0), how many sites does occJSDM think are **false negatives**?
+We pointed at 4 sites (GLG23055, GLG23052, GLG23053, GLG23064) that are likely **false positives** (0,0,1) and one site (GLG39) that is a likely **true detection**.
+
+What does occJSDM think about these sites?
+
+Also, of the 60 sites that had no detections (0,0,0), how many sites does occJSDM think are **false negatives**?
 
 ```{r session1-sites}
 # patterns is the number of positive PCRs (e.g. 2,2,1 or 0,3,2) in every sample.
@@ -386,7 +404,7 @@ map_data |>
   arrange(probability)
 ```
 
-- **The four possible false positives** from Session 1 (GLG23055, GLG23052, GLG23053, GLG23064), each with a detection pattern of (0,0,1), all get a probability of a few percent at most. This means that occJSDM concluded that they are false positives.
+- **The four possible false positives** from Session 1 (GLG23055, GLG23052, GLG23053, GLG23064), each with a detection pattern of (0,0,1), all get a probability of a few percent or less. This means that occJSDM concluded that they are false positives.
 - **GLG39**, with two good samples and one empty one (0,2,3), gets a high probability: the empty sample was a false negative, and the model looks past it.
 - **GLG28**, positive in all 18 PCRs (6,6,6), is certain.
 
@@ -410,16 +428,14 @@ map_data |>
 - **The false negatives.** Session 1 asked how many of the 60 empty circles are false negatives. The model's answer is about 1.7 sites (`expected_occupied` in the first table).
 - **In total**, adding up the probabilities over all 101 sites, the model expects the dhole at about 17 sites, against the 41 where it was detected (the second table).
 
-> **Discussion**
->
-> The model expects the dhole at fewer sites than the raw map shows. What does this mean about which kind of error, false positives or false negatives, is the bigger problem in the dhole dataset?
+> **Discuss.** The model expects the dhole at fewer sites than the raw map shows. What does this mean about the kind of error, false positives or false negatives, in the dhole dataset?
 
 ## How widespread is the dhole?
 
 `returnOccupancyRates()` gives the dhole's **baseline occupancy**: the chance that it occupies an "average" site. Here that means:
 
 - **Average values of the six numeric occupancy covariates** (climate, forest, human modification, patch and edge density). `runOccJSDM()` rescales each one to an average of 0 before fitting, so the baseline sits at their averages.
-- **The reference level of the two category covariates**, which have no average: in the East, with a stream rising inside the reserve.
+- **The reference level of the two category covariates**, which have no average: in the East, with a stream originating inside a reserve.
 
 It returns one value for each of the model's draws, so we can report a mean and a 95% interval.
 
@@ -434,7 +450,7 @@ baseline |>
   round(2)
 ```
 
-Such a site has about a one-in-five chance (0.20) of holding the dhole, but the 95% interval runs from 0.08 to 0.37.
+An average, reference site has about a 20% chance of holding the dhole, but the 95% interval is wide: 0.08 to 0.37.
 
 ## How well is the dhole's DNA collected and detected?
 
@@ -496,29 +512,60 @@ ggplot(effect_table, aes(mean, covariate)) +
   theme_minimal()
 ```
 
-Rain on the day before sampling clearly lowers the chance that a sample catches the dhole's DNA: its interval lies below zero. Filtering more water probably helps, but its interval crosses zero, so we cannot be sure.
+Rain on the day before sampling clearly lowers the chance that a sample catches the dhole's DNA: its interval lies below zero. (This is the opposite of our working hypothesis.)
+
+Filtering more water probably helps, but its interval crosses zero, so we cannot be sure. However, note that we are only testing within the range of water volumes used in this study, which might not have been wide enough to pick up a clear effect. To deliberately test the effect of water volume on detection, one should run an experiment.
 
 ### Would more field samples or PCRs help?
 
-From the collection and detection probabilities, we can work out how often a survey with `M` field samples per site and `K` PCRs per sample would detect the dhole at a site where it lives. We do the sum for every draw, so the answer comes with an interval.
+From the collection and detection probabilities, we can work out how often a survey with `M` field samples per site and `K` PCRs per sample would detect the dhole at a site where it is present. We do the sum for every draw, so the answer comes with an interval.
 
 ```{r design}
-# The chance that a site where the dhole lives gives at least one positive PCR.
-# A sample detects the dhole if it catches the DNA (collection_draws) and at least
-# one of its K PCRs finds it: all K miss with probability (1 - p)^K.
+# The chance that a site where the dhole lives produces ≥1 positive PCR.
+# A sample detects the dhole if it catches the DNA (collection_draws) and at least one of its K PCRs finds it: all K miss with probability (1 - p)^K.
 # The site detects the dhole unless all M samples miss.
 detect_site <- function(M, K) {
   per_sample <- collection_draws * (1 - (1 - detection_draws)^K)
   1 - (1 - per_sample)^M
 }
 
-expand_grid(field_samples = c(1, 2, 3, 6),
-            pcrs_per_sample = c(1, 3, 6, 12)) |>
+designs <- expand_grid(field_samples = c(1, 2, 3, 6),
+                       pcrs_per_sample = c(1, 3, 6, 12)) |>
   # one summary (mean and 95% interval) per design
   mutate(detection = map2(field_samples, pcrs_per_sample,
                           \(M, K) summarise_draws(detect_site(M, K)))) |>
   unnest(detection) |>
   mutate(across(c(mean, lower, upper), \(x) round(x, 2)))
+
+designs
+```
+
+Click on `designs` in the Environment tab to view it. Now we plot it: one line for each number of field samples.
+
+```{r design-plot, fig.height = 4.5}
+ggplot(designs, aes(pcrs_per_sample, mean,
+                    colour = factor(field_samples),
+                    fill = factor(field_samples))) +
+  # the 95% interval of each design
+  geom_ribbon(aes(ymin = lower, ymax = upper),
+              alpha = 0.15,
+              colour = NA) +
+  geom_line() +
+  geom_point() +
+  # this survey's design: 3 field samples, 6 PCRs each
+  annotate("point",
+           x = 6,
+           y = designs$mean[designs$field_samples == 3 & designs$pcrs_per_sample == 6],
+           shape = 21,
+           size = 5,
+           colour = "black") +
+  scale_x_continuous(breaks = c(1, 3, 6, 12)) +
+  scale_y_continuous(limits = c(0, 1)) +
+  labs(x = "PCRs per field sample",
+       y = "Chance of detecting the dhole\nat a site where it is present",
+       colour = "Field samples\nper site",
+       fill = "Field samples\nper site") +
+  theme_minimal()
 ```
 
 - With this survey's design (3 samples, 6 PCRs each), the dhole is detected at about 96% of the sites where it lives. That is why the model expects so few false negatives.
@@ -527,7 +574,7 @@ expand_grid(field_samples = c(1, 2, 3, 6),
 
 > Exercise 2 below drops the survey to two field samples per site. Find that design in the table. How much detection would we lose?
 
-## What explains where the dhole is?
+## What features of the environment explain where the dhole is?
 
 The harder question is why. We look at the effect of each occupancy covariate on the chance the dhole is present.
 
@@ -538,7 +585,7 @@ diag <- returnConvergenceDiagnostics(fit)
 # beta_psi: the effects of the occupancy covariates
 effects <- diag |>
   filter(param == "beta_psi") |>
-  transmute(covariate = label1, mean, lower = q2.5, upper = q97.5)
+  select(covariate = label1, mean, lower = q2.5, upper = q97.5)
 
 ggplot(effects, aes(mean, covariate)) +
   geom_vline(xintercept = 0, linetype = 2, colour = "grey50") +

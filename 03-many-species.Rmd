@@ -102,7 +102,7 @@ diagnostics <- diag |>
 # Covariate effects on occupancy: one row per species and covariate
 effects <- diag |>
   filter(param == "beta_psi") |>
-  transmute(otu_id, covariate = label1, mean, lo = q2.5, hi = q97.5, rhat)
+  select(otu_id, covariate = label1, mean, lo = q2.5, hi = q97.5, rhat)
 
 # Associations: lower, median and upper residual correlation for each pair of species
 sig <- returnResidualCorrelationMatrix(fit_full)   # 3 x species x species
@@ -234,11 +234,13 @@ Here are the ten species with the highest false-positive rates, with the number 
 profile |>
   arrange(desc(q_mean)) |>
   left_join(sites_detected, by = "otu_id") |>
-  transmute(species,
-            local_status,
-            sites_detected,
-            false_positive = round(q_mean, 3),
-            true_positive = round(p_mean, 2)) |>
+  select(species,
+         local_status,
+         sites_detected,
+         false_positive = q_mean,
+         true_positive = p_mean) |>
+  mutate(false_positive = round(false_positive, 3),
+         true_positive = round(true_positive, 2)) |>
   head(10)
 ```
 
@@ -452,7 +454,8 @@ assoc |>
 
 assoc |>
   arrange(desc(median)) |>
-  transmute(species_a, species_b, correlation = round(median, 2)) |>
+  select(species_a, species_b, correlation = median) |>
+  mutate(correlation = round(correlation, 2)) |>
   head(10)
 ```
 
