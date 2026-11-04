@@ -67,6 +67,42 @@ Session 2 does not read the mammal fit; these changes come from the new pin alon
 - Line 527: "The strongest are between close relatives (the *Rattus* species), between livestock (cattle and buffalo), and between the dhole and *Canis lupus*". Cattle and buffalo (0.67) now rank 152nd of 235, out of the top ten. The top three are *Rattus nitidus* with *R. tanezumi* (0.94), the shrews *Episoriculus leucops* with *E. caudatus* (0.93), and the dhole with *Canis lupus* (0.92). The rest of the top ten are rodents and small mammals.
 - Line 549 (take-away): "With human modification held fixed, most species are more likely present at reserve sites, threatened or not." No longer true.
 
+### Where the reserve effect comes from
+
+Added on 4 Nov 2026 after the merge, to help reframe lines 408 to 455 and 549. The numbers come from `analysis/reserve-by-region.R`, which reads only the derived files. Its detection counts are raw (a site counts if any PCR of the species was positive), so they include false positives.
+
+**The reserve boundary changes the habitat only in the Southwest.** Site means of human modification and forest cover, inside against outside a reserve:
+
+- Northwest (13 inside, 4 outside): human modification 0.10 against 0.10, forest cover 0.96 against 0.94. Intact and lightly used on both sides.
+- East (20 inside, 8 outside): human modification 0.37 against 0.40, forest cover 0.60 against 0.66. Moderately modified, but alike on both sides.
+- Southwest (18 inside, 38 outside): human modification 0.27 against 0.48, forest cover 0.88 against 0.43. Most of the sites outside the reserves are here, and nearly all of the habitat difference.
+
+The model has one reserve coefficient per species for all three regions, with no reserve-by-region interaction, so the estimate is driven by the Southwest. The 12 outside sites in the north and east add little, because they look like the inside sites there. Doug's reading: in the north and east the habitat is intact (or at least no worse) outside the reserves and human population density is low, so the reserves add little protection there.
+
+**The 9 credibly positive species are forest mammals of the tropical Southwest.** Eight of the nine are Indo-Malayan tropical species: two fruit bats (*Cynopterus brachyotis*, *Eonycteris spelaea*), the Bengal slow loris (*Nycticebus bengalensis*, EN), the Assam macaque (*Macaca assamensis*, NT), two *Callosciurus* squirrels, the brush-tailed porcupine (*Atherurus macrourus*) and the common palm civet (*Paradoxurus hermaphroditus*), plus the Yunnan giant flying squirrel (*Petaurista yunanensis*). Compared with the 81 settled wild species with no credible effect:
+
+- 70% of their detections are at Southwest sites, against 49%.
+- They are detected at a median of 26 sites, against 9. This is probably why their intervals clear zero: they are detected often enough for the effect to be measured. Most of the 81 are rare, and "no credible effect" for them means the data cannot say, not that there is no effect.
+- They are larger (median body mass 1.1 kg, against 100 g).
+- Most are Least Concern, so this is not a story about threatened species.
+
+**Raw detections within the Southwest show the effect plainly.** Share of Southwest sites with a detection, inside against outside a reserve:
+
+- *Atherurus macrourus*: 0.83 against 0.16
+- *Callosciurus quinquestriatus*: 0.78 against 0.26
+- *Paradoxurus hermaphroditus*: 0.78 against 0.42
+- *Petaurista yunanensis*: 0.67 against 0.37
+- *Nycticebus bengalensis*: 0.56 against 0.13
+- *Macaca assamensis*: 0.50 against 0.03
+- *Callosciurus phayrei*: 0.44 against 0.00
+- *Cynopterus brachyotis*: 0.39 against 0.03
+- *Eonycteris spelaea*: 0.28 against 0.03
+- *Nectogale elegans* (water shrew, credibly negative): 0.78 against 0.95. It is detected at 95 of the 101 sites and lives in streams, so it has no reason to track forest protection.
+
+**A possible framing for Session 3.** In the tropical Southwest, where the land outside the reserve has been cleared, forest mammals such as the slow loris, Assam macaque, porcupine, palm civet and fruit bats are found mainly where the stream rises inside the reserve. In the Northwest the forest is intact on both sides of the boundary, and in the East the habitat is similar on both sides, so the reserve shows little effect there. For most small mammals the data cannot say. The fixed-prior fit's "51 of 68" came from the prior, not the data, which is itself a teaching point. A Discuss question could ask why the model can see a reserve effect only where there are unprotected sites to compare against, and only for species detected often enough to measure it.
+
+**Cautions.** The effect is estimated with human modification and forest cover held fixed, but in the Southwest the reserve, forest loss and human modification go together, so the model is partly splitting one contrast three ways. Several of the 9 species are hunted (loris, macaque, porcupine, civet), and less hunting inside the reserve is a plausible reason for the contrast that the 1 km human-modification index would not capture. That is a guess; the model does not test it. With 91 species and 95% intervals, about 2 or 3 would come out credibly positive by chance alone, so a few of the 9 may be false alarms. A reserve-by-region interaction would be the analysis for a paper, not for the workshop.
+
 ## Session 4 (`04-scp.Rmd`)
 
 - Line 270: "Only 38 of the 108 species meet their target." New: 32.
