@@ -7,7 +7,7 @@ The design is in `docs/design.md` and the build plan in `docs/plan.md`. Student 
 The files in `data-derived/` are committed, so the sessions need neither the raw archive nor the full fit. To rebuild them, run these from the project root, in order:
 
 - `analysis/build-derived.R`, with `WORKSHOP_RAW` set to the unpacked Zenodo archive (`setup/01-download-data.R` fetches it). It writes `mammal_input.rds` and `species_status.rds`.
-- `analysis/fit-mammal.R`, with `WORKSHOP_FIT` set to a new path outside the repo. It fits the 108 mammals at the pinned occJSDM (about 30 minutes) and saves the full fit, `fit_Mammal_d4_community_1b4a2cd.rds`.
+- `analysis/fit-mammal.R`, with `WORKSHOP_FIT` set to a new path outside the repo. It fits the 108 mammals at the pinned occJSDM (about 8 minutes on two cores) and saves the full fit, `fit_Mammal_d4_community_1b4a2cd_10k.rds`.
 - `analysis/build-fit-summary.R`, with `WORKSHOP_FIT` set to that fit. It writes `fit_summary.rds`.
 - `analysis/build-session-data.R`. It writes `dhole_input.rds`, `occupancy_long.csv` and `dhole_fit.rds`.
 - `analysis/build-simulated-fit.R`. It writes `simulated_fit.rds`.

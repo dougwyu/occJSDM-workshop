@@ -115,14 +115,13 @@ test_that("Session 3: convergence counts quoted in the text", {
   d <- f$diagnostics
   bad_det <- d$rhat_detection > 1.1
   bad_eff <- d$rhat_effects > 1.1
-  expect_equal(sum(bad_det), 2)
-  expect_equal(sum(bad_eff), 16)
-  expect_equal(sum(bad_det | bad_eff), 17)
+  expect_equal(sum(bad_det), 1)
+  expect_equal(sum(bad_eff), 5)
+  expect_equal(sum(bad_det | bad_eff), 5)
   n <- sites_detected[d$otu_id[bad_det | bad_eff]]
-  expect_equal(sum(n <= 6), 7)                       # "7 of those 17 ... six sites or fewer"
-  expect_true(d$rhat_effects[d$species == "Bos taurus"] > 1.1)
-  expect_equal(by_name(sites_detected, "Bos taurus"), 97)
-  expect_true(all(unlist(d[d$species == "Rattus tanezumi", c("rhat_detection", "rhat_effects")]) <= 1.1))
+  expect_equal(sum(n <= 6), 3)                       # "3 of those 5 ... six sites or fewer"
+  expect_true(all(n <= 11))                          # no common species among them
+  expect_true(all(unlist(d[d$species %in% c("Rattus tanezumi", "Bos taurus"), c("rhat_detection", "rhat_effects")]) <= 1.1))
   expect_true(all(unlist(d[d$species == "Cuon alpinus", c("rhat_detection", "rhat_effects")]) <= 1.1))
 })
 
@@ -131,7 +130,7 @@ test_that("Session 3: false positives, richness and associations", {
   expect_true(all(sites_detected[top$otu_id] / 101 > 0.5))   # "detected at most sites"
   expect_true(all(c("Sus scrofa", "Bos taurus") %in% top$species))
   credible <- f$assoc |> filter(lo > 0 | hi < 0)
-  expect_equal(nrow(credible), 236)
+  expect_equal(nrow(credible), 235)
   expect_true(all(credible$median > 0))              # "every association that survives is positive"
   sp <- function(id) status$species[match(id, status$otu_id)]
   pairs <- paste(sp(credible$otu_a), sp(credible$otu_b))

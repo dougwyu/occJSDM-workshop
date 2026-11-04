@@ -1,9 +1,9 @@
 # Reduce the full mammal fit to data-derived/fit_summary.rds. The fit is made by fit-mammal.R:
-# occJSDM 1b4a2cd, b0_prior left at its default, "community" (fit_Mammal_d4_community_1b4a2cd.rds).
+# occJSDM 1b4a2cd, b0_prior left at its default, "community" (fit_Mammal_d4_community_1b4a2cd_10k.rds).
 # Set WORKSHOP_FIT to the fit. Run from the project root after build-derived.R.
 source("R/data.R")
 suppressPackageStartupMessages(library(occJSDM))
-fit_path <- Sys.getenv("WORKSHOP_FIT", unset = "fits/fit_Mammal_d4_community_1b4a2cd.rds")
+fit_path <- Sys.getenv("WORKSHOP_FIT", unset = "fits/fit_Mammal_d4_community_1b4a2cd_10k.rds")
 f <- readRDS(fit_path)
 stopifnot(!is.null(f$results_output$jsdm_output$mu_b0_output))   # a community-prior fit
 ro <- f$results_output
