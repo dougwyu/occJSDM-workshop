@@ -331,7 +331,7 @@ Domestic buffalo (*Bubalus bubalis*), goats (*Capra hircus*) and sheep (*Ovis ar
 
 At the other end (up) are species of little-disturbed forest: three shrews (*Episoriculus leucops*, *E. caudatus* and *E. macrurus*), the Gongshan muntjac (*Muntiacus gongshanensis*), the takin (*Budorcas taxicolor*) and the Gaoligong pika (*Ochotona gaoligongensis*). We also see that three domestic species are more associated with less modified sites: yak (*Bos grunniens*), horse (*Equus caballus*) and cat (*Felis catus*).
 
-### Are threatened species found in the nature reserve?
+### Are threatened species found in the nature reserves?
 
 Let's try another biplot.
 
@@ -346,7 +346,7 @@ This time, we ask whether Red-Listed species are more likely to be found in natu
 The next chunk prepares the second biplot, in the same way as the first.
 
 - It puts each species in one of three Red List groups (`red_list`), as described above.
-- It makes the dashed arrow for the reserve. `inside` is `TRUE` for sites whose stream rises inside the reserve, and the arrow's coordinates are the correlations of `inside` with each latent variable. R treats `TRUE` as 1 and `FALSE` as 0, so this works just as it did for human modification.
+- It makes the dashed arrow for the reserve sites. `inside` is `TRUE` for sites whose stream rises inside a reserve, and the arrow's coordinates are the correlations of `inside` with each latent variable. R treats `TRUE` as 1 and `FALSE` as 0, so this works just as it did for human modification.
 - It keeps the threatened species in their own table (`threatened`), so that we can label them.
 
 ```{r reserve-direction}
@@ -401,7 +401,7 @@ p2 <- ggplot() +
   coord_equal() +
   labs(x = "Latent variable 1", 
        y = "Latent variable 2", 
-       fill = "Stream rises in\nthe nature reserve", 
+       fill = "Stream rises in\na nature reserve", 
        colour = "Red List",
        title = "Sites coloured by protection, species arrows by Red List status") +
   theme_minimal(); p2

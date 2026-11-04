@@ -23,8 +23,6 @@ source("R/session1.R")          # session1_dhole_map(): Session 1's dhole figure
 mcp_off <- Sys.getenv("WORKSHOP_NO_MCP") == "1"
 ```
 
-The second loads the packages.
-
 ```{r packages}
 library(tidyverse)
 library(occJSDM)
@@ -62,7 +60,7 @@ dim(d$OTU) # 1818 rows X 1 species, same row order as info
 Click on `d` in the Environment tab to view it. Do you understand why `d$OTU` has the same number of rows as `d$info`?
 
 - `d$info` is the table from Session 1, unchanged: one row per PCR replicate, with `Site`, `Sample`, the occupancy covariates and the collection covariates.
-  - **Occupancy covariates** are also known as **Site covariates** and **Environmental covariates**. They describe the site (climate, forest, human modification, region, and whether the stream rises inside the nature reserve). They can change whether the dhole lives there.
+  - **Occupancy covariates** are also known as **Site covariates** and **Environmental covariates**. They describe the site (climate, forest, human modification, region, and whether the stream rises inside a nature reserve). They can change whether the dhole lives there.
   - **Collection covariates** describe how a sample was taken (the volume of water filtered, rain the previous day). They can change whether a sample catches the dhole's DNA, if the dhole is there.
 - `d$OTU` is a matrix with the same 1,818 rows and a single column, the dhole. A 1 means the PCR was positive. It must stay a matrix with a column name, even with one species, which is why we write `drop = FALSE`.
 - The rows of the two tables must be in the same order. Here they are, because both come from the same files.
@@ -82,7 +80,7 @@ set.seed(2026)   # so that every student gets the same "random" survey
 # 1. The species is more likely to be present where forest cover is high.
 truth <- info |>
   distinct(Site, forest = Percent_of_forest_cover_1km) |>
-  mutate(prob_present = plogis(-0.5 + 2 * as.vector(scale(forest))),   
+  mutate(prob_present = plogis(-0.5 + 2 * as.vector(scale(forest))),
          # plogis() turns a score into a probability
          present = rbinom(n(), 1, prob_present))  # 1 = present, 0 = absent
 
@@ -99,7 +97,7 @@ sim_pcrs <- info |>
   mutate(positive = dna * rbinom(n(), 1, 0.6))
 ```
 
-Click on `sim_pcrs` in the Environment pane to view it.
+Click on `sim_pcrs` in the Environment tab to view it.
 
 `sim_pcrs` is the simulated survey, one row per PCR, like `info`:
 
@@ -110,11 +108,11 @@ Click on `sim_pcrs` in the Environment pane to view it.
 occJSDM needs the detections laid out like `OTU`: a matrix with one row per PCR, in the same order as `info`, and one named column for the species.
 
 ```{r simulated-otu}
-sim_OTU <- matrix(sim_pcrs$positive, ncol = 1, 
+sim_OTU <- matrix(sim_pcrs$positive, ncol = 1,
                   dimnames = list(NULL, "simulated"))
 ```
 
-We fit it with the same call as the dhole, with two differences. The only occupancy covariate is forest cover, which is what the species responds to. And there are no collection covariates, because in our survey every sample has the same chance of catching DNA. The fit takes a few seconds.
+We fit it with `runOccJSDM()`, the same call we use for the dhole below, with two differences. The only occupancy covariate is forest cover, which is what the species responds to. And there are no collection covariates, because in our survey every sample has the same chance of catching DNA. The fit takes a few seconds.
 
 ```{r simulated-fit, message = TRUE}
 # so that every student gets the same fit
@@ -146,7 +144,7 @@ What the arguments mean:
 - `threshold`: a PCR counts as a detection if its value is at least this. Our `OTU` holds 0s and 1s, so 1 is right. With read counts you normally would also use 1, and you should not remove low read counts first: the model needs the weak detections to estimate false positives. However, we do provide the option to set threshold higher.
 - `occCovariates` and `collCovariates` name the columns of `info` to use for occupancy and for collection.
 - `spatCovariates = character()` leaves out the spatial part of the model, which needs far more sites than most surveys have.
-- `MCMCparams` sets how long the model runs. The model is fitted by MCMC, which takes a long series of random draws of the parameters. The comments in the code say what each setting does.
+- `MCMCparams` sets how long the model runs. The model is fitted by MCMC, which takes a long series of random draws of the parameters. The comments in the dhole fit below say what each setting does, and "Can we trust the computation?" explains MCMC.
 - `summarisedLatentPresences = TRUE` keeps only the average of each site's presence or absence, which keeps the fit small.
 
 ### Did the model find where the species truly is?
@@ -162,7 +160,7 @@ sim_prob <- tibble(Site = rownames(sim_prob),
                    probability = sim_prob[, 1])
 ```
 
-Click on `sim_prob` in the Environment pane to view it.
+Click on `sim_prob` in the Environment tab to view it.
 
 For each site, use the known truth in `sim_pcrs` (in column `present`) to classify each site by whether the species was correctly judged to be absent or present, or whether it was present but missed (false negatives). Then join this to occJSDM's estimated probabilities of presence.
 
@@ -184,7 +182,7 @@ sim_check |>
             highest = round(max(probability), 2))
 ```
 
-Click on `sim_check` in the Environment pane to view it.
+Click on `sim_check` in the Environment tab to view it.
 
 Now we plot `sim_check`.
 
@@ -242,7 +240,7 @@ c(collection = mean(sim_fit$results_output$theta_output),   # we used 0.4
 - The model does not turn the orange sites red. It says "maybe" (mean prob = 0.40) wherever the species could be, and in total it gets about the right number of sites.
 - It also recovers how often a sample catches the DNA and how often a PCR detects it.
 
-Now we read the dhole's results the same way, except that this is a real dataset so we do not know the truth. (We use simulations and additional fieldwork to test occupancy models).
+Now we read the dhole's results the same way, except that this is a real dataset so we do not know the truth. (We use simulations and additional fieldwork to test occupancy models.)
 
 ## Now fit the occJSDM to the dhole survey data
 
@@ -256,7 +254,7 @@ set.seed(2026)
 
 fit <- runOccJSDM(
   data = d,
-  # one species, so no shared hidden factors
+  # one species, so no shared hidden environmental covariates
   listParams = list(n_factors = 0),
   # a replicate is positive if its value is at least 1
   threshold = 1,
@@ -291,31 +289,31 @@ Like we did with the simulated species, `computeConditionalOccupancyProbs()` ret
 cond <- computeConditionalOccupancyProbs(fit)
 
 sites <- info |>
-  distinct(Site, .keep_all = TRUE) |>                  
+  distinct(Site, .keep_all = TRUE) |>
     # one row per site, as in Session 1
   select(-Sample, -Primer, -Filter_vol, -PrevDayRain) |>
   arrange(Site)
 
 positive_pcrs <- d$info |>
   mutate(positive = d$OTU[, 1]) |>
-  count(Site, wt = positive, name = "positive_pcrs")   
+  count(Site, wt = positive, name = "positive_pcrs")
     # positive PCRs per site, out of 18
 
-model_probs <- tibble(Site = rownames(cond), model = cond[, 1])   
+model_probs <- tibble(Site = rownames(cond), model = cond[, 1])
   # cond as a table, one row per site
 
 map_data <- sites |>
-  left_join(positive_pcrs, by = "Site") |>      
+  left_join(positive_pcrs, by = "Site") |>
     # match by site name
   left_join(model_probs, by = "Site") |>
-  mutate(raw = positive_pcrs / 18, .before = model) |>   
+  mutate(raw = positive_pcrs / 18, .before = model) |>
     # share of PCRs positive
   select(-positive_pcrs)
 ```
 
 Click on `cond` and then on `map_data` in the Environment tab to view them. Which column in `map_data` came from `cond`?
 
-Here are the raw detections from Session 1 next to the model's estimates, drawn the same way. Empty circles are sites with no detection (raw map) or where occJSDM thinks that the dhole is almost certainly absent (probability \< 0.1) (model map).
+Here are the raw detections from Session 1 next to the model's estimates, drawn the same way. Empty circles are sites with no detection (raw map), or sites where occJSDM thinks that the dhole is almost certainly absent, with a probability below 0.1 (model map).
 
 ```{r maps, fig.width = 9, fig.height = 7}
 map_long <- map_data |>
@@ -329,7 +327,7 @@ map_long <- map_data |>
                          value))
 
 ggplot(map_long, aes(Xs.1, Xs.2)) +
-  geom_point(data = filter(map_long, is.na(value)), 
+  geom_point(data = filter(map_long, is.na(value)),
              shape = 21, size = 2.2, colour = "grey55", fill = NA) +
   geom_point(data = filter(map_long, !is.na(value)),
              aes(fill = value),
@@ -604,7 +602,7 @@ How to read this figure:
 
 - Each row is one occupancy covariate. The point is the best estimate of its effect, and the line is its 95% interval.
 - For a number, such as `Human_modification_1km`, the effect is per standard deviation of the covariate. A positive effect means the dhole is more likely to be present where the covariate is higher.
-- For a category, the effect compares one level with a reference level that does not get a row. `streamOriginoutsideGLGS` compares sites whose stream originates outside the Gaoligongshan reserve with those whose stream rises inside it. `Regional_DivisionNorthwest` and `Regional_DivisionSouthwest` compare those regions with the East.
+- For a category, the effect compares one level with a reference level that does not get a row. `streamOriginoutsideGLGS` compares sites whose stream originates outside Gaoligongshan's nature reserves with those whose stream rises inside one. `Regional_DivisionNorthwest` and `Regional_DivisionSouthwest` compare those regions with the East.
 - An interval that crosses the dashed line means we cannot tell whether the covariate matters. All 9 intervals cross the line, so the detection data that we have for the dhole are not enough to see a clear effect of any of these covariates.
 - Testing for covariate effects is different from asking where a species is. After all, the covariates we measured might truly not explain where the dhole lives. But even if we do not know why the dhole is where it is, we can trust the model's estimates of where it is, as the next section ("Can we trust the computation?") shows.
 
@@ -616,9 +614,9 @@ plotOccupancyGradient(fit, covName = "Human_modification_1km")
 
 The shaded band is the 95% interval. You can draw a horizontal line through the band from left to right, and a horizontal line means the covariate has no effect. This is the same message as the effect’s interval crossing zero in the figure above.
 
-- In Session 1, the ordination suggested that dholes were found more often in sites inside the reserve and in sites with little human modification, but we could not say which one was more important for explaining the species distributions.
+- In Session 1, the ordination suggested that dholes were found more often in sites inside a reserve and in sites with little human modification, but we could not say which one was more important for explaining the species distributions.
 
-- A model can try to tell them apart, because it estimates the effect of each covariate while holding the others fixed. In effect, it compares sites that are equally modified but differ in whether their stream rises inside the reserve, and it compares sites whose streams rise in the same place but differ in human modification. However, for the dhole, there are not enough detections, and possibly not enough independent variation in the two covariates, to find a clear effect of either.
+- A model can try to tell them apart, because it estimates the effect of each covariate while holding the others fixed. In effect, it compares sites that are equally modified but differ in whether their stream rises inside a reserve, and it compares sites whose streams rise in the same place but differ in human modification. However, for the dhole, there are not enough detections, and possibly not enough independent variation in the two covariates, to find a clear effect of either.
 
 - In Session 3, we revisit this question with a model fitted to all 108 mammal species at once. It still estimates a separate effect for each species, and we count how many species respond to each covariate.
 
@@ -630,12 +628,12 @@ What are model diagnostics? First, a word on how MCMC works.
 
 - The model does not calculate its answer in one step. It searches for it over thousands of steps, trying many different values of each parameter, mostly close to the previous value, sometimes far from it.
 - At first the search wanders, because it starts far from the values that fit. These early steps are the burn-in (`nburn`), and they are thrown away.
-- Eventually, the search finds the set of values that fit the data well, and from then on it keeps searching close by. The model keeps the next `niter` steps as its results.
+- Eventually, the search finds a set of values that fit the data well, and from then on it keeps searching close by. The model keeps the next `niter` steps as its results.
 - We can see the search in a traceplot (one per parameter), which shows the value tried at each step of the search. A search that has settled jumps up and down around the same value, which is why a good traceplot looks like a fuzzy caterpillar. The width of the caterpillar is the uncertainty. A narrow caterpillar means the data are pointing the search at a narrow range of values.
-- The model runs the search twice independently (`nchain = 2`), and we ask whether the two chains found the same values. If they settle in different places, or one is still wandering, at least one of them has not finished searching, and the results cannot be trusted yet. If both have settled around the same values, they have probably found the answer. `rhat` measures how well the two chains agree, and we want it close to 1, at most 1.01. (A value of 1.01 means that when the two chains are pooled into one, the pooled draws are only 1% more spread out than a single chain's.)
-- We also want each chain to have searched many different values, but because MCMC searches near its previous value, 5,000 steps are not worth 5,000 independent values. Only after enough steps is a search's value unrelated to where it was. The effective sample size, `ess`, counts how many independent values the two chains together are worth. The more slowly the search moves, the lower `ess` is. We want at least 400.
+- The model runs the search twice independently (`nchain = 2`), and we ask whether the two chains found the same values. If they settle in different places, or one is still wandering, at least one of them has not finished searching, and the results cannot be trusted yet. If both have settled around the same values, they have probably found the answer. `rhat` measures how well the two chains agree, and we want it close to 1, at most 1.01. (A value of 1.01 means that when the two chains are pooled into one, the pooled draws are only 1% more spread out than a single chain's.) Sometimes we run more than 2 chains.
+- We also want each chain to have searched many different values, but because MCMC searches near its previous value, 5,000 steps are not worth 5,000 independent values. Only after enough intermediate steps is a search's value unrelated to where it had been. Technically, the values are no longer auto-correlated. The effective sample size, `ess`, counts how many independent values the two chains together are worth. The more slowly the search moves, the lower `ess` is. We want at least 400.
 
-We already made `diag` with `returnConvergenceDiagnostics()` above, to read the covariate effects. Now we check `diag` for any parameters that break the `rhat` or `ess` rule, and list them.
+We already made `diag` with `returnConvergenceDiagnostics()` above, to read the covariate effects. Now we check `diag` for any parameters that break either rule (`rhat` above 1.01, or `ess` below 400), and list them.
 
 ```{r diagnostics}
 # we already ran this above, so this is only here to show how we normally start model diagnostics
@@ -655,14 +653,20 @@ flagged
 
 Click on `diag` in the Environment tab to view it. It has one row per parameter.
 
-- Only 3 parameters out of 16 break the `rhat` or `ess` rule.
-- `param` is the kind of parameter: `beta0_psi` for the baseline occupancy, `beta_psi` for the effect of an occupancy covariate, `beta_theta` for collection, `theta0` for the field false-positive rate, and `p` and `q` for the lab detection and false-positive rates. `label1` says which covariate (or, for `p` and `q`, which primer) it belongs to.
-- `mean`, `sd`, `q2.5` and `q97.5` summarise the draws: their mean, their spread, and the ends of the 95% interval.
+- Only 2 parameters out of 16 in this model fit break the `rhat` or `ess` rule.
+- `param` is the kind of parameter:
+  - `beta0_psi` for the baseline occupancy
+  - `beta_psi` for the effect of an occupancy covariate
+  - `beta_theta` for collection
+  - `theta0` for the field false-positive rate
+  - `p` and `q` for the lab detection and false-positive rates
+- `label1` says which covariate (or, for `p` and `q`, which primer) it belongs to.
+- `mean`, `sd`, `q2.5` and `q97.5` summarise the tries (technically, the word is 'draws'): their mean value, their spread, and the ends of the 95% interval.
 - `rhat` and `ess` are the two checks described above.
 
 > Find `p` and `q` in `diag`. Which of the two rules does each one break?
 
-The flagged parameters here are the lab detection and false-positive rates, `p` and `q`. A traceplot shows the draws of each chain in order. Here is `p`, beside the baseline occupancy, which is not flagged.
+The flagged parameters here are the lab detection and false-positive rates, `p` and `q`. We can look at the traceplots to show the draws of each chain in order. Here is `p`, beside the baseline occupancy, which is not flagged.
 
 ```{r traceplot, fig.height = 3}
 # plotTraceplot() wants an array: parameter x draw x chain
@@ -671,10 +675,12 @@ draws_p <- array(fit$results_output$p_output, dim = c(1, 5000, 2))
 # the baseline occupancy draws are already in that shape
 draws_b0 <- fit$results_output$jsdm_output$B0_output
 
+# flagged: rhat above 1.01 and ess below 400
 plotTraceplot(draws_p,
               param_name = "p (flagged)",
               dimnames1 = "dhole")
 
+# not flagged
 plotTraceplot(draws_b0,
               param_name = "baseline occupancy (not flagged)",
               dimnames1 = "dhole")
@@ -687,7 +693,7 @@ plotTraceplot(draws_b0,
 What to do about a flagged parameter:
 
 - **Ask whether it matters for your question.** The flags here are small (`rhat` of 1.03, not 1.3), and the conclusion that one positive PCR out of 18 is weak evidence does not depend on the exact value of `p`.
-- **Run longer chains and check again.** Raise `nburn` and `niter`. That would pin `p` and `q` down more precisely, but would not make their intervals much narrower, because the width reflects how much the data say, not how long the chains ran.
+- **Run longer chains and check again.** Increase `nburn` and `niter`, which gives the chains more time to settle and agree on a set of values. If this works, that would pin `p` and `q` down more precisely, but would not make their intervals much narrower, because the width reflects the information in the data.
 - **Report it.** Say which parameters missed the rule and by how much.
 
 `runOccJSDM()` also checks each block of parameters itself, and warns if any has an `rhat` above 1.1 or an effective sample size below 50. You see these warnings only when you fit live.
@@ -709,15 +715,15 @@ Each exercise refits the model with one change and compares the answer with the 
 First, store the covariates in two vectors, so each exercise can reuse them.
 
 ```{r exercise-setup}
-occ_covs <- c("annual_precipitation", 
+occ_covs <- c("annual_precipitation",
               "mean_temperature",
               "Human_modification_1km",
-              "Percent_of_forest_cover_1km", 
+              "Percent_of_forest_cover_1km",
               "Patch_density_1km",
               "Edge_density_1km",
-              "streamOrigin", 
+              "streamOrigin",
               "Regional_Division")
-coll_covs <- c("Filter_vol", 
+coll_covs <- c("Filter_vol",
                "PrevDayRain")
 ```
 
@@ -825,16 +831,16 @@ Rain on the previous day lowered the chance that a sample caught the dhole's DNA
 
 ```{r exercise-no-rain, eval = FALSE}
 set.seed(2026)
-fit_no_rain <- runOccJSDM(data = d, 
-                          listParams = list(n_factors = 0), 
+fit_no_rain <- runOccJSDM(data = d,
+                          listParams = list(n_factors = 0),
                           threshold = 1,
-                          occCovariates = occ_covs, 
+                          occCovariates = occ_covs,
                           collCovariates = "Filter_vol",   # no PrevDayRain
                           spatCovariates = character(),
-                          MCMCparams = list(nchain = 2, 
-                                            nburn = 5000, 
-                                            niter = 5000, 
-                                            nthin = 1, 
+                          MCMCparams = list(nchain = 2,
+                                            nburn = 5000,
+                                            niter = 5000,
+                                            nthin = 1,
                                             ncores = 2),
                           summarisedLatentPresences = TRUE)
 
@@ -846,8 +852,8 @@ rain <- info |>
 
 compare_rain <- map_data |>
   select(Site, pattern, with_rain = model) |>
-  left_join(tibble(Site = rownames(no_rain_probability), 
-                   without_rain = no_rain_probability[, 1]), 
+  left_join(tibble(Site = rownames(no_rain_probability),
+                   without_rain = no_rain_probability[, 1]),
             by = "Site") |>
   left_join(rain, by = "Site")
 
@@ -867,7 +873,7 @@ cat('Your instructor has connected Posit Assistant to the occJSDM tools: `valida
 
 1. Ask the assistant to check the data file `data-derived/dhole_input.rds` with `validate_data`, using the occupancy covariates `annual_precipitation`, `mean_temperature`, `Human_modification_1km`, `Percent_of_forest_cover_1km`, `Patch_density_1km`, `Edge_density_1km`, `streamOrigin` and `Regional_Division`, and the collection covariates `Filter_vol` and `PrevDayRain`. Ask it to explain any problem before fitting.
 
-2. Ask it to fit the model with two chains of 5000 burn-in and 5000 kept iterations, no hidden factors, and a seed you choose.
+2. Ask it to fit the model with two chains of 5000 burn-in and 5000 kept iterations, no hidden environmental covariates (`n_factors = 0`), and a seed you choose.
 
 3. Ask it for the convergence diagnostics, and compare its count of flagged parameters with yours.
 

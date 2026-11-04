@@ -67,3 +67,8 @@ test_that("51 of 101 sites are in the reserve, and every plan puts about four in
     expect_lte(share, 0.85)
   }
 })
+
+test_that("the toy plan picks sites 1 and 3, not the two richest", {
+  expect_equal(which(s4$toy_solution$solution_1 == 1), c(1, 3))   # "picks sites 1 and 3 instead"
+  expect_gte(0.9 / 1.7, 0.5)                                      # "meets their 50% targets"
+})

@@ -58,7 +58,7 @@ test_that("Session 3: occupancy and richness", {
 
 test_that("Session 3: the reserve bullets", {
   r <- s3$reserve_effects
-  reserve <- filter(r, covariate == "Stream rises inside the reserve")
+  reserve <- filter(r, covariate == "Stream rises inside a reserve")
   modification <- filter(r, covariate == "More human modification")
   wild <- filter(reserve, local_status == "wild")
   expect_equal(nrow(wild), 68)                         # "the 68 wild species"

@@ -27,13 +27,13 @@ library(ggrepel)      # labels that do not overlap, in ggplot2
 library(occJSDM)      # to read Session 2's dhole fit
 ```
 
-## From one species to a community
+## Why model all the species together?
 
-A conservation plan needs an answer for every species, not just the dhole. We could fit 108 separate models, but a joint model does better. It:
+A conservation plan needs to know where many species are, not just one. We could fit 108 separate models, but a joint model fits all species at once. That lets it **share information between species, and so reveal hidden site effects that you did not measure, or did not know you should measure.**
 
-- fits all species together,
-- shares information between them through hidden site effects that act on many species at once,
-- and estimates which species go together after the environment is accounted for.
+What are hidden site effects? Sites differ in ways we did not measure, such as microclimate, disturbance history or isolation. Like the occupancy covariates we did measure, such a difference can affect several species at once. In a survey, it shows up as groups of species that turn up together at some sites and are missing together from others.
+
+The model cannot see the cause, but it can see the effect: species that turn up together more often than the measured covariates explain. It estimates a few hidden environmental covariates from that pattern (`n_factors` in `runOccJSDM()`, which was 0 for the dhole alone and is 4 here), and uses them like the measured ones. A rare species can gain most, because its few detections are read alongside those of the common species it shares sites with.
 
 Fitting this model for 108 mammals takes several minutes on a fast laptop, so we use a fit prepared earlier (5,000 burn-in and 5,000 kept iterations, two chains). If you want to run the occJSDM output functions on the full fit, your instructor can share the file.
 
@@ -114,12 +114,12 @@ assoc <- tibble(otu_a = species_ids[pairs[, 1]], otu_b = species_ids[pairs[, 2]]
 
 ## Can we trust the computation?
 
-With 108 species there are hundreds of parameters. For each species we take the largest R-hat in two groups:
+This time we check the chains first, as you should in your own work. With 108 species there are hundreds of parameters. For each species we take the largest R-hat in two groups:
 
 - its **detection** parameters: the true- and false-positive rates and the effects of the collection covariates;
 - its **covariate effects** on occupancy.
 
-As in Session 2, R-hat near 1 means the chains agree. Here we call a group settled if its largest R-hat is at most 1.1.
+As in Session 2, `rhat` near 1 means the two chains agree. Session 2 used the strict rule, at most 1.01. Here we use 1.1, the level at which `runOccJSDM()` itself warns, because this fit has hundreds of parameters and we cannot rerun it in class. So we call a group settled if its largest `rhat` is at most 1.1. The saved summary has no `ess`, so we check `rhat` only.
 
 ```{r convergence}
 conv <- fit$diagnostics |>
@@ -136,6 +136,12 @@ conv |>
   arrange(sites_detected) |>
   select(species, sites_detected, rhat_detection, rhat_effects)
 ```
+
+Click on `conv` in the Environment tab to view it. It has one row per species.
+
+- `rhat_detection` and `rhat_effects` are the species' largest `rhat` in each group.
+- `sites_detected` is the number of sites where the species was detected.
+- `detection_settled`, `effects_settled` and `settled` say whether the species passes each check, and both.
 
 > Look at the `sites_detected` column of the second table. What do most of the unsettled species have in common? Which ones break the pattern?
 
@@ -171,6 +177,8 @@ The model gives each species its own true-positive and false-positive rates. Fir
 profile <- fit$params |>
   left_join(status |> select(otu_id, local_status), by = "otu_id")
 ```
+
+Click on `profile` in the Environment tab to view it. `p_mean` is the species' true-positive rate per PCR and `q_mean` its false-positive rate, each with the ends of its 95% interval (`_lo`, `_hi`).
 
 We start with the plainest plot: one point per species.
 
@@ -247,9 +255,9 @@ profile |>
 
 The highest false-positive rates belong to species detected at most sites. They include the pig and cattle, whose DNA probably reaches rivers from farms and settlements, but also several common small mammals. The model cannot say why a species has a high rate, only that its raw detections overstate where they live.
 
-> **Discussion.** If a species' false-positive rate is high, what does that mean for a map of its raw detections?
+> **Discuss.** If a species' false-positive rate is high, what does that mean for a map of its raw detections?
 
-## Probability of presence at every site
+## How likely is each species to be at each site?
 
 For each site and each species, the model gives the probability that the species is present given what was detected. These are the numbers the conservation plan will use. We attach each species' taxonomic order, which we use below.
 
@@ -331,16 +339,22 @@ occ |>
 
 The saved table `data-derived/occupancy_long.csv` has one row per site and species, with taxonomy and conservation status attached. Session 4 reads it.
 
-## Does the reserve matter, once human modification is accounted for?
+### What did we just do?
 
-In Session 1's ordination, sites whose stream rises inside the Gaoligongshan reserve sat at the opposite end from the most modified sites. So the figure could not say which of the two the species respond to.
+- We checked the chains first, and set aside the 30 species whose chains have not settled.
+- We read each species' detection rates, and found that some species' raw detections overstate where they live.
+- We added up the probabilities of presence at each site, and found that the model expects fewer species per site than were detected.
+
+## Do the reserves matter, once human modification is accounted for?
+
+In Session 1's ordination, sites whose stream rises inside one of Gaoligongshan's nature reserves sat at the opposite end from the most modified sites. So the figure could not say which of the two the species respond to.
 
 - The model includes both covariates, and estimates the effect of each with the other held fixed.
 - Session 2 could not answer the question for the dhole alone. Here we ask it of every species.
 
 The next chunk prepares the effects for plotting.
 
-- The model reports the reserve as `streamOriginoutsideGLGS`: outside compared with inside. We flip its sign, so a positive value means a species is more likely to be present where the stream rises inside the reserve.
+- The model reports reserve status as `streamOriginoutsideGLGS`: outside compared with inside. We flip its sign, so a positive value means a species is more likely to be present where the stream rises inside a reserve.
 - We keep only the species whose chains settled.
 - We group the species by Red List status, as in Session 1.
 
@@ -354,7 +368,7 @@ reserve_effects <- fit$effects |>
          upper = pmax(sign * lo, sign * hi),
          covariate = if_else(covariate == "Human_modification_1km",
                              "More human modification",
-                             "Stream rises inside the reserve")) |>
+                             "Stream rises inside a reserve")) |>
   left_join(status |> select(otu_id, iucn, china_red_list, local_status, body_mass),
             by = "otu_id") |>
   # keep only the species whose chains settled
@@ -367,6 +381,8 @@ reserve_effects <- fit$effects |>
                               .default = "not assessed, or data deficient"))
 ```
 
+Click on `reserve_effects` in the Environment tab to view it. It has two rows per species, one for each covariate: `estimate` is the effect and `lower` and `upper` the ends of its 95% interval, after the flip.
+
 Each row of the figure is a species, with its effect and 95% interval. Points right of the dashed line mean more likely present; intervals that cross the line cannot be told apart from no effect.
 
 ```{r reserve-plot, fig.height = 11}
@@ -378,7 +394,7 @@ red_list_colours <- c("threatened (VU, EN, CR)" = "firebrick",
 reserve_effects |>
   # order the species by their reserve effect, in both panels
   mutate(species = fct_reorder(species,
-                               if_else(covariate == "Stream rises inside the reserve", estimate, NA),
+                               if_else(covariate == "Stream rises inside a reserve", estimate, NA),
                                .na_rm = TRUE)) |>
   ggplot(aes(estimate, species, colour = red_list)) +
   geom_vline(xintercept = 0, linetype = 2, colour = "grey50") +
@@ -387,7 +403,7 @@ reserve_effects |>
   scale_colour_manual(values = red_list_colours, name = "Red List") +
   labs(x = "Effect on the log-odds of presence",
        y = NULL,
-       title = "Most species are more likely present inside the reserve") +
+       title = "Most species are more likely present inside the reserves") +
   theme_minimal() +
   theme(axis.text.y = element_text(size = 6, face = "italic"),
         legend.position = "bottom")
@@ -405,7 +421,7 @@ reserve_effects |>
             .groups = "drop")
 
 reserve_only <- reserve_effects |>
-  filter(covariate == "Stream rises inside the reserve")
+  filter(covariate == "Stream rises inside a reserve")
 
 reserve_only |>
   group_by(local_status) |>
@@ -420,21 +436,21 @@ reserve_only |>
 
 What the model says, with human modification held fixed:
 
-- Most wild species are more likely to be present where the stream rises inside the reserve: for 51 of the 68 wild species the interval excludes zero. No species is credibly less likely to be there.
-- Threatened species are no different from common ones in this. The reserve seems to go with most of the mammal community, not with the threatened species in particular.
+- Most wild species are more likely to be present where the stream rises inside a reserve: for 51 of the 68 wild species the interval excludes zero. No species is credibly less likely to be there.
+- Threatened species are no different from common ones in this. The reserves seem to go with most of the mammal community, not with the threatened species in particular.
 - Larger species show weaker reserve effects, not stronger ones (the correlation with body mass is -0.37).
 - Domestic animals show little or no reserve effect, which is what we would expect if the effect is about wild mammals and not a quirk of the data.
-- With the reserve held fixed, human modification has a credible effect for only 1 of the 78 species.
+- With reserve status held fixed, human modification has a credible effect for only 1 of the 78 species.
 
-So the pattern that Session 1's ordination could not untangle is, in this model, mostly about the reserve.
+So the pattern that Session 1's ordination could not untangle is, in this model, mostly about the reserves.
 
 Be careful about what this does and does not show.
 
-- `streamOrigin` records where a stream rises, and the eDNA in a stream comes from upstream. A stream that rises inside the reserve carries DNA from the reserve's forest, so part of the effect may be about where the DNA comes from, not only where the animals live.
-- The reserve also differs from the land outside it in ways the model does not measure, such as terrain and access.
+- `streamOrigin` records where a stream rises, and the eDNA in a stream comes from upstream. A stream that rises inside a reserve carries DNA from the reserve's forest, so part of the effect may be about where the DNA comes from, not only where the animals live.
+- The reserves also differ from the land outside them in ways the model does not measure, such as terrain and access.
 - The model shows that species are more often present at reserve sites. It cannot show that protection is the cause.
 
-> **Discussion.** A park manager reads this and says "the reserve works". What would you tell them?
+> **Discuss.** A park manager reads this and says "the reserves work". What would you tell them?
 
 ### Back to the dhole
 
@@ -530,3 +546,4 @@ The assistant is a helper for R here. The occJSDM tools it used on Wednesday nee
 - Expected richness and raw richness tell different stories.
 - With human modification held fixed, most species are more likely present at reserve sites, threatened or not. That is an association, not proof that protection works.
 - Session 4 uses `occupancy_long.csv` to ask where to protect.
+

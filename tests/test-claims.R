@@ -90,6 +90,8 @@ test_that("Session 2: the saved dhole fit supports the text", {
   pq <- diag[diag$param %in% c("p", "q"), ]
   expect_true(all(pq$rhat > 1.01 & pq$ess < 400))   # "R-hat a little above 1.01 and ESS below 400"
   expect_true(all(pq$rhat < 1.1))
+  expect_equal(nrow(diag), 16)                       # "Only 2 parameters out of 16"
+  expect_equal(sum(diag$rhat > 1.01 | diag$ess < 400), 2)
   b <- diag[diag$param == "beta_psi", ]
   expect_true(all(b$q2.5 < 0 & b$q97.5 > 0))        # "every interval here crosses it"
   cond <- computeConditionalOccupancyProbs(fit)[, 1]
