@@ -29,23 +29,25 @@ library(occJSDM)      # to read Session 2's dhole fit
 
 ## Why model all the species together?
 
-A conservation plan needs to know where many species are, not just one. We could fit 108 separate models, but a joint model fits all species at once. That lets it **share information between species, and so reveal hidden site effects that you did not measure, or did not know you should measure.**
+A conservation plan needs to know where many species are, not just one. We could fit 108 separate models, but a joint model fits all species at once, which lets it **share information between species, and so reveal hidden site effects that you did not measure, or did not know you should measure. These are known as joint species distribution models, or JSDMs.**
 
-What are hidden site effects? Sites differ in ways we did not measure, such as microclimate, disturbance history or isolation. Like the occupancy covariates we did measure, such a difference can affect several species at once. In a survey, it shows up as groups of species that turn up together at some sites and are missing together from others.
+What are hidden site effects? Sites differ in ways that we did not measure, such as microclimate, disturbance history or isolation. Like the occupancy covariates we did measure, such a difference can affect several species at once. In a survey, it shows up as groups of species that turn up together at some sites and are missing together from others.
 
-The model cannot see the cause, but it can see the effect: species that turn up together more often than the measured covariates explain. It estimates a few hidden environmental covariates from that pattern (`n_factors` in `runOccJSDM()`, which was 0 for the dhole alone and is 4 here), and uses them like the measured ones. A rare species can gain most, because its few detections are read alongside those of the common species it shares sites with.
+Thus, a JSDM cannot see a *cause*, but it can see an *effect*: species that turn up together more often than the measured covariates explain.
 
-Fitting this model for 108 mammals takes several minutes on a fast laptop, so we use a fit prepared earlier (5,000 burn-in and 5,000 kept iterations, two chains). If you want to run the occJSDM output functions on the full fit, your instructor can share the file.
+You tell the JSDM how many hidden environmental covariates to estimate from survey data (`n_factors` in `runOccJSDM()`). We set `n_factors = 0` for the dhole because it was only 1 species and thus, there was no information to share between species. For this session, we will fit occJSDM to 108 species, and set `n_factors = 4`.
 
-We read the saved results, and the same data tables as in Session 1.
+Fitting occJSDM for 108 mammals takes several minutes on a fast laptop, so we use a saved fit that I prepared earlier (5,000 burn-in and 5,000 kept iterations, two chains). If you want to run the occJSDM output functions on the full model fit, your instructor can provide it (`fit_Mammal_d4_fixed.rds`, 236 MB).
+
+We read the saved results, and the same input data tables as in Session 1.
 
 ```{r load}
-fit <- read_fit_summary()      # a list of tables taken from the full fit
+fit <- read_fit_summary()   # a list of tables summarised from the full model fit
 status <- read.csv("data-derived/species.csv")
 info <- read.csv("data-derived/info.csv")
 OTU <- as.matrix(read.csv("data-derived/OTU.csv"))
 
-# one row per site, with its coordinates, for the maps
+# a table with one row per site and coordinates, to make maps
 sites <- info |>
   distinct(Site, Xs.1, Xs.2)
 
@@ -67,8 +69,8 @@ Click on `fit` in the Environment tab to view it. It is a list of tables. Each t
 
 - `occ`: one row per site and species. `cond_mean` and `psi_mean` are probabilities of presence, explained below.
 - `params`: one row per species. `p_` columns are the true-positive rate, `q_` columns the false-positive rate, each with its mean and the ends of its 95% interval (`_lo`, `_hi`).
-- `diagnostics`: one row per species, with its largest R-hat in two groups of parameters.
-- `effects`: one row per species and occupancy covariate: the effect's mean, its 95% interval (`lo`, `hi`) and its R-hat. It is the `beta_psi` part of the diagnostics table you met in Session 2.
+- `diagnostics`: one row per species, with two R-hat values. Each species has many parameters, and each parameter has its own R-hat, like the rows of the diagnostics table in Session 2. Here they are sorted into two groups, and each column keeps only the worst (largest) R-hat in its group. `rhat_detection` covers the detection parameters, which Session 2 listed by their `param` names: collection (`beta_theta`), the field false-positive rate (`theta0`), and the lab detection and false-positive rates (`p` and `q`). `rhat_effects` covers the occupancy parameters: the baseline occupancy (`beta0_psi`) and the effect of each occupancy covariate (`beta_psi`). If the worst R-hat in a group is acceptable, every parameter in that group is.
+- `effects`: one row per species and occupancy covariate: the occupancy covariate's mean, its 95% interval (`lo`, `hi`) and its R-hat. It is the `beta_psi` part of the diagnostics table you met in Session 2.
 - `assoc`: one row per pair of species, with their residual correlation.
 
 The full fitted model is a 236 MB file. Loading it is fine, but computing the species associations from it needs about 3 GB of memory, more than a standard Posit Cloud session has. So `read_fit_summary()` loads these tables instead. On a fit of your own you would make them with the occJSDM functions you used on the dhole in Session 2. The chunk below shows how. It is NOT run in class.
@@ -271,8 +273,8 @@ Click on `occ` in the Environment tab to view it. It has 10,908 rows. Can you wo
 
 It has two probabilities of presence:
 
-- `cond_mean` is the probability of presence given the detections. Use it to ask "is species X at site 12?".
-- `psi_mean` is the probability of presence before this species' own detections at the site are weighed. It comes from the site's occupancy covariates plus the hidden site effects, which were estimated from the survey itself. So it is not a prediction for a site nobody surveyed.
+- `cond_mean` is the probability of presence given the detections. It is calculated from the measured and hidden occupancy covariates plus the detection data: this species' PCR results at the site. This is what occJSDM calls the conditional occupancy probability (`computeConditionalOccupancyProbs()`). Use it to ask "is species X at site 12?".
+- `psi_mean` is the probability of presence before this species' own detections at the site are weighed. It is calculated from the measured and hidden occupancy covariates only. This is what occJSDM calls the predictive occupancy probability (`computePredictiveOccupancyProbs()`). The hidden covariates were estimated from the survey itself, so it is not a prediction for a site nobody surveyed.
 - Both are posterior means. The package does not yet return intervals for them, which we come back to in Session 4.
 
 The histogram below counts site-species pairs, on a log scale because most of them pile up near zero. Pairs at either end are settled; pairs in the middle are ones the data cannot decide.
@@ -546,4 +548,3 @@ The assistant is a helper for R here. The occJSDM tools it used on Wednesday nee
 - Expected richness and raw richness tell different stories.
 - With human modification held fixed, most species are more likely present at reserve sites, threatened or not. That is an association, not proof that protection works.
 - Session 4 uses `occupancy_long.csv` to ask where to protect.
-
