@@ -1,35 +1,61 @@
-# Session 3 shows, in a chunk not run in class, how its tables come from the full fit.
-# Run that chunk on the full fit (set WORKSHOP_FIT to it) and check it remakes the saved summary.
-test_that("Session 3's from-a-fit chunk remakes the saved fit summary", {
-  fit_path <- Sys.getenv("WORKSHOP_FIT", unset = "")
-  skip_if_not(nzchar(fit_path) && file.exists(fit_path), "set WORKSHOP_FIT to the full mammal fit")
-  root <- normalizePath(testthat::test_path(".."), mustWork = TRUE)
+# Session 3 builds its tables live from the full mammal fit (fits/, not in git), and shows,
+# in a chunk not run in class, how Session 4's occupancy table was saved. Both must agree
+# with the shipped files, which analysis/build-fit-summary.R and build-session-data.R made.
+root <- normalizePath(testthat::test_path(".."), mustWork = TRUE)
+fit_file <- file.path(root, "fits", "fit_Mammal_d4_community_1b4a2cd_10k.rds")
+
+session3_tables <- function() {
   .libPaths(c(file.path(root, "Rlib"), .libPaths()))
-  source(file.path(root, "R", "data.R"))
-  source(file.path(root, "R", "fit.R"))
-  suppressPackageStartupMessages(library(dplyr))
-  lines <- readLines(file.path(root, "03-many-species.Rmd"))
-  start <- grep("^```\\{r from-a-fit", lines)
-  end <- start + which(lines[(start + 1):length(lines)] == "```")[1]
-  code <- sub('"fit_Mammal_d4_[[:alnum:]_]+[.]rds"', deparse(fit_path), lines[(start + 1):(end - 1)])
-  expect_true(any(grepl(deparse(fit_path), code, fixed = TRUE)))   # the chunk reads the fit under test
+  suppressPackageStartupMessages(library(tidyverse))
+  suppressPackageStartupMessages(library(occJSDM))
+  rmd <- readLines(file.path(root, "03-many-species.Rmd"))
+  chunk <- function(label) {
+    start <- grep(paste0("^```\\{r ", label, "[,}]"), rmd)
+    end <- start + which(rmd[(start + 1):length(rmd)] == "```")[1]
+    rmd[(start + 1):(end - 1)]
+  }
   e <- new.env()
-  suppressPackageStartupMessages(eval(parse(text = c("library(tidyverse)", code)), envir = e))
-  f <- read_fit_summary()
-  occ <- left_join(f$occ, e$occ, by = c("Site", "otu_id"))
-  expect_equal(occ$cond_mean.x, occ$cond_mean.y)
-  expect_equal(occ$psi_mean.x, occ$psi_mean.y)
-  d <- left_join(f$diagnostics, e$diagnostics, by = "otu_id")
-  expect_equal(d$rhat_detection.x, d$rhat_detection.y)
-  expect_equal(d$rhat_effects.x, d$rhat_effects.y)
-  ef <- left_join(f$effects, e$effects, by = c("otu_id", "covariate"))
-  expect_equal(nrow(e$effects), nrow(f$effects))
-  expect_equal(ef$mean.x, ef$mean.y)
-  expect_equal(ef$lo.x, ef$lo.y)
-  expect_equal(ef$hi.x, ef$hi.y)
-  a <- left_join(f$assoc, e$assoc, by = c("otu_a", "otu_b"))
-  expect_equal(nrow(e$assoc), nrow(f$assoc))
-  expect_equal(a$median.x, a$median.y)
-  expect_equal(a$lo.x, a$lo.y)
-  expect_equal(a$hi.x, a$hi.y)
+  withr::with_dir(root, for (label in c("load", "fit-tables")) {
+    invisible(capture.output(eval(parse(text = chunk(label)), envir = e)))
+  })
+  e$save_code <- chunk("save-for-session-4")
+  e
+}
+
+test_that("Session 3 reads the fit the build scripts used", {
+  rmd <- readLines(file.path(root, "03-many-species.Rmd"))
+  expect_true(any(grepl('readRDS("fits/fit_Mammal_d4_community_1b4a2cd_10k.rds")', rmd, fixed = TRUE)))
+  expect_equal(readRDS(file.path(root, "data-derived", "fit_summary.rds"))$source$fit,
+               basename(fit_file))
+})
+
+test_that("Session 3's live tables match the saved fit summary, and its save chunk remakes Session 4's table", {
+  skip_if_not(file.exists(fit_file), "put the full mammal fit in fits/")
+  e <- session3_tables()
+  f <- readRDS(file.path(root, "data-derived", "fit_summary.rds"))
+  expect_named(e$fit, c("occ", "params", "diagnostics", "effects", "assoc"))
+  # the tables have the shipped columns, and the same rows
+  for (t in names(e$fit)) {
+    expect_setequal(names(e$fit[[t]]), names(f[[t]]))
+    expect_equal(nrow(e$fit[[t]]), nrow(f[[t]]))
+  }
+  same <- function(a, b, by) {
+    j <- dplyr::inner_join(a, b, by = by, suffix = c(".live", ".saved"))
+    expect_equal(nrow(j), nrow(a))
+    for (col in setdiff(names(a), by)) expect_equal(unname(j[[paste0(col, ".live")]]), unname(j[[paste0(col, ".saved")]]), info = col)
+  }
+  same(e$fit$occ, f$occ, c("Site", "otu_id"))
+  same(e$fit$params, f$params, "otu_id")
+  same(e$fit$diagnostics, f$diagnostics, "otu_id")
+  same(e$fit$effects, f$effects, c("otu_id", "covariate"))
+  same(e$fit$assoc, f$assoc, c("otu_a", "otu_b"))
+
+  # the not-run chunk, writing to a temporary folder, remakes occupancy_long.csv
+  out <- withr::local_tempdir()
+  dir.create(file.path(out, "data-derived"))
+  withr::with_dir(out, eval(parse(text = e$save_code), envir = e))
+  remade <- read.csv(file.path(out, "data-derived", "occupancy_long.csv"))
+  shipped <- read.csv(file.path(root, "data-derived", "occupancy_long.csv"))
+  expect_equal(names(remade), names(shipped))
+  same(remade, shipped, c("Site", "otu_id"))
 })

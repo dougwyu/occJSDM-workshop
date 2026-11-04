@@ -16,15 +16,13 @@ As before, the first code chunk is only for the workshop, and the second loads t
 ```{r workshop-setup}
 source("setup/pins.R")
 use_workshop_lib()                  # use the packages installed for the workshop
-source("R/data.R")                  # derived_path(), used by read_fit_summary()
-source("R/fit.R")                   # read_fit_summary(): saved results of the model fitted to all mammals
 mcp_off <- Sys.getenv("WORKSHOP_NO_MCP") == "1"
 ```
 
 ```{r packages}
 library(tidyverse)
 library(ggrepel)      # labels that do not overlap, in ggplot2
-library(occJSDM)      # to read Session 2's dhole fit
+library(occJSDM)      # to read the mammal fit, and Session 2's dhole fit
 ```
 
 ## Why model all the species together?
@@ -37,12 +35,14 @@ Thus, a JSDM cannot see a *cause*, but it can see an *effect*: species that turn
 
 You tell the JSDM how many hidden environmental covariates to estimate from survey data (`n_factors` in `runOccJSDM()`). We set `n_factors = 0` for the dhole because it was only 1 species and thus, there was no information to share between species. For this session, we will fit occJSDM to 108 species, and set `n_factors = 4`.
 
-Fitting occJSDM for 108 mammals takes several minutes on a fast laptop, so we use a saved fit that I prepared earlier (5,000 burn-in and 5,000 kept iterations, two chains). If you want to run the occJSDM output functions on the full model fit, your instructor can provide it (`fit_Mammal_d4_fixed.rds`, 236 MB).
+Fitting occJSDM to 108 mammals takes too long for class, so I fitted it beforehand and saved the whole fit: two chains, each with 10,000 burn-in and 10,000 iterations, keeping every second draw. Instead of running `runOccJSDM()`, we load that fit and use the occJSDM output functions on it, as you did on the dhole in Session 2.
 
-We read the saved results, and the same input data tables as in Session 1.
+This session needs more memory than the others, about 3 GB at its peak. Before you start, restart R (Session \> Restart R), so that nothing from Sessions 1 and 2 is still in memory.
+
+We load the fit, and the same input data tables as in Session 1.
 
 ```{r load}
-fit <- read_fit_summary()   # a list of tables summarised from the full model fit
+fit_full <- readRDS("fits/fit_Mammal_d4_community_1b4a2cd_10k.rds")   # the full mammal fit, 235 MB
 status <- read.csv("data-derived/species.csv")
 info <- read.csv("data-derived/info.csv")
 OTU <- as.matrix(read.csv("data-derived/OTU.csv"))
@@ -65,63 +65,104 @@ sites_detected <- presence |>
   summarise(sites_detected = sum(present))
 ```
 
+Click on `presence` and `sites_detected` in the Environment tab to view them.
+
+Now we turn the fit into five tables, with the occJSDM output functions. The chunk takes about 15 seconds. Its last step, the species associations, is the one that needs the memory.
+
+```{r fit-tables}
+species_ids <- fit_full$infos$speciesNames   # the otu_id of each species, in the model's order
+species_names <- status |>
+  select(otu_id, species)
+
+# occ: probability of presence given the detections (cond_mean), and before them (psi_mean)
+cond <- computeConditionalOccupancyProbs(fit_full)   # one row per site, one column per species
+psi <- computePredictiveOccupancyProbs(fit_full)
+occ <- as_tibble(cond, rownames = "Site") |>
+  pivot_longer(-Site,
+               names_to = "otu_id",
+               values_to = "cond_mean") |>
+  left_join(as_tibble(psi, rownames = "Site") |>
+              pivot_longer(-Site,
+                           names_to = "otu_id",
+                           values_to = "psi_mean"),
+            by = c("Site", "otu_id")) |>
+  left_join(species_names, by = "otu_id") |>
+  select(Site, otu_id, species, cond_mean, psi_mean)
+
+# params: the mean and 95% interval of each species' detection rates, from their draws as in Session 2
+summarise_rate <- function(param) {
+  draws <- returnPosteriorDraws(fit_full, param)[1, , , ]   # species x iteration x chain
+  tibble(mean = apply(draws, 1, mean),
+         lo = apply(draws, 1, quantile, probs = 0.025),
+         hi = apply(draws, 1, quantile, probs = 0.975))
+}
+p <- summarise_rate("p")             # true-positive rate of a PCR
+q <- summarise_rate("q")             # false-positive rate of a PCR
+theta0 <- summarise_rate("theta0")   # field false-positive rate
+params <- tibble(otu_id = species_ids,
+                 p_mean = p$mean, p_lo = p$lo, p_hi = p$hi,
+                 q_mean = q$mean, q_lo = q$lo, q_hi = q$hi,
+                 theta0_mean = theta0$mean, theta0_lo = theta0$lo, theta0_hi = theta0$hi) |>
+  left_join(species_names, by = "otu_id")
+
+# diagnostics: the largest R-hat per species, for detection and for the occupancy effects
+diag <- returnConvergenceDiagnostics(fit_full) |>
+  filter(param != "mu_b0") |>   # the community mean of baseline occupancy belongs to no one species
+  mutate(otu_id = if_else(label2 %in% species_ids, label2, label1))   # the species is in one of the two
+diagnostics <- diag |>
+  mutate(group = if_else(param %in% c("beta0_psi", "beta_psi"),
+                         "rhat_effects",
+                         "rhat_detection")) |>
+  group_by(otu_id, group) |>
+  summarise(rhat = max(rhat, na.rm = TRUE), .groups = "drop") |>
+  pivot_wider(names_from = group,
+              values_from = rhat) |>
+  left_join(species_names, by = "otu_id") |>
+  select(otu_id, species, rhat_detection, rhat_effects)
+
+# effects: each occupancy covariate's effect on each species
+effects <- diag |>
+  filter(param == "beta_psi") |>
+  left_join(species_names, by = "otu_id") |>
+  select(otu_id, species, covariate = label1, mean, lo = q2.5, hi = q97.5, rhat)
+
+# assoc: lower, median and upper residual correlation for each pair of species
+sig <- returnResidualCorrelationMatrix(fit_full)   # 3 x species x species
+pairs <- which(upper.tri(sig[1, , ]), arr.ind = TRUE)
+assoc <- tibble(otu_a = species_ids[pairs[, 1]],
+                otu_b = species_ids[pairs[, 2]],
+                lo = sig[1, , ][pairs],
+                median = sig[2, , ][pairs],
+                hi = sig[3, , ][pairs])
+
+# keep the five tables together in one list, and tidy away the pieces
+fit <- list(occ = occ,
+            params = params,
+            diagnostics = diagnostics,
+            effects = effects,
+            assoc = assoc)
+rm(cond, psi, occ, p, q, theta0, params, diag, diagnostics, effects, sig, pairs, assoc)
+```
+
 Click on `fit` in the Environment tab to view it. It is a list of tables. Each table has the species' `otu_id` (its column name in `OTU`) and its `species` name.
 
 - `occ`: one row per site and species. `cond_mean` and `psi_mean` are probabilities of presence, explained below.
 - `params`: one row per species. `p_` columns are the true-positive rate, `q_` columns the false-positive rate, each with its mean and the ends of its 95% interval (`_lo`, `_hi`).
-- `diagnostics`: one row per species, with two R-hat values. Each species has many parameters, and each parameter has its own R-hat, like the rows of the diagnostics table in Session 2. Here they are sorted into two groups, and each column keeps only the worst (largest) R-hat in its group. `rhat_detection` covers the detection parameters, which Session 2 listed by their `param` names: collection (`beta_theta`), the field false-positive rate (`theta0`), and the lab detection and false-positive rates (`p` and `q`). `rhat_effects` covers the occupancy parameters: the baseline occupancy (`beta0_psi`) and the effect of each occupancy covariate (`beta_psi`). If the worst R-hat in a group is acceptable, every parameter in that group is.
+- `diagnostics`: one row per species, with two R-hat values. Each species has many parameters, and each parameter has its own R-hat, like the rows of the diagnostics table in Session 2. Here they are sorted into two groups, and each column keeps only the worst (largest) R-hat in its group.
+  - `rhat_detection` covers the detection parameters, which Session 2 listed by their `param` names: collection (`beta_theta`), the field false-positive rate (`theta0`), and the lab detection and false-positive rates (`p` and `q`).
+  - `rhat_effects` covers the occupancy parameters: the baseline occupancy (`beta0_psi`) and the effect of each occupancy covariate (`beta_psi`).
+  - If the worst R-hat in a group is acceptable, every parameter in that group is.
 - `effects`: one row per species and occupancy covariate: the occupancy covariate's mean, its 95% interval (`lo`, `hi`) and its R-hat. It is the `beta_psi` part of the diagnostics table you met in Session 2.
-- `assoc`: one row per pair of species, with their residual correlation.
-
-The full fitted model is a 236 MB file. Loading it is fine, but computing the species associations from it needs about 3 GB of memory, more than a standard Posit Cloud session has. So `read_fit_summary()` loads these tables instead. On a fit of your own you would make them with the occJSDM functions you used on the dhole in Session 2. The chunk below shows how. It is NOT run in class.
-
-```{r from-a-fit, eval = FALSE}
-library(occJSDM)
-fit_full <- readRDS("fit_Mammal_d4_fixed.rds")     # the full mammal fit, 236 MB
-
-# Probability of presence given the detections (cond_mean), and before them (psi_mean):
-# one row per site, one column per species
-cond <- computeConditionalOccupancyProbs(fit_full)
-psi <- computePredictiveOccupancyProbs(fit_full)
-occ <- as_tibble(cond, rownames = "Site") |>
-  pivot_longer(-Site, names_to = "otu_id", values_to = "cond_mean") |>
-  left_join(as_tibble(psi, rownames = "Site") |>
-              pivot_longer(-Site, names_to = "otu_id", values_to = "psi_mean"),
-            by = c("Site", "otu_id"))
-
-# Detection rates: posterior draws in fit_full$results_output$p_output and q_output, as in Session 2
-
-# Convergence: the largest R-hat per species, for detection and for the occupancy effects
-diag <- returnConvergenceDiagnostics(fit_full)
-species_ids <- colnames(cond)
-diag <- diag |>
-  mutate(otu_id = if_else(label2 %in% species_ids, label2, label1))     # the species name is in one of the two
-diagnostics <- diag |>
-  mutate(group = if_else(param %in% c("beta0_psi", "beta_psi"), "rhat_effects", "rhat_detection")) |>
-  group_by(otu_id, group) |>
-  summarise(rhat = max(rhat, na.rm = TRUE), .groups = "drop") |>
-  pivot_wider(names_from = group, values_from = rhat)
-
-# Covariate effects on occupancy: one row per species and covariate
-effects <- diag |>
-  filter(param == "beta_psi") |>
-  select(otu_id, covariate = label1, mean, lo = q2.5, hi = q97.5, rhat)
-
-# Associations: lower, median and upper residual correlation for each pair of species
-sig <- returnResidualCorrelationMatrix(fit_full)   # 3 x species x species
-pairs <- which(upper.tri(sig[1, , ]), arr.ind = TRUE)
-assoc <- tibble(otu_a = species_ids[pairs[, 1]], otu_b = species_ids[pairs[, 2]],
-                lo = sig[1, , ][pairs], median = sig[2, , ][pairs], hi = sig[3, , ][pairs])
-```
+- `assoc`: one row per pair of species (5,778 pairs for 108 species). `otu_a` and `otu_b` are the two species, and `median`, `lo` and `hi` are their residual correlation and the ends of its 95% interval. Its species have only their `otu_id`; we attach the names when we use it.
 
 ## Can we trust the computation?
 
-This time we check the chains first, as you should in your own work. With 108 species there are hundreds of parameters. For each species we take the largest R-hat in two groups:
+This time we check the chains first, as you should also do in your own work. With 108 species, there are hundreds of parameters. For each species we take the largest R-hat in two groups:
 
 - its **detection** parameters: the true- and false-positive rates and the effects of the collection covariates;
 - its **covariate effects** on occupancy.
 
-As in Session 2, `rhat` near 1 means the two chains agree. Session 2 used the strict rule, at most 1.01. Here we use 1.1, the level at which `runOccJSDM()` itself warns, because this fit has hundreds of parameters and we cannot rerun it in class. So we call a group settled if its largest `rhat` is at most 1.1. The saved summary has no `ess`, so we check `rhat` only.
+As in Session 2, `rhat` near 1 means the two chains agree. Session 2 used the strict rule, at most 1.01. Here we use 1.1, which is the default warning level for `runOccJSDM()`. So we call a group settled if its largest `rhat` is at most 1.1. To keep `diagnostics` short, we check `rhat` only.
 
 ```{r convergence}
 conv <- fit$diagnostics |>
@@ -339,7 +380,15 @@ occ |>
   arrange(desc(mean_per_site))
 ```
 
-The saved table `data-derived/occupancy_long.csv` has one row per site and species, with taxonomy and conservation status attached. Session 4 reads it.
+Session 4 needs only these probabilities of presence, not the whole fit, so it reads them from a small table, `data-derived/occupancy_long.csv`. It has one row per site and species, with taxonomy and conservation status attached. The chunk below shows how it was saved. It is not run in class, because the file is already there.
+
+```{r save-for-session-4, eval = FALSE}
+fit$occ |>
+  select(Site, otu_id, cond_mean, psi_mean) |>
+  left_join(status |> select(otu_id, species, order, family, iucn, china_red_list, local_status),
+            by = "otu_id") |>
+  write_csv("data-derived/occupancy_long.csv")
+```
 
 ### What did we just do?
 

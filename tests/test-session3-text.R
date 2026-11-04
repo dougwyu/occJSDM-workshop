@@ -12,11 +12,14 @@ chunk <- function(label) {   # the code of one chunk, as in test-session2-exerci
   rmd[(start + 1):(end - 1)]
 }
 
+# Session 3 builds its tables from the full mammal fit, which is not in git.
+skip_if_not(file.exists(file.path(root, "fits", "fit_Mammal_d4_community_1b4a2cd_10k.rds")),
+            "put the full mammal fit in fits/")
+suppressPackageStartupMessages(library(occJSDM))
+
 s3 <- new.env()
 withr::with_dir(root, {
-  sys.source(file.path(root, "R", "data.R"), envir = s3)
-  sys.source(file.path(root, "R", "fit.R"), envir = s3)
-  for (label in c("load", "convergence", "detection-rates", "occupancy", "richness",
+  for (label in c("load", "fit-tables", "convergence", "detection-rates", "occupancy", "richness",
                   "reserve-effects", "reserve-summary", "associations")) {
     invisible(capture.output(eval(parse(text = chunk(label)), envir = s3)))
   }

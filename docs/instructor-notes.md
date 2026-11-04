@@ -8,7 +8,7 @@ Doug's slots are Tuesday and Wednesday 13.00 to 17.00 (3 h 45 min each) and Thur
 
 - Session 1: ecoCopula and ggplot2. The ordination fits in a few seconds.
 - Session 2: a live one-species fit with occJSDM. It takes about 7 seconds on the build laptop (2 chains, 5000 burn-in, 5000 kept). Posit Cloud will be slower and is not yet timed. If the live fit fails, the chunk prints the error and loads `data-derived/dhole_fit.rds`, a saved copy of the same fit (same settings and seed). Setting `WORKSHOP_LIVE_FIT=0` before rendering skips the live fit altogether.
-- Session 3: only the slim summary, `data-derived/fit_summary.rds`. The full mammal fit is not needed in class.
+- Session 3: the full mammal fit, `fits/fit_Mammal_d4_community_1b4a2cd_10k.rds` (235 MB). It is not in git (GitHub refuses files over 100 MB), so put it in the `fits/` folder of the Posit Cloud template project before copying the template for students. The session's `fit-tables` chunk runs the occJSDM output functions on it in about 15 seconds on the build laptop and peaks at about 3.2 GB, so give each student 4.5 GB and have them restart R (Session \> Restart R) at the start of the session. Session 4 does not need the fit: it reads `data-derived/occupancy_long.csv`.
 - Session 4: `prioritizr` with the HiGHS solver. The four plans solve in about 10 seconds in total on the build laptop.
 
 ## What is checked and what is not
