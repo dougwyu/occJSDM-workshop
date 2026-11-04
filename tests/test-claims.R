@@ -78,8 +78,8 @@ test_that("Session 2: the results sections support the text", {
   expect_equal(round(mean(1 - (1 - c_draws * (1 - (1 - p_draws)^6))^3), 2), 0.96)   # "about 96%"
   dg <- returnConvergenceDiagnostics(fit)
   flagged <- dg[dg$rhat > 1.01 | dg$ess < 400, ]
-  expect_setequal(flagged$param, c("p", "q"))        # "the flagged parameters ... p and q"
-  expect_true(all(flagged$rhat < 1.05))              # "rhat of 1.03"
+  expect_setequal(flagged$param, c("beta_theta", "p", "q"))   # the rain effect on collection, p and q
+  expect_true(all(flagged$rhat < 1.05))              # "rhat of 1.03" at most
 })
 
 test_that("Session 2: the saved dhole fit supports the text", {
@@ -88,10 +88,11 @@ test_that("Session 2: the saved dhole fit supports the text", {
   invisible(capture.output(diag <- returnConvergenceDiagnostics(fit)))
   expect_equal(mean(fit$results_output$p_output), 0.6, tolerance = 0.05 / 0.6)   # "six times in ten"
   pq <- diag[diag$param %in% c("p", "q"), ]
-  expect_true(all(pq$rhat > 1.01 & pq$ess < 400))   # "R-hat a little above 1.01 and ESS below 400"
-  expect_true(all(pq$rhat < 1.1))
-  expect_equal(nrow(diag), 16)                       # "Only 2 parameters out of 16"
-  expect_equal(sum(diag$rhat > 1.01 | diag$ess < 400), 2)
+  expect_true(all(pq$rhat <= 1.01 & pq$ess < 400))  # p and q break only the ess rule
+  rain <- diag[diag$param == "beta_theta" & diag$label1 == "PrevDayRain", ]
+  expect_true(rain$rhat > 1.01 & rain$rhat < 1.05 & rain$ess >= 400)   # the rain effect breaks only the rhat rule
+  expect_equal(nrow(diag), 16)                       # "Only 3 parameters out of 16"
+  expect_equal(sum(diag$rhat > 1.01 | diag$ess < 400), 3)
   b <- diag[diag$param == "beta_psi", ]
   expect_true(all(b$q2.5 < 0 & b$q97.5 > 0))        # "every interval here crosses it"
   cond <- computeConditionalOccupancyProbs(fit)[, 1]
@@ -100,10 +101,9 @@ test_that("Session 2: the saved dhole fit supports the text", {
   expect_gt(cor(cond[joint$Site], joint$cond_mean), 0.9)   # Session 3: "both fits agree"
 })
 
-test_that("Session 3: the dhole's mammal-wide Southwest effect excludes zero but is not more precise", {
+test_that("Session 3: no mammal-wide effect for the dhole excludes zero, and the intervals are not more precise", {
   eff <- readRDS(derived_path("dhole_check.rds"))$effects
-  sw <- eff[eff$covariate == "Regional_DivisionSouthwest", ]
-  expect_lt(sw$hi, 0)
+  expect_true(all(eff$lo < 0 & eff$hi > 0))         # as in the one-species fit, every interval crosses zero
   fit <- readRDS(derived_path("dhole_fit.rds"))
   invisible(capture.output(diag <- occJSDM::returnConvergenceDiagnostics(fit)))
   single <- diag[diag$param == "beta_psi", ]
@@ -115,13 +115,13 @@ test_that("Session 3: convergence counts quoted in the text", {
   d <- f$diagnostics
   bad_det <- d$rhat_detection > 1.1
   bad_eff <- d$rhat_effects > 1.1
-  expect_equal(sum(bad_det), 4)
-  expect_equal(sum(bad_eff), 29)
-  expect_equal(sum(bad_det | bad_eff), 30)
+  expect_equal(sum(bad_det), 1)
+  expect_equal(sum(bad_eff), 5)
+  expect_equal(sum(bad_det | bad_eff), 5)
   n <- sites_detected[d$otu_id[bad_det | bad_eff]]
-  expect_equal(sum(n <= 6), 15)                      # "half of those 30 ... six sites or fewer"
-  expect_true(d$rhat_effects[d$species == "Rattus tanezumi"] > 1.1)
-  expect_equal(by_name(sites_detected, "Rattus tanezumi"), 84)
+  expect_equal(sum(n <= 6), 3)                       # "3 of those 5 ... six sites or fewer"
+  expect_true(all(n <= 11))                          # no common species among them
+  expect_true(all(unlist(d[d$species %in% c("Rattus tanezumi", "Bos taurus"), c("rhat_detection", "rhat_effects")]) <= 1.1))
   expect_true(all(unlist(d[d$species == "Cuon alpinus", c("rhat_detection", "rhat_effects")]) <= 1.1))
 })
 
@@ -130,7 +130,7 @@ test_that("Session 3: false positives, richness and associations", {
   expect_true(all(sites_detected[top$otu_id] / 101 > 0.5))   # "detected at most sites"
   expect_true(all(c("Sus scrofa", "Bos taurus") %in% top$species))
   credible <- f$assoc |> filter(lo > 0 | hi < 0)
-  expect_equal(nrow(credible), 225)
+  expect_equal(nrow(credible), 235)
   expect_true(all(credible$median > 0))              # "every association that survives is positive"
   sp <- function(id) status$species[match(id, status$otu_id)]
   pairs <- paste(sp(credible$otu_a), sp(credible$otu_b))
