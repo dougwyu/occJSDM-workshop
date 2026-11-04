@@ -1,5 +1,7 @@
 # Cached mammal fit, reduced to the summaries the sessions use.
-# The full fit is 236 MB on disk (about 0.4 GB in memory), so students read this instead.
+# The full fit is 236 MB on disk and about 0.4 GB in memory once loaded, but
+# returnResidualCorrelationMatrix() on it peaks near 2.4 GB (the whole Session 3
+# from-a-fit chunk near 3.2 GB), so students read this instead.
 read_fit_summary <- function() {
   readRDS(derived_path("fit_summary.rds"))
 }

@@ -71,7 +71,7 @@ Click on `fit` in the Environment tab to view it. It is a list of tables. Each t
 - `effects`: one row per species and occupancy covariate: the effect's mean, its 95% interval (`lo`, `hi`) and its R-hat. It is the `beta_psi` part of the diagnostics table you met in Session 2.
 - `assoc`: one row per pair of species, with their residual correlation.
 
-The full fitted model is too large for a 4 GB session, so `read_fit_summary()` loads these tables instead. On a fit of your own you would make them with the occJSDM functions you used on the dhole in Session 2. The chunk below shows how. It is not run in class.
+The full fitted model is a 236 MB file. Loading it is fine, but computing the species associations from it needs about 3 GB of memory, more than a standard Posit Cloud session has. So `read_fit_summary()` loads these tables instead. On a fit of your own you would make them with the occJSDM functions you used on the dhole in Session 2. The chunk below shows how. It is NOT run in class.
 
 ```{r from-a-fit, eval = FALSE}
 library(occJSDM)
