@@ -31,7 +31,7 @@ fit <- runOccJSDM(
                     "streamOrigin", "Regional_Division"),
   collCovariates = c("Filter_vol", "PrevDayRain"),
   spatCovariates = character(),
-  MCMCparams = list(nchain = 2, nburn = 5000, niter = 5000, nthin = 1),
+  MCMCparams = list(nchain = 2, nburn = 5000, niter = 5000, nthin = 1, ncores = 2),
   summarisedLatentPresences = TRUE
 )
 saveRDS(fit, "data-derived/dhole_fit.rds")

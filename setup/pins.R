@@ -1,5 +1,5 @@
 # One place for the versions the workshop depends on.
-PIN_OCCJSDM <- "6256791d4e16b20a5aa3cdc8252a11a8955fbb28"
+PIN_OCCJSDM <- "1b4a2cdfb1a25330e9b3da24aef2ebb210776352"
 ZENODO_RECORD <- "17113196"
 CRAN_PACKAGES <- c(
   "tidyverse", "vegan", "ecoCopula", "prioritizr", "highs", "rmarkdown",

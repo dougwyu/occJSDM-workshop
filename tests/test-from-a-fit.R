@@ -11,7 +11,8 @@ test_that("Session 3's from-a-fit chunk remakes the saved fit summary", {
   lines <- readLines(file.path(root, "03-many-species.Rmd"))
   start <- grep("^```\\{r from-a-fit", lines)
   end <- start + which(lines[(start + 1):length(lines)] == "```")[1]
-  code <- sub('"fit_Mammal_d4_fixed.rds"', deparse(fit_path), lines[(start + 1):(end - 1)], fixed = TRUE)
+  code <- sub('"fit_Mammal_d4_[[:alnum:]_]+[.]rds"', deparse(fit_path), lines[(start + 1):(end - 1)])
+  expect_true(any(grepl(deparse(fit_path), code, fixed = TRUE)))   # the chunk reads the fit under test
   e <- new.env()
   suppressPackageStartupMessages(eval(parse(text = c("library(tidyverse)", code)), envir = e))
   f <- read_fit_summary()

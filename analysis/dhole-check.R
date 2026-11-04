@@ -1,6 +1,6 @@
 # Acceptance check for the Wednesday species (Cuon alpinus): are per-site occupancy and
 # covariate effects well enough determined to teach from? Uses draws from the cached fit.
-fit_path <- Sys.getenv("WORKSHOP_FIT", unset = "fits/fit_Mammal_d4_fixed.rds")
+fit_path <- Sys.getenv("WORKSHOP_FIT", unset = "fits/fit_Mammal_d4_community_1b4a2cd.rds")
 f <- readRDS(fit_path)
 j <- f$results_output$jsdm_output
 sp <- grep("Cuon_alpinus", f$infos$speciesNames)
