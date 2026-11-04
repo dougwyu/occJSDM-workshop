@@ -605,8 +605,8 @@ How to read this figure:
 - Each row is one occupancy covariate. The point is the best estimate of its effect, and the line is its 95% interval.
 - For a number, such as `Human_modification_1km`, the effect is per standard deviation of the covariate. A positive effect means the dhole is more likely to be present where the covariate is higher.
 - For a category, the effect compares one level with a reference level that does not get a row. `streamOriginoutsideGLGS` compares sites whose stream originates outside the Gaoligongshan reserve with those whose stream rises inside it. `Regional_DivisionNorthwest` and `Regional_DivisionSouthwest` compare those regions with the East.
-- An interval that crosses the dashed line means we cannot tell whether the covariate matters. All 9 intervals cross the line, so the detection data that we have for the dhole are insufficient to tell whether any of these covariates has an effect.
-- Testing for covariate effects is different from asking where a species is. As we will see in the next section ("Can we trust the computation?"), we can trust the occupancy results for the dhole.
+- An interval that crosses the dashed line means we cannot tell whether the covariate matters. All 9 intervals cross the line, so the detection data that we have for the dhole are not enough to see a clear effect of any of these covariates.
+- Testing for covariate effects is different from asking where a species is. After all, the covariates we measured might truly not explain where the dhole lives. But even if we do not know why the dhole is where it is, we can trust the model's estimates of where it is, as the next section ("Can we trust the computation?") shows.
 
 Effects on the log-odds scale are hard to picture, so `plotOccupancyGradient()` draws one of them as a probability, holding the other covariates at typical values:
 
@@ -618,21 +618,29 @@ The shaded band is the 95% interval. You can draw a horizontal line through the 
 
 - In Session 1, the ordination suggested that dholes were found more often in sites inside the reserve and in sites with little human modification, but we could not say which one was more important for explaining the species distributions.
 
-- A model can try to tell them apart, because it estimates the effect of each covariate while holding the others fixed. In effect, it compares sites that are equally modified but differ in whether their stream rises inside the reserve, and the reverse.
+- A model can try to tell them apart, because it estimates the effect of each covariate while holding the others fixed. In effect, it compares sites that are equally modified but differ in whether their stream rises inside the reserve, and it compares sites whose streams rise in the same place but differ in human modification. However, for the dhole, there are not enough detections, and possibly not enough independent variation in the two covariates, to find a clear effect of either.
 
-- For the dhole alone, there are too few detections to tell them apart: both intervals cross zero. Session 3 asks the same question of all 108 mammals at once.
+- In Session 3, we revisit this question with a model fitted to all 108 mammal species at once. It still estimates a separate effect for each species, and we count how many species respond to each covariate.
 
 ## Can we trust the computation?
 
-All the above results come from the model's MCMC draws. Normally, the first thing one does after running `runOccJSDM()` is to check the model diagnostics. Here, we have left this step for the end, because we want to show what the model can do.
+All the above results come from the model's MCMC draws. Normally, the first thing you do after running `runOccJSDM()` is to check the model diagnostics. This time, we have left the diagnostic step for the end, because we first wanted to show what the model can do.
 
-What
+What are model diagnostics? First, a word on how MCMC works.
 
-efore reporting any of them, check that the two chains agree. If they do, they have probably both found the same answer; if they do not, at least one of them has not finished exploring.
+- The model does not calculate its answer in one step. It searches for it over thousands of steps, trying many different values of each parameter, mostly close to the previous value, sometimes far from it.
+- At first the search wanders, because it starts far from the values that fit. These early steps are the burn-in (`nburn`), and they are thrown away.
+- Eventually, the search finds the set of values that fit the data well, and from then on it keeps searching close by. The model keeps the next `niter` steps as its results.
+- We can see the search in a traceplot (one per parameter), which shows the value tried at each step of the search. A search that has settled jumps up and down around the same value, which is why a good traceplot looks like a fuzzy caterpillar. The width of the caterpillar is the uncertainty. A narrow caterpillar means the data are pointing the search at a narrow range of values.
+- The model runs the search twice independently (`nchain = 2`), and we ask whether the two chains found the same values. If they settle in different places, or one is still wandering, at least one of them has not finished searching, and the results cannot be trusted yet. If both have settled around the same values, they have probably found the answer. `rhat` measures how well the two chains agree, and we want it close to 1, at most 1.01. (A value of 1.01 means that when the two chains are pooled into one, the pooled draws are only 1% more spread out than a single chain's.)
+- We also want each chain to have searched many different values, but because MCMC searches near its previous value, 5,000 steps are not worth 5,000 independent values. Only after enough steps is a search's value unrelated to where it was. The effective sample size, `ess`, counts how many independent values the two chains together are worth. The more slowly the search moves, the lower `ess` is. We want at least 400.
 
-We made `diag` with `returnConvergenceDiagnostics()` above, to read the covariate effects. Now we count the parameters that miss the usual rules, and list them.
+We already made `diag` with `returnConvergenceDiagnostics()` above, to read the covariate effects. Now we check `diag` for any parameters that break the `rhat` or `ess` rule, and list them.
 
 ```{r diagnostics}
+# we already ran this above, so this is only here to show how we normally start model diagnostics
+# diag <- returnConvergenceDiagnostics(fit)
+
 diag |>
   summarise(parameters = n(),
             rhat_above_1.01 = sum(rhat > 1.01, na.rm = TRUE),
@@ -641,15 +649,16 @@ diag |>
 flagged <- diag |>
   filter(rhat > 1.01 | ess < 400) |>
   select(param, label1, mean, rhat, ess)
+
 flagged
 ```
 
 Click on `diag` in the Environment tab to view it. It has one row per parameter.
 
+- Only 3 parameters out of 16 break the `rhat` or `ess` rule.
 - `param` is the kind of parameter: `beta0_psi` for the baseline occupancy, `beta_psi` for the effect of an occupancy covariate, `beta_theta` for collection, `theta0` for the field false-positive rate, and `p` and `q` for the lab detection and false-positive rates. `label1` says which covariate (or, for `p` and `q`, which primer) it belongs to.
 - `mean`, `sd`, `q2.5` and `q97.5` summarise the draws: their mean, their spread, and the ends of the 95% interval.
-- `rhat` compares the two chains. Values near 1 mean they agree. A common rule flags anything above 1.01.
-- `ess`, the effective sample size, counts how many independent draws the chains are worth. Draws that follow each other closely are worth less than their number. A common rule flags anything below 400.
+- `rhat` and `ess` are the two checks described above.
 
 > Find `p` and `q` in `diag`. Which of the two rules does each one break?
 
@@ -658,18 +667,20 @@ The flagged parameters here are the lab detection and false-positive rates, `p` 
 ```{r traceplot, fig.height = 3}
 # plotTraceplot() wants an array: parameter x draw x chain
 draws_p <- array(fit$results_output$p_output, dim = c(1, 5000, 2))
+
 # the baseline occupancy draws are already in that shape
 draws_b0 <- fit$results_output$jsdm_output$B0_output
 
 plotTraceplot(draws_p,
               param_name = "p (flagged)",
               dimnames1 = "dhole")
+
 plotTraceplot(draws_b0,
               param_name = "baseline occupancy (not flagged)",
               dimnames1 = "dhole")
 ```
 
-- Two good chains look like fuzzy caterpillars that overlap and wander around the same level.
+- Two good chains look like fuzzy caterpillars that overlap and wander around the same value.
 - For `p` the two chains overlap, but each drifts slowly up and down, so neighbouring draws are similar. That is why its effective sample size is low.
 - Chain 1 also makes more high excursions than chain 2. That small disagreement between the chains is what nudges `rhat` above 1.01.
 
@@ -716,6 +727,7 @@ The takin (*Budorcas taxicolor*) lives only in the north of the study area. Ji e
 
 ```{r exercise-takin, eval = FALSE}
 takin_col <- str_subset(colnames(OTU), "Budorcas_taxicolor")
+
 d_takin <- list(info = info,
                 OTU = OTU[, takin_col, drop = FALSE])
 
