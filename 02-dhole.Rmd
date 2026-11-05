@@ -423,8 +423,8 @@ map_data |>
             expected_occupied = round(sum(model), 1))
 ```
 
-- **The false negatives.** Session 1 asked how many of the 60 empty circles are false negatives. The model's answer is about 1.7 sites (`expected_occupied` in the first table).
-- **In total**, adding up the probabilities over all 101 sites, the model expects the dhole at about 17 sites, against the 41 where it was detected (the second table).
+- **The false negatives.** Session 1 asked how many of the 60 empty circles are false negatives. The model's answer is about 1.8 sites (`expected_occupied` in the first table).
+- **In total**, adding up the probabilities over all 101 sites, the model expects the dhole at about 18 sites, against the 41 where it was detected (the second table).
 
 > **Discuss.** The model expects the dhole at fewer sites than the raw map shows. What does this mean about the kind of error, false positives or false negatives, in the dhole dataset?
 
@@ -448,7 +448,7 @@ baseline |>
   round(2)
 ```
 
-An average, reference site has about a 20% chance of holding the dhole, but the 95% interval is wide: 0.08 to 0.37.
+An average, reference site has about a 21% chance of holding the dhole, but the 95% interval is wide: 0.08 to 0.38.
 
 ## How well is the dhole's DNA collected and detected?
 
@@ -653,7 +653,7 @@ flagged
 
 Click on `diag` in the Environment tab to view it. It has one row per parameter.
 
-- Only 2 parameters out of 16 in this model fit break the `rhat` or `ess` rule.
+- In the fit this page was written from, 3 of the 16 parameters break the `rhat` or `ess` rule. Yours may show 2: see below for why.
 - `param` is the kind of parameter:
   - `beta0_psi` for the baseline occupancy
   - `beta_psi` for the effect of an occupancy covariate
@@ -664,18 +664,18 @@ Click on `diag` in the Environment tab to view it. It has one row per parameter.
 - `mean`, `sd`, `q2.5` and `q97.5` summarise the tries (technically, the word is 'draws'): their mean value, their spread, and the ends of the 95% interval.
 - `rhat` and `ess` are the two checks described above.
 
-> Find `p` and `q` in `diag`. Which of the two rules does each one break?
+> Find `beta_theta` for the effect of `PrevDayRain` and `p` and `q` for 12S in `diag`. Which of the two rules does each one break?
 
-The flagged parameters here are the lab detection and false-positive rates, `p` and `q`. We can look at the traceplots to show the draws of each chain in order. Here is `p`, beside the baseline occupancy, which is not flagged.
+The lab detection and false-positive rates, `p` and `q`, break the `ess` rule: their chains agree, but the draws are so alike from one to the next that they add up to only about 200 independent ones. The effect of rain on collection (`beta_theta` for the effect of `PrevDayRain`) sits right at the `rhat` rule. In the fit this page was written from, its `rhat` is 1.03, just over 1.01. In a run of the same model on another computer it can come out just under, and then it is not flagged. Nothing about the parameter has changed. The rules are conventions, not a line between good and bad chains. Just as p = 0.049 and p = 0.051 are not really different, an `rhat` just over 1.01 and one just under it tell you the same thing: look at the chains. We can look at the traceplots to show the draws of each chain in order. Here is `p`, beside the baseline occupancy, which is not flagged, and then the rain effect.
 
 ```{r traceplot, fig.height = 3}
-# plotTraceplot() wants an array: parameter x draw x chain
+# plotTraceplot() needs an array: parameter x draw x chain
 draws_p <- array(fit$results_output$p_output, dim = c(1, 5000, 2))
 
 # the baseline occupancy draws are already in that shape
 draws_b0 <- fit$results_output$jsdm_output$B0_output
 
-# flagged: rhat above 1.01 and ess below 400
+# flagged: ess below 400
 plotTraceplot(draws_p,
               param_name = "p (flagged)",
               dimnames1 = "dhole")
@@ -684,15 +684,25 @@ plotTraceplot(draws_p,
 plotTraceplot(draws_b0,
               param_name = "baseline occupancy (not flagged)",
               dimnames1 = "dhole")
+
+# the rain effect is the third row: intercept, Filter_vol, PrevDayRain
+draws_rain <- array(fit$results_output$beta_theta_output[3, 1, , ], dim = c(1, 5000, 2))
+
+# borderline: rhat close to 1.01
+plotTraceplot(draws_rain,
+              param_name = "rain effect (borderline)",
+              dimnames1 = "dhole")
 ```
 
 - Two good chains look like fuzzy caterpillars that overlap and wander around the same value.
 - For `p` the two chains overlap, but each drifts slowly up and down, so neighbouring draws are similar. That is why its effective sample size is low.
-- Chain 1 also makes more high excursions than chain 2. That small disagreement between the chains is what nudges `rhat` above 1.01.
+- The rain effect's draws are far less alike from one to the next (`ess` above 1,000). Check whether its two chains wander around the same value. If one makes more deep dips than the other, that small disagreement is what nudges `rhat` up.
 
 What to do about a flagged parameter:
 
-- **Ask whether it matters for your question.** The flags here are small (`rhat` of 1.03, not 1.3), and the conclusion that one positive PCR out of 18 is weak evidence does not depend on the exact value of `p`.
+- **Ask whether it matters for your question.** The flags here are small.
+  - `rhat` close to 1.01 for the effect of `PrevDayRain`, not 1.3
+  - The conclusion that one positive PCR out of 18 is weak evidence does not depend on the exact value of `p`.
 - **Run longer chains and check again.** Increase `nburn` and `niter`, which gives the chains more time to settle and agree on a set of values. If this works, that would pin `p` and `q` down more precisely, but would not make their intervals much narrower, because the width reflects the information in the data.
 - **Report it.** Say which parameters missed the rule and by how much.
 

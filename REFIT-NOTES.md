@@ -24,17 +24,17 @@ The first refit at this pin (5,000 burn-in + 5,000 kept, `fit_Mammal_d4_communit
 
 ## Session 2 (`02-dhole.Rmd`)
 
-Session 2 does not read the mammal fit; these changes come from the new pin alone.
+Session 2 does not read the mammal fit; these changes come from the new pin alone. Line numbers are those of the edited file on 5 Nov 2026, which added the rain-effect traceplot (8 lines after line 686); entries that moved also give their line at 34e55ef.
 
-- Line 426: "The model's answer is about 1.7 sites". New: about 1.8 sites (1.78).
-- Line 427: "the model expects the dhole at about 17 sites, against the 41 where it was detected". New: about 18 sites (17.6); 41 is unchanged.
-- Line 451: "An average, reference site has about a 20% chance of holding the dhole, but the 95% interval is wide: 0.08 to 0.37." New: about 21% (0.21), interval 0.08 to 0.38.
-- Line 656: "Only 2 parameters out of 16 in this model fit break the `rhat` or `ess` rule." New: 3 parameters out of 16.
-- Line 667 (question, no change needed): "Which of the two rules does each one break?" The answer is now different: `p` and `q` break only the `ess` rule (`rhat` 1.00 for both, `ess` 215 and 203).
-- Line 669: "The flagged parameters here are the lab detection and false-positive rates, `p` and `q`." New flagged set: the effect of rain on collection (`beta_theta`, `PrevDayRain`: `rhat` 1.03, `ess` 1055) and `p` and `q` (`rhat` 1.00, `ess` 215 and 203). The traceplot of `p` still shows a flagged parameter, for its low `ess`.
-- Line 678 (code comment): "flagged: rhat above 1.01 and ess below 400". New: `p` is flagged for `ess` below 400 only.
-- Line 691: "Chain 1 also makes more high excursions than chain 2. That small disagreement between the chains is what nudges `rhat` above 1.01." No longer true for `p` (`rhat` 1.00). Suggest dropping it, or moving the `rhat` point to the rain effect, which is the one parameter whose chains disagree a little.
-- Line 695: "The flags here are small (`rhat` of 1.03, not 1.3)". Still true, but the 1.03 is now the rain effect, not `p` and `q`.
+- ~~Line 426: "The model's answer is about 1.7 sites". New: about 1.8 sites (1.78).~~
+- ~~Line 427: "the model expects the dhole at about 17 sites, against the 41 where it was detected". New: about 18 sites (17.6); 41 is unchanged.~~
+- ~~Line 451: "An average, reference site has about a 20% chance of holding the dhole, but the 95% interval is wide: 0.08 to 0.37." New: about 21% (0.21), interval 0.08 to 0.38.~~
+- ~~Line 656: "Only 2 parameters out of 16 in this model fit break the `rhat` or `ess` rule." New: 3 parameters out of 16.~~
+- ~~Line 667 (question, no change needed): "Which of the two rules does each one break?" The answer is now different: `p` and `q` break only the `ess` rule (`rhat` 1.00 for both, `ess` 215 and 203).~~
+- ~~Line 669: "The flagged parameters here are the lab detection and false-positive rates, `p` and `q`." New flagged set: the effect of rain on collection (`beta_theta`, `PrevDayRain`: `rhat` 1.03, `ess` 1055) and `p` and `q` (`rhat` 1.00, `ess` 215 and 203). The traceplot of `p` still shows a flagged parameter, for its low `ess`.~~
+- ~~Line 678 (code comment): "flagged: rhat above 1.01 and ess below 400". New: `p` is flagged for `ess` below 400 only.~~
+- ~~Line 699 (was 691): "Chain 1 also makes more high excursions than chain 2. That small disagreement between the chains is what nudges `rhat` above 1.01." No longer true for `p` (`rhat` 1.00). Suggest dropping it, or moving the `rhat` point to the rain effect, which is the one parameter whose chains disagree a little.~~
+- ~~Line 703 (was 695): "The flags here are small (`rhat` of 1.03, not 1.3)". Still true, but the 1.03 is now the rain effect, not `p` and `q`.~~
 - Unchanged and still true: the simulated species (lines 205 to 215; the saved simulated fit is identical to the old one), lines 405 to 407 (the four possible false positives are all below 0.03, GLG39 is 0.80, GLG28 is 1.00), line 493 (collection 0.71, PCR detection 0.59: "seven times in ten", "six times in ten"), line 513 (rain's interval is still below zero: -3.38 to -0.19), line 569 (96%), and all 9 occupancy intervals crossing zero.
 
 ## Session 3 (`03-many-species.Rmd`)
