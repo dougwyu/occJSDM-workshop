@@ -27,15 +27,15 @@ library(occJSDM)      # to read the mammal fit, and Session 2's dhole fit
 
 ## Why model all the species together?
 
-A conservation plan needs to know where many species are, not just one. We could fit 108 separate models, but a joint model fits all species at once, which lets it **share information between species, and so reveal hidden site effects that you did not measure, or did not know you should measure. These are known as joint species distribution models, or JSDMs.**
+A conservation plan needs to know where many species are, not just one. We could fit 108 separate species distribution models, but a **joint species distribution model** (JSDM) fits all species at once, which lets it **share information between species, and so reveal hidden site effects that you did not measure, or did not know you should measure.**
 
-What are hidden site effects? Sites differ in ways that we did not measure, such as microclimate, disturbance history or isolation. Like the occupancy covariates we did measure, such a difference can affect several species at once. In a survey, it shows up as groups of species that turn up together at some sites and are missing together from others.
+**What are hidden site effects?** Sites always differ in ways that we did not measure, such as microclimate, disturbance history or isolation. Like the occupancy covariates we did measure, such a difference can affect several species at once. In a survey, it shows up as groups of species that appear together at some sites and are missing together from others.
 
-Thus, a JSDM cannot see a *cause*, but it can see an *effect*: species that turn up together more often than the measured covariates explain.
+Thus, even if a JSDM cannot see a *cause*, it can see an *effect*: species that appear together or are missing together more often than the measured covariates explain.
 
-You tell the JSDM how many hidden environmental covariates to estimate from survey data (`n_factors` in `runOccJSDM()`). We set `n_factors = 0` for the dhole because it was only 1 species and thus, there was no information to share between species. For this session, we will fit occJSDM to 108 species, and set `n_factors = 4`.
+You tell the JSDM how many hidden environmental covariates to estimate from survey data (`n_factors` in `runOccJSDM()`). We set `n_factors = 0` for the dhole because it was only 1 species and thus, there was no information to share between species. For this session, we will fit occJSDM to 108 species, and set `n_factors = 4`. (There are techniques to estimate the best number of `n_factors` to set, but we will skip it in this lesson).
 
-Fitting occJSDM to 108 mammals takes too long for class, so I fitted it beforehand and saved the whole fit: two chains, each with 10,000 burn-in and 10,000 iterations, keeping every second draw. Instead of running `runOccJSDM()`, we load that fit and use the occJSDM output functions on it, as you did on the dhole in Session 2.
+Fitting occJSDM to 108 mammals takes too long for class, so I fitted it beforehand and saved the whole fit as a single file: two chains, each with 10,000 burn-in and 10,000 iterations, keeping every second draw. Instead of running `runOccJSDM()`, we load that file and use the occJSDM output functions on it, as you did on the dhole in Session 2.
 
 This session needs more memory than the others, about 3 GB at its peak. Before you start, restart R (Session \> Restart R), so that nothing from Sessions 1 and 2 is still in memory.
 
@@ -67,16 +67,21 @@ sites_detected <- presence |>
 
 Click on `presence` and `sites_detected` in the Environment tab to view them.
 
-Now we turn the fit into five tables, with the occJSDM output functions. The chunk takes about 15 seconds. Its last step, the species associations, is the one that needs the memory.
+Now we use the occJSDM output functions to convert the fit into five tables. You are already familiar with the output functions from 02-dhole.Rmd, but now the files are 108 times larger because they store the outputs for 108 species.
+
+The chunk takes about 15 seconds. Its last step, the species associations, is the one that needs the memory.
 
 ```{r fit-tables}
 species_ids <- fit_full$infos$speciesNames   # the otu_id of each species, in the model's order
 species_names <- status |>
   select(otu_id, species)
 
-# occ: probability of presence given the detections (cond_mean), and before them (psi_mean)
-cond <- computeConditionalOccupancyProbs(fit_full)   # one row per site, one column per species
+# occ: probability of presence given knowledge of the detections (cond_mean), and before knowing the detections (psi_mean)
+# one row per site, one column per species
+cond <- computeConditionalOccupancyProbs(fit_full)   
 psi <- computePredictiveOccupancyProbs(fit_full)
+
+# one row per site and species combination
 occ <- as_tibble(cond, rownames = "Site") |>
   pivot_longer(-Site,
                names_to = "otu_id",
@@ -89,7 +94,8 @@ occ <- as_tibble(cond, rownames = "Site") |>
   left_join(species_names, by = "otu_id") |>
   select(Site, otu_id, species, cond_mean, psi_mean)
 
-# params: the mean and 95% interval of each species' detection rates, from their draws as in Session 2
+
+# params: the mean and 95% interval of each species' detection rates theta0, p, and q, from their draws as in Session 2
 summarise_rate <- function(param) {
   draws <- returnPosteriorDraws(fit_full, param)[1, , , ]   # species x iteration x chain
   tibble(mean = apply(draws, 1, mean),
@@ -99,16 +105,21 @@ summarise_rate <- function(param) {
 p <- summarise_rate("p")             # true-positive rate of a PCR
 q <- summarise_rate("q")             # false-positive rate of a PCR
 theta0 <- summarise_rate("theta0")   # field false-positive rate
+# one row per species
 params <- tibble(otu_id = species_ids,
                  p_mean = p$mean, p_lo = p$lo, p_hi = p$hi,
                  q_mean = q$mean, q_lo = q$lo, q_hi = q$hi,
-                 theta0_mean = theta0$mean, theta0_lo = theta0$lo, theta0_hi = theta0$hi) |>
+                 theta0_mean = theta0$mean, theta0_lo = theta0$lo, 
+                    theta0_hi = theta0$hi) |>
   left_join(species_names, by = "otu_id")
 
+
 # diagnostics: the largest R-hat per species, for detection and for the occupancy effects
+# This line takes about 5 minutes on Posit Cloud: it checks 1,729 parameters. Wait for it to finish
 diag <- returnConvergenceDiagnostics(fit_full) |>
   filter(param != "mu_b0") |>   # the community mean of baseline occupancy belongs to no one species
   mutate(otu_id = if_else(label2 %in% species_ids, label2, label1))   # the species is in one of the two
+# One row per species
 diagnostics <- diag |>
   mutate(group = if_else(param %in% c("beta0_psi", "beta_psi"),
                          "rhat_effects",
@@ -120,22 +131,28 @@ diagnostics <- diag |>
   left_join(species_names, by = "otu_id") |>
   select(otu_id, species, rhat_detection, rhat_effects)
 
+
 # effects: each occupancy covariate's effect on each species
+# one row per species and covariate
 effects <- diag |>
   filter(param == "beta_psi") |>
   left_join(species_names, by = "otu_id") |>
   select(otu_id, species, covariate = label1, mean, lo = q2.5, hi = q97.5, rhat)
 
+
 # assoc: lower, median and upper residual correlation for each pair of species
+# this line takes about 1 minute and 3.7 GB on Posit Cloud
 sig <- returnResidualCorrelationMatrix(fit_full)   # 3 x species x species
 pairs <- which(upper.tri(sig[1, , ]), arr.ind = TRUE)
+# one line for every pair of species
 assoc <- tibble(otu_a = species_ids[pairs[, 1]],
                 otu_b = species_ids[pairs[, 2]],
                 lo = sig[1, , ][pairs],
                 median = sig[2, , ][pairs],
                 hi = sig[3, , ][pairs])
 
-# keep the five tables together in one list, and tidy away the pieces
+
+# keep the five tables together in one list, and clean up the pieces
 fit <- list(occ = occ,
             params = params,
             diagnostics = diagnostics,
@@ -162,7 +179,7 @@ This time we check the chains first, as you should also do in your own work. Wit
 - its **detection** parameters: the true- and false-positive rates and the effects of the collection covariates;
 - its **covariate effects** on occupancy.
 
-As in Session 2, `rhat` near 1 means the two chains agree. Session 2 used the strict rule, at most 1.01. Here we use 1.1, which is the default warning level for `runOccJSDM()`. So we call a group settled if its largest `rhat` is at most 1.1. To keep `diagnostics` short, we check `rhat` only.
+As in Session 2, `rhat` near 1 means the two chains agree. Session 2 used the strict rule, at most 1.01. Here we use 1.1, which is the default warning level for `runOccJSDM()`. So we call a group settled if its **largest** `rhat ≤ 1.1`. To keep `diagnostics` short, we check `rhat` only.
 
 ```{r convergence}
 conv <- fit$diagnostics |>
@@ -201,16 +218,17 @@ conv |>
   facet_wrap(~ parameters, ncol = 1) +
   labs(x = "Largest R-hat per species",
        y = "Number of species",
-       title = "Detection has settled for almost every species; the covariate effects have not") +
+       title = "Detection has settled for almost every species, and the covariate effects for most") +
   theme_minimal()
 ```
 
-- Detection has settled for all but 4 species.
-- The covariate effects are worse: for 29 species at least one effect has not settled.
-- Together, 30 species fail one check or the other. Half of them (15) were detected at six sites or fewer, where there is little information. But the list also includes common species such as *Rattus tanezumi*, detected at 84 sites.
+- Detection has settled for all but 1 species (*Micromys erythrotis*).
+- The covariate effects are worse: for 5 species at least one effect has not settled.
+- Together, 5 species fail one check or the other. **3 of them were detected at six sites or fewer, and all 5 at 11 sites or fewer, where there is little information.** Rarely detected species are just hard to model.
+- **No common species is on the list.**
 - The dhole passes both checks.
 
-The cure is a longer run, which takes too long for class. Until then, do not read the covariate effects of these 30 species, and treat their probabilities of presence with care, because those probabilities are built from the same effects. This is a limit of this fit, not a reason to drop the whole analysis.
+The cure for non-convergence is a longer run, which takes too long for class. Until then, do not read the covariate effects of these 5 species, and treat their probabilities of presence with care, because those probabilities are built from the same effects. This is a limit of this fit, not a reason to drop the occJSDM analysis.
 
 ## How reliable is each species' detection?
 
@@ -228,8 +246,8 @@ We start with the plainest plot: one point per species.
 ```{r detection-plain}
 ggplot(profile, aes(q_mean, p_mean)) +
   geom_point(size = 2, colour = "grey40") +
-  labs(x = "False-positive rate per PCR",
-       y = "True-positive rate per PCR",
+  labs(x = "False-positive rate per PCR (q)",
+       y = "True-positive rate per PCR (p)",
        title = "Each point is a species") +
   theme_minimal()
 ```
@@ -237,7 +255,7 @@ ggplot(profile, aes(q_mean, p_mean)) +
 How to read it:
 
 - Up means a positive PCR is more likely when the species' DNA is there. Species near the top are easy to detect.
-- Right means a PCR is more often positive when the species is not there. Species to the right have detections that overstate where they live.
+- Right means a PCR is more often positive when the species is not there. Species to the right have detections that overstate where they live, due to PCR contamination.
 - The best place to be is the top left.
 
 What can we read from this plain version?
@@ -274,8 +292,8 @@ ggplot(profile, aes(q_mean, p_mean, colour = local_status)) +
   scale_colour_manual(values = status_colours,
                       labels = status_labels,
                       name = "Species") +
-  labs(x = "False-positive rate per PCR",
-       y = "True-positive rate per PCR",
+  labs(x = "False-positive rate per PCR (q)",
+       y = "True-positive rate per PCR (p)",
        title = "Detection quality varies a lot between species") +
   theme_minimal()
 ```
@@ -298,11 +316,11 @@ profile |>
 
 The highest false-positive rates belong to species detected at most sites. They include the pig and cattle, whose DNA probably reaches rivers from farms and settlements, but also several common small mammals. The model cannot say why a species has a high rate, only that its raw detections overstate where they live.
 
-> **Discuss.** If a species' false-positive rate is high, what does that mean for a map of its raw detections?
+> **Discuss.** If a species' false-positive rate is high, what does that mean for a map of its raw detections? Why do you think some of these species have high lab contamination rates `q`?
 
 ## How likely is each species to be at each site?
 
-For each site and each species, the model gives the probability that the species is present given what was detected. These are the numbers the conservation plan will use. We attach each species' taxonomic order, which we use below.
+For each site and each species, the model gives two probabilities that the species is present. The conservation plan in Session 4 uses one of them. We attach each species' taxonomic order, which we use below.
 
 ```{r occupancy}
 occ <- fit$occ |>
@@ -310,13 +328,74 @@ occ <- fit$occ |>
             by = "otu_id")
 ```
 
-Click on `occ` in the Environment tab to view it. It has 10,908 rows. Can you work out why?
+Click on `occ` in the Environment tab to view it. It has 10,908 rows.
+
+> **Discuss**. Can you explain why?
 
 It has two probabilities of presence:
 
-- `cond_mean` is the probability of presence given the detections. It is calculated from the measured and hidden occupancy covariates plus the detection data: this species' PCR results at the site. This is what occJSDM calls the conditional occupancy probability (`computeConditionalOccupancyProbs()`). Use it to ask "is species X at site 12?".
-- `psi_mean` is the probability of presence before this species' own detections at the site are weighed. It is calculated from the measured and hidden occupancy covariates only. This is what occJSDM calls the predictive occupancy probability (`computePredictiveOccupancyProbs()`). The hidden covariates were estimated from the survey itself, so it is not a prediction for a site nobody surveyed.
+- `psi_mean` is the probability that a site with these characteristics is occupied. It is calculated from the measured and hidden occupancy covariates alone, not from this species' own detections at the site. This is what occJSDM calls the predictive occupancy probability (`computePredictiveOccupancyProbs()`). Because it rests on how the covariates act across all the sites, it is the more robust measure of where a species lives, and it is what the maps in Ji et al. (2025) show. The hidden covariates were estimated from the survey itself, so it is not a prediction for a site nobody surveyed.
+- `cond_mean` is the probability that the species is present at this site, given the detections. It adds this species' PCR results at the site to the covariates. This is what occJSDM calls the conditional occupancy probability (`computeConditionalOccupancyProbs()`). It is more sensitive to the detections at one site, but it is the one that can tell you whether those detections were false positives. Use it to ask "is species X at site 12?".
 - Both are posterior means. The package does not yet return intervals for them, which we come back to in Session 4.
+
+To see how the two differ, we map both for the takin (*Budorcas taxicolor*), as Supplementary Figure 12 of Ji et al. (2025) does. Session 2's first exercise fitted the takin alone; here it comes from the model of all 108 mammals.
+
+```{r takin}
+takin_id <- status |>
+  filter(species == "Budorcas taxicolor") |>
+  pull(otu_id)
+
+# positive PCRs per site, out of 18, and the takin's two probabilities
+takin <- info |>
+  select(Site) |>
+  mutate(positive = OTU[, takin_id]) |>
+  count(Site, wt = positive, name = "positive_pcrs") |>
+  left_join(occ |>
+              filter(otu_id == takin_id) |>
+              select(Site, cond_mean, psi_mean),
+            by = "Site") |>
+  left_join(sites, by = "Site")
+
+# the sites with at least one positive PCR, south to north
+takin |>
+  filter(positive_pcrs > 0) |>
+  arrange(Xs.2) |>
+  mutate(across(c(cond_mean, psi_mean), \(x) round(x, 2))) |>
+  select(Site, latitude = Xs.2, positive_pcrs, cond_mean, psi_mean)
+```
+
+```{r takin-map, fig.width = 7, fig.height = 7}
+takin |>
+  pivot_longer(c(cond_mean, psi_mean),
+               names_to = "probability",
+               values_to = "value") |>
+  mutate(probability = recode(probability,
+                              cond_mean = "cond_mean:\ngiven the\ndetections",
+                              psi_mean = "psi_mean:\nat a site with\nthese characteristics")) |>
+  ggplot(aes(Xs.1, Xs.2)) +
+  geom_point(aes(colour = value),
+             size = 3) +
+  # a black ring marks each site with at least one positive PCR
+  geom_point(data = \(d) filter(d, positive_pcrs > 0),
+             shape = 21,
+             size = 4.5,
+             colour = "black") +
+  facet_wrap(~ probability) +
+  scale_colour_viridis_c(option = "C",
+                         limits = c(0, 1),
+                         name = "Probability\nof presence") +
+  coord_quickmap() +
+  labs(x = "Longitude",
+       y = "Latitude",
+       title = "The takin's two probabilities of presence") +
+  theme_minimal()
+```
+
+- At the six sites where most PCRs were positive (13 to 18 of 18), `cond_mean` is 1: the detections settle it. `psi_mean` is only 0.5 to 0.9 there, because it does not use those detections.
+- At the sites with only 1 to 4 positive PCRs, `cond_mean` is at most 0.15: the model judges those detections to be false positives. This includes the weak detections in the south, where the takin is known not to live. `psi_mean` is higher at most of the northern ones, up to about 0.3, because their covariates resemble those of the sites where the takin clearly is.
+- So `cond_mean` sorts the detections into true and false, while `psi_mean` says where the takin could be, judged by the kind of site.
+
+> **Discuss.** A manager asks where the takin lives. Which map would you show, and why? Would your answer change if they asked which sites to check for takin with camera traps?
 
 The histogram below counts site-species pairs, on a log scale because most of them pile up near zero. Pairs at either end are settled; pairs in the middle are ones the data cannot decide.
 
@@ -351,7 +430,7 @@ richness |>
             expected = mean(expected))
 ```
 
-> On average a site had 22.5 species detected, but the model expects only 12.8. Think back to the false-positive rates. Why might the model expect fewer species than were detected?
+> **Discuss**. On average a site had 22.5 species detected, but the model expects only 12.8. Think back to the false-positive rates. Why might the model expect fewer species than were detected?
 
 Now we map both measures side by side.
 
@@ -392,7 +471,7 @@ fit$occ |>
 
 ### What did we just do?
 
-- We checked the chains first, and set aside the 30 species whose chains have not settled.
+- We checked the chains first, and set aside the 5 species whose chains have not settled.
 - We read each species' detection rates, and found that some species' raw detections overstate where they live.
 - We added up the probabilities of presence at each site, and found that the model expects fewer species per site than were detected.
 

@@ -19,7 +19,7 @@ suppressPackageStartupMessages(library(occJSDM))
 
 s3 <- new.env()
 withr::with_dir(root, {
-  for (label in c("load", "fit-tables", "convergence", "detection-rates", "occupancy", "richness",
+  for (label in c("load", "fit-tables", "convergence", "detection-rates", "occupancy", "takin", "richness",
                   "reserve-effects", "reserve-summary", "associations")) {
     invisible(capture.output(eval(parse(text = chunk(label)), envir = s3)))
   }
@@ -29,6 +29,21 @@ test_that("Session 3: the number of species", {
   expect_equal(nrow(s3$fit$params), 108)               # "108 separate models", "108 mammals"
   expect_equal(ncol(s3$OTU), 108)
   expect_equal(nrow(s3$fit$diagnostics), 108)          # "With 108 species"
+})
+
+test_that("Session 3: the takin's two probabilities", {
+  t <- s3$takin
+  strong <- filter(t, positive_pcrs >= 13)
+  weak <- filter(t, positive_pcrs >= 1, positive_pcrs <= 4)
+  expect_equal(nrow(strong), 6)                                       # "the six sites ... 13 to 18 of 18"
+  expect_true(all(strong$positive_pcrs <= 18) & !any(t$positive_pcrs %in% 5:12))
+  expect_true(all(round(strong$cond_mean, 2) == 1))                   # "cond_mean is 1"
+  expect_true(all(strong$psi_mean > 0.5 & strong$psi_mean < 0.9))     # "only 0.5 to 0.9"
+  expect_lte(round(max(weak$cond_mean), 2), 0.15)                     # "at most 0.15"
+  expect_true(all(weak$cond_mean[weak$Xs.2 < 25.5] < 0.01))           # the weak southern detections
+  north <- filter(weak, Xs.2 > 27.5)
+  expect_gt(mean(north$psi_mean > north$cond_mean), 0.5)              # "higher at most of the northern ones"
+  expect_equal(round(max(north$psi_mean), 1), 0.3)                    # "up to about 0.3"
 })
 
 test_that("Session 3: the convergence bullets", {

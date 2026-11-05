@@ -68,7 +68,10 @@ Click on `occ` in the Environment tab to view it.
 
 - It is the long table saved at the end of Session 3: one row per site and species.
 - `cond_mean` is the probability that the species is present at the site, given the detections.
+- `psi_mean` is the probability that a site with these characteristics is occupied. It is what the maps in Ji et al. (2025) show.
 - The other columns carry each species' taxonomy and Red List status.
+
+We plan with `cond_mean`. A plan should protect the sites where a species actually is, and `cond_mean` is the probability that uses what the survey found at each site: a site where the species was detected again and again counts fully, and one whose few detections the model judged to be false positives counts for little. `psi_mean` leaves out each site's own detections, so it rates sites by their covariates alone. You can try planning with it in the group exercise.
 
 > `occ` has 10,908 rows. Can you see where that number comes from?
 
@@ -472,6 +475,7 @@ In groups, choose one change and report how the plan responds.
 - Raise or lower the target (`target`) or the budget (`budget_frac`), then rerun the plans.
 - Weight a group of species, such as all carnivores, more heavily.
 - Use a different cost, such as forest cover.
+- Plan with `psi_mean` instead of `cond_mean`. Change the `occ_in` line in the first chunk to `select(Site, species, cond_mean = psi_mean)`, so the rest of the code runs unchanged, and compare the sites chosen with Plan 1.
 
 For each, say which sites move, and whether the answer would change what you tell a park manager.
 

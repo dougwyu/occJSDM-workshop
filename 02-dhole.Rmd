@@ -283,7 +283,7 @@ fit <- runOccJSDM(
 
 ### What is the dhole's probability of presence at each site?
 
-Like we did with the simulated species, `computeConditionalOccupancyProbs()` returns a matrix with one row per site and one column per species (here only the dhole). Each value is the probability that the dhole is present at the site, given what was detected there.
+Like we did with the simulated species, `computeConditionalOccupancyProbs()` returns a matrix with one row per site and one column per species (here only the dhole). Each value is the probability that the dhole is present at the site, given what was detected there. occJSDM also gives a second probability, which leaves out the site's own detections. Session 3 compares the two.
 
 ```{r probability}
 cond <- computeConditionalOccupancyProbs(fit)
@@ -783,6 +783,7 @@ takin |>
 - Where are the weak takin detections, and what probability does the model give them?
 - Does the model agree with what is known about the takin's range?
 - Check the fit with `returnConvergenceDiagnostics(fit_takin)`. Are any parameters flagged?
+- Ji et al. (2025) map the takin's two probabilities of presence in their Supplementary Figure 12. Session 3 draws the same two maps from the model of all 108 mammals.
 
 ### Exercise 2: fewer field samples
 
