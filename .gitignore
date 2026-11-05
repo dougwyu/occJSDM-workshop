@@ -6,3 +6,6 @@ fits/
 *.html
 *_files/
 Rlib/
+.posit/assistant
+artifacts/
+mcp/
