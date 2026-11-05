@@ -1,6 +1,7 @@
 # The numbers Session 2's text states, computed by running the session's own chunks.
 # The fits are the saved copies (see helper-saved-fits.R), which are identical to the live fits
-# with the session's seed when the chunks run in a plain R session. If one of these fails, the sentence that quotes it needs
+# with the session's seed on Posit Cloud, where students run them. A run on the macOS laptop
+# differs slightly (Accelerate BLAS), so the text is written to hold for both. If one of these fails, the sentence that quotes it needs
 # rewriting, not just the test.
 .libPaths(c(file.path(normalizePath(testthat::test_path("..")), "Rlib"), .libPaths()))
 root <- normalizePath(testthat::test_path(".."), mustWork = TRUE)
@@ -30,10 +31,12 @@ test_that("the simulated species: the model's counts, averages and ranges", {
   hi <- tapply(s$probability, s$status, max)
   expect_equal(as.vector(table(s$status)[c("absent", "present, detected", "present, missed")]),
                c(55, 37, 9))                                         # "these 55 / 37 / 9 sites"
-  expect_equal(round(means[["absent"]], 2), 0.14)                    # "0.14 (from 0.01 to 0.48)"
-  expect_equal(round(c(lo[["absent"]], hi[["absent"]]), 2), c(0.01, 0.48))
-  expect_equal(round(means[["present, detected"]], 2), 0.98)         # "0.98 (from 0.85 to 1.00)"
-  expect_equal(round(c(lo[["present, detected"]], hi[["present, detected"]]), 2), c(0.85, 1))
+  expect_equal(round(means[["absent"]], 2), 0.14)                    # "0.14 (from 0.01 to just under 0.5)"
+  expect_equal(round(lo[["absent"]], 2), 0.01)
+  expect_true(hi[["absent"]] > 0.45 & hi[["absent"]] < 0.5)
+  expect_equal(round(means[["present, detected"]], 2), 0.98)         # "0.98 (from about 0.85 to 1.00)"
+  expect_lt(abs(lo[["present, detected"]] - 0.85), 0.015)
+  expect_equal(round(hi[["present, detected"]], 2), 1)
   expect_equal(round(means[["present, missed"]], 2), 0.40)           # "0.40 (from 0.20 to 0.49)"
   expect_equal(round(c(lo[["present, missed"]], hi[["present, missed"]]), 2), c(0.20, 0.49))
   absent <- s$probability[s$status == "absent"]
@@ -50,13 +53,13 @@ test_that("the dhole: false negatives and the expected number of sites", {
   m <- s2$map_data
   expect_equal(sum(m$raw == 0), 60)                                  # "the 60 empty circles"
   expect_equal(round(sum(m$model[m$raw == 0]), 1), 1.8)              # "about 1.8 sites"
-  expect_equal(round(sum(m$model)), 18)                              # "about 18 sites"
+  expect_equal(round(sum(m$model)), 17)                              # "about 17 sites"
   expect_equal(sum(m$raw > 0), 41)                                   # "the 41 where it was detected"
 })
 
 test_that("the dhole: baseline occupancy", {
   b <- s2$baseline$draw
-  expect_equal(round(mean(b), 2), 0.21)                              # "about one in five (0.21)"
+  expect_equal(round(mean(b), 2), 0.20)                              # "about a 20% chance"
   expect_equal(round(quantile(b, 0.025)[[1]], 2), 0.08)              # "from 0.08"
   expect_equal(round(quantile(b, 0.975)[[1]], 2), 0.38)              # "to 0.38"
 })
@@ -74,8 +77,10 @@ test_that("the dhole: covariate effects and diagnostics", {
   e <- s2$effects
   expect_equal(nrow(e), 9)                                           # "All 9 intervals"
   expect_true(all(e$lower < 0 & e$upper > 0))                        # "cross the line"
-  expect_equal(s2$flagged$param, c("beta_theta", "p", "q"))
-  expect_equal(round(s2$flagged$rhat, 2), c(1.03, 1.00, 1.00))       # "rhat of 1.03" for rain; p and q fail on ess
+  expect_equal(s2$flagged$param, c("p", "q"))                       # p and q fail on ess only
+  expect_equal(round(s2$flagged$rhat, 2), c(1.00, 1.00))
+  rain <- s2$diag[s2$diag$param == "beta_theta" & s2$diag$label1 == "PrevDayRain", ]
+  expect_equal(round(rain$rhat, 3), 1.002)                           # "its rhat is 1.002, just under 1.01"
   expect_true(all(s2$flagged$ess[s2$flagged$param %in% c("p", "q")] < 400))
 })
 

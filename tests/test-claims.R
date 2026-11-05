@@ -78,21 +78,21 @@ test_that("Session 2: the results sections support the text", {
   expect_equal(round(mean(1 - (1 - c_draws * (1 - (1 - p_draws)^6))^3), 2), 0.96)   # "about 96%"
   dg <- returnConvergenceDiagnostics(fit)
   flagged <- dg[dg$rhat > 1.01 | dg$ess < 400, ]
-  expect_setequal(flagged$param, c("beta_theta", "p", "q"))   # the rain effect on collection, p and q
-  expect_true(all(flagged$rhat < 1.05))              # "rhat of 1.03" at most
+  expect_setequal(flagged$param, c("p", "q"))         # p and q; the rain effect is just under the rhat rule
+  expect_true(all(flagged$rhat < 1.01))
 })
 
 test_that("Session 2: the saved dhole fit supports the text", {
   suppressPackageStartupMessages(library(occJSDM))
-  fit <- readRDS(derived_path("dhole_fit.rds"))     # identical to the live fit with the session's seed
+  fit <- readRDS(derived_path("dhole_fit.rds"))     # identical to the live fit on Posit Cloud with the session's seed
   invisible(capture.output(diag <- returnConvergenceDiagnostics(fit)))
   expect_equal(mean(fit$results_output$p_output), 0.6, tolerance = 0.05 / 0.6)   # "six times in ten"
   pq <- diag[diag$param %in% c("p", "q"), ]
   expect_true(all(pq$rhat <= 1.01 & pq$ess < 400))  # p and q break only the ess rule
   rain <- diag[diag$param == "beta_theta" & diag$label1 == "PrevDayRain", ]
-  expect_true(rain$rhat > 1.01 & rain$rhat < 1.05 & rain$ess >= 400)   # the rain effect breaks only the rhat rule
-  expect_equal(nrow(diag), 16)                       # "Only 3 parameters out of 16"
-  expect_equal(sum(diag$rhat > 1.01 | diag$ess < 400), 3)
+  expect_true(rain$rhat > 1 & rain$rhat < 1.01 & rain$ess >= 400)   # "1.002, just under 1.01, so it is not flagged"
+  expect_equal(nrow(diag), 16)                       # 2 of the 16 parameters are flagged on Cloud
+  expect_equal(sum(diag$rhat > 1.01 | diag$ess < 400), 2)
   b <- diag[diag$param == "beta_psi", ]
   expect_true(all(b$q2.5 < 0 & b$q97.5 > 0))        # "every interval here crosses it"
   cond <- computeConditionalOccupancyProbs(fit)[, 1]

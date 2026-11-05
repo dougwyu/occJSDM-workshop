@@ -203,9 +203,9 @@ ggplot(sim_check, aes(probability, status, colour = status)) +
 How did the model do? There are three rows:
 
 - **absent**: the species was truly absent from those sites in the simulation.
-  - In these 55 sites, occJSDM estimated that the species was present with an average of only 0.14 probability (from 0.01 to 0.48). This makes sense.
+  - In these 55 sites, occJSDM estimated that the species was present with an average of only 0.14 probability (from 0.01 to just under 0.5). This makes sense.
 - **present, detected**: the species was truly present at those sites in the simulation.
-  - In these 37 sites, occJSDM estimated that the species was present with an average of 0.98 probability (from 0.85 to 1.00). This again makes sense.
+  - In these 37 sites, occJSDM estimated that the species was present with an average of 0.98 probability (from about 0.85 to 1.00). This again makes sense.
   - occJSDM does not estimate exactly 1.0 because occJSDM thinks there is a small possibility of false positives.
 - **present, missed**: the species was truly present at those sites but detection failed.
   - In these 9 sites, occJSDM estimated that the species was present with an average of 0.40 probability (from 0.20 to 0.49).
@@ -424,7 +424,7 @@ map_data |>
 ```
 
 - **The false negatives.** Session 1 asked how many of the 60 empty circles are false negatives. The model's answer is about 1.8 sites (`expected_occupied` in the first table).
-- **In total**, adding up the probabilities over all 101 sites, the model expects the dhole at about 18 sites, against the 41 where it was detected (the second table).
+- **In total**, adding up the probabilities over all 101 sites, the model expects the dhole at about 17 sites, against the 41 where it was detected (the second table).
 
 > **Discuss.** The model expects the dhole at fewer sites than the raw map shows. What does this mean about the kind of error, false positives or false negatives, in the dhole dataset?
 
@@ -448,7 +448,7 @@ baseline |>
   round(2)
 ```
 
-An average, reference site has about a 21% chance of holding the dhole, but the 95% interval is wide: 0.08 to 0.38.
+An average, reference site has about a 20% chance of holding the dhole, but the 95% interval is wide: 0.08 to 0.38.
 
 ## How well is the dhole's DNA collected and detected?
 
@@ -666,7 +666,7 @@ Click on `diag` in the Environment tab to view it. It has one row per parameter.
 
 > Find `beta_theta` for the effect of `PrevDayRain` and `p` and `q` for 12S in `diag`. Which of the two rules does each one break?
 
-The lab detection and false-positive rates, `p` and `q`, break the `ess` rule: their chains agree, but the draws are so alike from one to the next that they add up to only about 200 independent ones. The effect of rain on collection (`beta_theta` for the effect of `PrevDayRain`) sits right at the `rhat` rule. In the fit this page was written from, its `rhat` is 1.03, just over 1.01. In a run of the same model on another computer it can come out just under, and then it is not flagged. Nothing about the parameter has changed. The rules are conventions, not a line between good and bad chains. Just as p = 0.049 and p = 0.051 are not really different, an `rhat` just over 1.01 and one just under it tell you the same thing: look at the chains. We can look at the traceplots to show the draws of each chain in order. Here is `p`, beside the baseline occupancy, which is not flagged, and then the rain effect.
+The lab detection and false-positive rates, `p` and `q`, break the `ess` rule: their chains agree, but the draws are so alike from one to the next that they add up to only about 200 independent ones. The effect of rain on collection (`beta_theta` for the effect of `PrevDayRain`) sits right at the `rhat` rule. In the fit this page was written from, its `rhat` is 1.002, just under 1.01, so it is not flagged. In a run of the same model, with the same seed, on another computer it came out at 1.03, just over, and was flagged. Nothing about the parameter has changed. The rules are conventions, not a line between good and bad chains. Just as p = 0.049 and p = 0.051 are not really different, an `rhat` just over 1.01 and one just under it tell you the same thing: look at the chains. We can look at the traceplots to show the draws of each chain in order. Here is `p`, beside the baseline occupancy, which is not flagged, and then the rain effect.
 
 ```{r traceplot, fig.height = 3}
 # plotTraceplot() needs an array: parameter x draw x chain
