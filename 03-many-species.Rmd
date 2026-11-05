@@ -22,7 +22,7 @@ mcp_off <- Sys.getenv("WORKSHOP_NO_MCP") == "1"
 ```{r packages}
 library(tidyverse)
 library(ggrepel)      # labels that do not overlap, in ggplot2
-library(occJSDM)      # to read the mammal fit, and Session 2's dhole fit
+library(occJSDM)      # to read the mammal fit
 ```
 
 ## Why model all the species together?
@@ -36,6 +36,32 @@ Thus, even if a JSDM cannot see a *cause*, it can see an *effect*: species that 
 You tell the JSDM how many hidden environmental covariates to estimate from survey data (`n_factors` in `runOccJSDM()`). We set `n_factors = 0` for the dhole because it was only 1 species and thus, there was no information to share between species. For this session, we will fit occJSDM to 108 species, and set `n_factors = 4`. (There are techniques to estimate the best number of `n_factors` to set, but we will skip it in this lesson).
 
 Fitting occJSDM to 108 mammals takes too long for class, so I fitted it beforehand and saved the whole fit as a single file: two chains, each with 10,000 burn-in and 10,000 iterations, keeping every second draw. Instead of running `runOccJSDM()`, we load that file and use the occJSDM output functions on it, as you did on the dhole in Session 2.
+
+For the record, this is the call that made the fit. It was run once, outside class (it is in `analysis/fit-mammal.R`, and took about 6 minutes on a laptop's two cores).
+
+``` r
+inp <- readRDS("data-derived/mammal_input.rds")   # the 108 mammals, in the form runOccJSDM() expects
+
+set.seed(20261018)
+fit_full <- runOccJSDM(inp$data,
+                       listParams = list(n_factors = 4),   # four hidden environmental covariates
+                       threshold = 1,
+                       occCovariates = c("annual_precipitation",
+                                         "mean_temperature",
+                                         "Human_modification_1km",
+                                         "Percent_of_forest_cover_1km",
+                                         "Patch_density_1km",
+                                         "Edge_density_1km",
+                                         "streamOrigin",
+                                         "Regional_Division"),
+                       collCovariates = c("Filter_vol",
+                                          "PrevDayRain"),
+                       MCMCparams = list(nchain = 2,
+                                         nburn = 10000,
+                                         niter = 5000,   # draws kept per chain, after thinning
+                                         nthin = 2,      # keep every second draw
+                                         ncores = 2))
+```
 
 This session needs more memory than the others, about 3 GB at its peak. Before you start, restart R (Session \> Restart R), so that nothing from Sessions 1 and 2 is still in memory.
 
@@ -260,8 +286,8 @@ How to read it:
 
 What can we read from this plain version?
 
-- True-positive rates spread widely, from about 0.15 to 0.95. Some species are easy to detect and some are hard.
-- Most species (96 of 108) sit at the far left, with false-positive rates below 0.05.
+- True-positive rates spread widely, from about 0.17 to 0.95. Some species are easy to detect and some are hard.
+- Most species (95 of 108) sit at the far left, with false-positive rates below 0.05.
 - A few species sit far to the right.
 
 What we cannot read is which species those are, whether they are wild or domestic, or how sure the model is about each rate. So we colour the points by wild or domestic, add each species' 95% intervals as faint lines, and label the six species with the highest false-positive rates.
@@ -334,8 +360,8 @@ Click on `occ` in the Environment tab to view it. It has 10,908 rows.
 
 It has two probabilities of presence:
 
-- `psi_mean` is the probability that a site with these characteristics is occupied. It is calculated from the measured and hidden occupancy covariates alone, not from this species' own detections at the site. This is what occJSDM calls the predictive occupancy probability (`computePredictiveOccupancyProbs()`). Because it rests on how the covariates act across all the sites, it is the more robust measure of where a species lives, and it is what the maps in Ji et al. (2025) show. The hidden covariates were estimated from the survey itself, so it is not a prediction for a site nobody surveyed.
-- `cond_mean` is the probability that the species is present at this site, given the detections. It adds this species' PCR results at the site to the covariates. This is what occJSDM calls the conditional occupancy probability (`computeConditionalOccupancyProbs()`). It is more sensitive to the detections at one site, but it is the one that can tell you whether those detections were false positives. Use it to ask "is species X at site 12?".
+- `psi_mean` is the probability that a site with these characteristics is occupied. It is calculated from the measured and hidden occupancy covariates alone, not from this species' own detections at the site. This is what occJSDM calls the predictive occupancy probability (`computePredictiveOccupancyProbs()`). Because it rests on how the covariates act across all the sites, it is the more robust measure of where a species lives, and it is what the maps in Ji et al. (2025) show. The hidden covariates were estimated from the survey itself, so it is not a prediction for an unsurveyed site.
+- `cond_mean` is the probability that the species is present at this site, given the detections. **It considers the species' responses to each site's covariates (like `psi_mean` does) plus the species' PCR results at this site**. This is what occJSDM calls the conditional occupancy probability, short for occupancy conditional on the detection data (`computeConditionalOccupancyProbs()`). By design, conditional occupancy is affected by the detections at one site, which is useful if the site is unlike other occupied sites but the species is truly there, but misleading if a site has many false positives, as heavy contamination could produce.
 - Both are posterior means. The package does not yet return intervals for them, which we come back to in Session 4.
 
 To see how the two differ, we map both for the takin (*Budorcas taxicolor*), as Supplementary Figure 12 of Ji et al. (2025) does. Session 2's first exercise fitted the takin alone; here it comes from the model of all 108 mammals.
@@ -373,16 +399,19 @@ takin |>
                               cond_mean = "cond_mean:\ngiven the\ndetections",
                               psi_mean = "psi_mean:\nat a site with\nthese characteristics")) |>
   ggplot(aes(Xs.1, Xs.2)) +
+  # a green ring marks each site with at least one positive PCR: a larger green
+  # point drawn first, so the site's own colour stays whole on top of it
+  geom_point(data = \(d) filter(d, positive_pcrs > 0),
+             size = 5.5,
+             colour = "green3") +
   geom_point(aes(colour = value),
              size = 3) +
-  # a black ring marks each site with at least one positive PCR
-  geom_point(data = \(d) filter(d, positive_pcrs > 0),
-             shape = 21,
-             size = 4.5,
-             colour = "black") +
   facet_wrap(~ probability) +
+  # a square-root scale spreads out the low probabilities, so 0.1 and 0.3 look different
   scale_colour_viridis_c(option = "C",
                          limits = c(0, 1),
+                         trans = "sqrt",
+                         breaks = c(0, 0.05, 0.25, 0.5, 1),
                          name = "Probability\nof presence") +
   coord_quickmap() +
   labs(x = "Longitude",
@@ -391,20 +420,22 @@ takin |>
   theme_minimal()
 ```
 
-- At the six sites where most PCRs were positive (13 to 18 of 18), `cond_mean` is 1: the detections settle it. `psi_mean` is only 0.5 to 0.9 there, because it does not use those detections.
-- At the sites with only 1 to 4 positive PCRs, `cond_mean` is at most 0.15: the model judges those detections to be false positives. This includes the weak detections in the south, where the takin is known not to live. `psi_mean` is higher at most of the northern ones, up to about 0.3, because their covariates resemble those of the sites where the takin clearly is.
-- So `cond_mean` sorts the detections into true and false, while `psi_mean` says where the takin could be, judged by the kind of site.
+- At the six sites where most PCRs were positive (13-to-18 positives out of 18), `cond_mean` is 1: the detections clearly indicate occupancy. In contrast, `psi_mean` is only 0.5 to 0.9 in those sites, because `psi_mean` does not use the detection data, just the site covariate data. These sites are all in the north (yellow and orange). Both probabilities point to the takin being present, although `psi_mean` is less sure.
+- At all 16 sites with only 1 to 4 positive PCRs (the other circled sites), `cond_mean` is ≤ 0.15: the model judges those detections to be false positives, given how strong the detections are at the six sites where the takin clearly is, and occupancy probability is therefore estimated to be low. These circles are dark in the `cond_mean` map.
+- In contrast, `psi_mean` is mostly higher at the 9 northern weak-detection sites than at the other 7 sites.
+  - At the 4 sites in the south, where we know independently that the takin is not found (Ji et al. 2025), `psi_mean` is ≤ 0.03, and at the 3 sites in the eastern strip it is ≤ 0.08. These 7 sites are dark.
+  - At the 9 sites in the north, near the takin's occupied sites, `psi_mean` reaches 0.3, and 6 of them are above 0.1. This is because these sites have covariate values that give them a fair chance of holding a takin. Most of them are purple to pink.
+- **So comparing `cond_mean` and `psi_mean` shows which weak detections might still be real**. A site with weak detections (low `cond_mean`) but a moderate `psi_mean` (favourable covariates) is worth surveying again.
 
 > **Discuss.** A manager asks where the takin lives. Which map would you show, and why? Would your answer change if they asked which sites to check for takin with camera traps?
 
-The histogram below counts site-species pairs, on a log scale because most of them pile up near zero. Pairs at either end are settled; pairs in the middle are ones the data cannot decide.
+The histogram below counts site-species pairs. Pairs at either end are settled; pairs in the middle are ones the data cannot decide. There are few of these.
 
 ```{r certainty}
 ggplot(occ, aes(cond_mean)) +
   geom_histogram(binwidth = 0.05, fill = "grey40") +
-  scale_y_log10() +
   labs(x = "Probability of presence given the detections",
-       y = "Site-species pairs (log scale)",
+       y = "Site-species pairs",
        title = "Most site-species pairs are settled; a minority are uncertain") +
   theme_minimal()
 ```
@@ -430,7 +461,7 @@ richness |>
             expected = mean(expected))
 ```
 
-> **Discuss**. On average a site had 22.5 species detected, but the model expects only 12.8. Think back to the false-positive rates. Why might the model expect fewer species than were detected?
+> **Discuss**. On average a site had 22.5 species detected, but the model expects only 11.4. Think back to the false-positive rates. Why might the model expect fewer species than were detected?
 
 Now we map both measures side by side.
 
@@ -462,25 +493,26 @@ occ |>
 Session 4 needs only these probabilities of presence, not the whole fit, so it reads them from a small table, `data-derived/occupancy_long.csv`. It has one row per site and species, with taxonomy and conservation status attached. The chunk below shows how it was saved. It is not run in class, because the file is already there.
 
 ```{r save-for-session-4, eval = FALSE}
-fit$occ |>
-  select(Site, otu_id, cond_mean, psi_mean) |>
-  left_join(status |> select(otu_id, species, order, family, iucn, china_red_list, local_status),
-            by = "otu_id") |>
-  write_csv("data-derived/occupancy_long.csv")
+# fit$occ |>
+#   select(Site, otu_id, cond_mean, psi_mean) |>
+#   left_join(status |> select(otu_id, species, order, family, iucn, china_red_list, local_status),
+#             by = "otu_id") |>
+#   write_csv("data-derived/occupancy_long.csv")
 ```
 
 ### What did we just do?
 
 - We checked the chains first, and set aside the 5 species whose chains have not settled.
-- We read each species' detection rates, and found that some species' raw detections overstate where they live.
+- We read each species' detection rates (`p` and `q`), and found that some species' raw detections overstate where they live.
+- We met the two probabilities of presence. `psi_mean` judges a site by its covariates, and `cond_mean` adds the species' own PCR results there. For the takin, `cond_mean` set aside all 16 weakly detected sites as false positives, while `psi_mean` picked out the northern ones, near where the takin lives, as worth surveying again.
 - We added up the probabilities of presence at each site, and found that the model expects fewer species per site than were detected.
 
 ## Do the reserves matter, once human modification is accounted for?
 
-In Session 1's ordination, sites whose stream rises inside one of Gaoligongshan's nature reserves sat at the opposite end from the most modified sites. So the figure could not say which of the two the species respond to.
+In Session 1's ordination, sites whose streams originate inside one of Gaoligongshan's nature reserves sat at the opposite end from the most modified sites. So the figure could not say whether the species respond to human modification or reserve status or both.
 
 - The model includes both covariates, and estimates the effect of each with the other held fixed.
-- Session 2 could not answer the question for the dhole alone. Here we ask it of every species.
+- Session 2 could not answer the question for the dhole alone. Here we ask it of all the species.
 
 The next chunk prepares the effects for plotting.
 
@@ -513,7 +545,7 @@ reserve_effects <- fit$effects |>
 
 Click on `reserve_effects` in the Environment tab to view it. It has two rows per species, one for each covariate: `estimate` is the effect and `lower` and `upper` the ends of its 95% interval, after the flip.
 
-Each row of the figure is a species, with its effect and 95% interval. Points right of the dashed line mean more likely present; intervals that cross the line cannot be told apart from no effect.
+Each row of the figure is a species, with its effect and 95% interval. Domestic species, and those that can be either wild or domestic, are drawn as triangles and squares on a pale orange band. Points right of the dashed line mean more likely present; intervals that cross the line cannot be told apart from no effect.
 
 ```{r reserve-plot, fig.height = 11}
 # the same colours as in Session 1
@@ -521,113 +553,178 @@ red_list_colours <- c("threatened (VU, EN, CR)" = "firebrick",
                       "not threatened (LC, NT)" = "grey50",
                       "not assessed, or data deficient" = "steelblue")
 
-reserve_effects |>
+reserve_plot_data <- reserve_effects |>
   # order the species by their reserve effect, in both panels
   mutate(species = fct_reorder(species,
                                if_else(covariate == "Stream rises inside a reserve", estimate, NA),
-                               .na_rm = TRUE)) |>
-  ggplot(aes(estimate, species, colour = red_list)) +
+                               .na_rm = TRUE),
+         status = recode(local_status,
+                         wild = "wild",
+                         dom = "domestic",
+                         wild_or_dom = "wild or domestic"))
+
+ggplot(reserve_plot_data, aes(estimate, species)) +
+  # a pale band behind each domestic species, so they stand out down the figure
+  geom_tile(data = \(d) filter(d, status != "wild"),
+            aes(x = 0),
+            width = Inf,
+            height = 1,
+            fill = "orange",
+            alpha = 0.25) +
   geom_vline(xintercept = 0, linetype = 2, colour = "grey50") +
-  geom_pointrange(aes(xmin = lower, xmax = upper), size = 0.2) +
+  geom_pointrange(aes(xmin = lower, xmax = upper, colour = red_list, shape = status),
+                  size = 0.3) +
   facet_wrap(~ covariate) +
+  # keep every species in the order set above; without this, the band layer's species come first
+  scale_y_discrete(drop = FALSE) +
   scale_colour_manual(values = red_list_colours, name = "Red List") +
+  scale_shape_manual(values = c(wild = 16,
+                                domestic = 17,
+                                "wild or domestic" = 15),
+                     name = "Species") +
   labs(x = "Effect on the log-odds of presence",
        y = NULL,
-       title = "Most species are more likely present inside the reserves") +
+       title = "Nine wild species are credibly more likely\npresent inside the reserves") +
+  guides(colour = guide_legend(nrow = 2),
+         shape = guide_legend(nrow = 2)) +
   theme_minimal() +
   theme(axis.text.y = element_text(size = 6, face = "italic"),
-        legend.position = "bottom")
+        legend.position = "bottom",
+        legend.box = "vertical")
 ```
 
-The tables below count, for each group of species, how many effects are credibly positive (the interval is above zero) or credibly negative (below zero).
+The question that matters is which species respond, and by how much. The next table lists every species whose interval excludes zero, for either covariate. `odds_multiplier` is `exp(estimate)`: how many times the odds of presence are multiplied where the stream rises inside a reserve, or where human modification is one unit higher.
 
-```{r reserve-summary}
-reserve_effects |>
-  group_by(covariate, red_list) |>
-  summarise(species = n(),
-            credibly_positive = sum(lower > 0),
-            credibly_negative = sum(upper < 0),
-            mean_effect = round(mean(estimate), 2),
-            .groups = "drop")
+```{r reserve-credible}
+responding_species <- reserve_effects |>
+  filter(lower > 0 | upper < 0) |>
+  mutate(odds_multiplier = round(exp(estimate), 1),
+         across(c(estimate, lower, upper), \(x) round(x, 2))) |>
+  arrange(covariate, desc(estimate)) |>
+  select(covariate, species, red_list, estimate, lower, upper, odds_multiplier)
 
-reserve_only <- reserve_effects |>
-  filter(covariate == "Stream rises inside a reserve")
-
-reserve_only |>
-  group_by(local_status) |>
-  summarise(species = n(),
-            credibly_positive = sum(lower > 0),
-            mean_effect = round(mean(estimate), 2))
-
-# body mass, on a log scale
-reserve_only |>
-  summarise(correlation_with_body_mass = round(cor(estimate, log10(body_mass)), 2))
+responding_species
 ```
+
+Click on `responding_species` in the Environment tab to view it.
 
 What the model says, with human modification held fixed:
 
-- Most wild species are more likely to be present where the stream rises inside a reserve: for 51 of the 68 wild species the interval excludes zero. No species is credibly less likely to be there.
-- Threatened species are no different from common ones in this. The reserves seem to go with most of the mammal community, not with the threatened species in particular.
-- Larger species show weaker reserve effects, not stronger ones (the correlation with body mass is -0.37).
-- Domestic animals show little or no reserve effect, which is what we would expect if the effect is about wild mammals and not a quirk of the data.
-- With reserve status held fixed, human modification has a credible effect for only 1 of the 78 species.
+- Nine wild species are credibly more likely to be present where the stream rises inside a reserve: the common palm civet (*Paradoxurus hermaphroditus*), two squirrels (*Callosciurus quinquestriatus* and *C. phayrei*), the brush-tailed porcupine (*Atherurus macrourus*), two fruit bats (*Cynopterus brachyotis* and *Eonycteris spelaea*), the Bengal slow loris (*Nycticebus bengalensis*), the Assamese macaque (*Macaca assamensis*) and a flying squirrel (*Petaurista yunanensis*).
+- Their estimated effects are large: they multiply the odds of presence by about 5 (the flying squirrel) to 25 (the civet). However, the intervals are wide, and their lower ends are close to zero, so the true effects could be smaller.
+- One species is credibly *less* likely to be present there: the water shrew *Nectogale elegans*, which is aquatic.
+- For the other 81 wild species the interval crosses zero: the data cannot tell whether they respond, in either direction.
+- No domestic animal has a credible reserve effect on its own. As a group, though, they sit towards the bottom of the figure (the orange bands): 8 of the 9 domestic species, and all 3 that can be wild or domestic, are in its bottom half. That fits livestock being kept mostly outside the reserves.
+- With reserve status held fixed, human modification has a credible effect for 5 of the 103 species. Four are less likely to be present where modification is higher, and three of those four (the civet, *Callosciurus quinquestriatus* and the macaque) are also among the nine reserve species. The fifth, the goat (*Capra hircus*), is more likely.
 
-So the pattern that Session 1's ordination could not untangle is, in this model, mostly about the reserves.
+So the pattern that Session 1's ordination could not untangle has a species-by-species answer. With both covariates in the model, a handful of species respond credibly to the reserves, a handful to human modification, three to both, and for most species the data cannot tell.
+
+Where do the nine live? The maps show each species' probability of presence given the detections. Triangles are sites whose stream rises inside a reserve.
+
+```{r reserve-maps, fig.width = 10, fig.height = 10}
+# the nine species, from the largest reserve effect to the smallest
+nine <- reserve_effects |>
+  filter(covariate == "Stream rises inside a reserve",
+         local_status == "wild",
+         lower > 0) |>
+  arrange(desc(estimate)) |>
+  pull(species)
+
+# whether each site's stream rises inside a reserve
+site_reserve <- info |>
+  distinct(Site, streamOrigin) |>
+  mutate(reserve = if_else(streamOrigin == "insideGLGS", "inside a reserve", "outside"))
+
+occ |>
+  filter(species %in% nine) |>
+  mutate(species = factor(species, levels = nine)) |>
+  left_join(sites, by = "Site") |>
+  left_join(site_reserve, by = "Site") |>
+  arrange(cond_mean) |>   # draw the likeliest sites last, on top
+  ggplot(aes(Xs.1, Xs.2, colour = cond_mean, shape = reserve)) +
+  geom_point(size = 2.5) +
+  facet_wrap(~ species,
+             nrow = 2,
+             labeller = label_wrap_gen(width = 12)) +
+  # one colour, from pale grey (unlikely) to dark green (likely), on a square-root scale
+  scale_colour_gradient(low = "grey85",
+                        high = "darkgreen",
+                        limits = c(0, 1),
+                        trans = "sqrt",
+                        breaks = c(0, 0.1, 0.5, 1),
+                        name = "Probability of presence\ngiven the detections") +
+  guides(colour = guide_colourbar(barwidth = 10)) +
+  scale_shape_manual(values = c("inside a reserve" = 17,
+                                outside = 16),
+                     name = "Stream rises") +
+  scale_x_continuous(breaks = c(97.5, 98.5)) +
+  coord_quickmap() +
+  labs(x = "Longitude",
+       y = "Latitude",
+       title = "Where the nine reserve species are likely to be") +
+  theme_minimal() +
+  theme(strip.text = element_text(face = "italic"),
+        legend.position = "bottom")
+```
+
+- For seven of the nine, most of the sites where they are likely present (`cond_mean` above 0.5) are in the far southwest corner of the study area, and 61 of those 62 sites have streams rising inside a reserve. That corner holds only 18 of the 101 sites, 12 of them inside a reserve.
+- Only the macaque and the flying squirrel are also likely present at many reserve sites elsewhere.
+- So for most of the nine, the credible reserve effect rests on about a dozen reserve sites in one corner. The model cannot tell a reserve effect from anything unmeasured that sets that corner apart.
 
 Be careful about what this does and does not show.
 
-- `streamOrigin` records where a stream rises, and the eDNA in a stream comes from upstream. A stream that rises inside a reserve carries DNA from the reserve's forest, so part of the effect may be about where the DNA comes from, not only where the animals live.
-- The reserves also differ from the land outside them in ways the model does not measure, such as terrain and access.
-- The model shows that species are more often present at reserve sites. It cannot show that protection is the cause.
+- An interval that crosses zero is not evidence of no effect. With 101 sites, and few detections for many species, the model probably does not have the information to pick out modest effects.
+- In Gaoligongshan, the northern and eastern regions have low human modification index levels, which means that habitat inside and outside reserves in the north and east are largely equivalent. This would weaken any effect of the reserve covariate.
+- Even for the nine species with a credible effect, the model shows only that they are more often present at reserve sites. It cannot show that protection is the cause.
 
-> **Discuss.** A park manager reads this and says "the reserves work". What would you tell them?
+> **Discuss.** What do the nine reserve species have in common? A park manager asks which mammals the reserves help. What would you tell them, and what would you not claim?
 
-### Back to the dhole
+## Which species are found together or apart more often than explained by the occupancy covariates?
 
-In Session 2, the one-species fit could not tell whether any covariate matters for the dhole: all 9 intervals crossed zero. The mammal-wide fit does put one of the dhole's effects clearly away from zero.
+The model explains these associations with its four hidden environmental covariates (`n_factors = 4`): species that respond in the same way to a hidden covariate tend to be found together. `returnOrdinationScores()` gives each site's score on each hidden covariate. The maps show each site's median score, with triangles for sites whose stream rises inside a reserve, as before.
 
-```{r joint-effects}
-joint_effects <- fit$effects |>
-  filter(species == "Cuon alpinus") |>
-  select(covariate, mean, lo, hi) |>
-  mutate(across(where(is.numeric), \(x) round(x, 2)))
+```{r hidden-covariates, fig.width = 10, fig.height = 7}
+# quantile (2.5%, 50%, 97.5%) x site x hidden covariate
+scores <- returnOrdinationScores(fit_full)
 
-joint_effects
-```
+hidden <- scores["50%", , ] |>
+  as.data.frame() |>
+  setNames(paste("hidden covariate", 1:4)) |>
+  rownames_to_column("Site") |>
+  pivot_longer(-Site,
+               names_to = "hidden",
+               values_to = "score") |>
+  left_join(sites, by = "Site") |>
+  left_join(site_reserve, by = "Site")
 
-- Its Southwest effect is clearly below zero.
-- But do not set these numbers beside the one-species fit. They are measured after allowing for hidden site effects shared by all species, so they are on a different scale, and the intervals are mostly wider, not narrower.
-- Being sure where the dhole is does not require being sure why.
-
-Do the two fits at least agree about where the dhole is? We read Session 2's one-species fit from its saved copy. Each point below is a site. Points on the grey line get the same probability from both fits.
-
-```{r agreement}
-# Session 2's one-species fit: the probability of presence at each site
-dhole_fit <- readRDS("data-derived/dhole_fit.rds")
-single <- computeConditionalOccupancyProbs(dhole_fit)
-single <- tibble(Site = rownames(single),
-                 single = single[, 1])
-
-both <- occ |>
-  filter(species == "Cuon alpinus") |>
-  select(Site, joint = cond_mean) |>
-  left_join(single, by = "Site")
-
-ggplot(both, aes(joint, single)) +
-  geom_abline(colour = "grey60") +
-  geom_point(alpha = 0.7) +
-  labs(x = "Mammal-wide fit",
-       y = "One-species fit",
-       title = "Both fits agree about where the dhole is") +
+ggplot(hidden, aes(Xs.1, Xs.2, colour = score, shape = reserve)) +
+  geom_point(size = 2.5) +
+  facet_wrap(~ hidden, nrow = 1) +
+  # the sign of a hidden covariate is arbitrary: only which sites are alike matters
+  scale_colour_gradient2(low = "sienna",
+                         mid = "grey90",
+                         high = "darkgreen",
+                         midpoint = 0,
+                         name = "Site score") +
+  scale_shape_manual(values = c("inside a reserve" = 17,
+                                outside = 16),
+                     name = "Stream rises") +
+  scale_x_continuous(breaks = c(97.5, 98.5)) +
+  coord_quickmap() +
+  labs(x = "Longitude",
+       y = "Latitude",
+       title = "Where the four hidden environmental covariates are high and low") +
   theme_minimal() +
-  coord_equal()
-
-both |> summarise(correlation = round(cor(joint, single), 2))
+  theme(legend.position = "bottom")
 ```
 
-## Which species go together?
+- A hidden covariate's sign and scale are arbitrary, so only the pattern matters: which sites are alike.
+- The scores are uncertain. At almost every site, the 95% interval of each score crosses zero. Read the maps as broad patterns, not site by site.
+- Hidden covariate 1 is higher in the far southwest corner than elsewhere, and that corner is where most of the nine reserve species live. Hidden covariates 3 and 4 go with reserve status: 3 is higher at reserve sites, and 4, which varies least of the four, is lower. So part of what sets the reserve sites apart is shared with the hidden covariates, which is one more reason to read the reserve effects with care.
 
-After the environment is accounted for, some species still occur together more than chance would suggest. The model estimates these residual associations as correlations. We keep only pairs whose 95% interval excludes zero, attach the species names, and list the ten strongest.
+> **Discuss.** What might these hidden covariates be? Think of what was not measured, such as elevation, forest type, river size or distance to villages.
+
+After the environment is accounted for, some species still occur together or apart more than chance would suggest. The model estimates these residual associations as correlations. We keep only pairs whose 95% interval excludes zero, attach the species names, and list the ten strongest.
 
 ```{r associations}
 assoc <- fit$assoc |>
@@ -646,17 +743,18 @@ assoc |>
   arrange(desc(median)) |>
   select(species_a, species_b, correlation = median) |>
   mutate(correlation = round(correlation, 2)) |>
-  head(10)
+  head(20)
 ```
 
 A correlation of 1 would mean two species are always found together, after the covariates and hidden site effects are allowed for; 0 means knowing one tells you nothing about the other.
 
-- 225 pairs have an interval that excludes zero, and none of them is negative: no pair is credibly less likely to co-occur than chance.
-- The strongest are between close relatives (the *Rattus* species), between livestock (cattle and buffalo), and between the dhole and *Canis lupus*, a name that also covers domestic dogs.
+- 235 pairs have an interval that excludes zero, and none of them is negative: no pair is credibly less likely to co-occur than chance.
+- The strongest are between close relatives (*Rattus nitidus* with *R. tanezumi* and the shrews *Episoriculus leucops* with *E. caudatus*).
+- Some of these associations might be caused by taxonomic over-splitting, in which one species is represented by two or more OTUs.
 
 An association is not an interaction. Two species can co-occur because they share an unmeasured habitat, because DNA from both is washed into the same water, or because they really do interact. The table is a place to start asking, not an answer.
 
-> Click on `assoc` in the Environment tab and look for the dhole (*Cuon alpinus*). Which species go with it, and which of the three explanations above seems most likely for each?
+> Click on `assoc` in the Environment tab and look for the dhole (*Cuon alpinus*). Which species go with it, and which of the three explanations above seems most likely for each? Hint: you can use the Filter button in the RStudio viewer to search for *Cuon*.
 
 ```{r mcp, echo = FALSE, results = "asis", eval = !mcp_off}
 cat('**Ask the assistant.** Posit Assistant can help you write R against the tables above. Try these, and read the code it writes before you run it.
@@ -671,8 +769,10 @@ The assistant is a helper for R here. The occJSDM tools it used on Wednesday nee
 
 ## What you take away
 
-- A joint model gives a probability of presence for every species at every site, with the false positives accounted for.
+- A joint model gives two probabilities of presence for every species at every site, with the false positives accounted for. `psi_mean` is for a site with these characteristics; `cond_mean` adds the species' own detections there. Comparing them shows which weak detections might still be real.
 - Check convergence for every species, and know which ones are flagged.
+- Detection quality (`p` and `q`) varies a lot between species. For some, the raw detections overstate where they live.
 - Expected richness and raw richness tell different stories.
-- With human modification held fixed, most species are more likely present at reserve sites, threatened or not. That is an association, not proof that protection works.
+- Whether the reserves matter is a species-by-species question. With human modification held fixed, nine wild species are credibly more likely present at reserve sites, most of them in one southwest corner, and one is credibly less likely. For most species the data cannot tell, and the domestic species tend to sit towards the bottom of the reserve figure. That is an association, not proof that protection works.
+- The associations left after the covariates are a place to start asking which species go together, not an answer.
 - Session 4 uses `occupancy_long.csv` to ask where to protect.

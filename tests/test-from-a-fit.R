@@ -18,7 +18,7 @@ session3_tables <- function() {
   withr::with_dir(root, for (label in c("load", "fit-tables")) {
     invisible(capture.output(eval(parse(text = chunk(label)), envir = e)))
   })
-  e$save_code <- chunk("save-for-session-4")
+  e$save_code <- sub("^# ?", "", chunk("save-for-session-4"))   # the chunk is commented out so it cannot run by accident
   e
 }
 

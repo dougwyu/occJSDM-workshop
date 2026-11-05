@@ -27,13 +27,13 @@ library(highs)        # the solver prioritizr uses here
 
 ## How do we turn probabilities into a plan?
 
-Session 3 gave us the probability that each of 108 mammals is present at each of 101 sites. A manager has a different question: which sites should we protect, given that we cannot protect them all?
+Session 3 gave us the probability that each of 108 mammals is present at each of 101 sites. A manager has a different question: **which sites should we protect, if we cannot protect them all?**
 
-Systematic conservation planning answers that with three ingredients.
+Systematic conservation planning answers this question with three inputs.
 
 - **Features**: what we want to protect. Here, each species, with its probability of presence at each site.
-- **Targets**: how much of each feature is enough. Here, 50% of a species' total probability of presence.
-- **Costs and a budget**: what protecting a site costs, and how much we can spend.
+- **Targets**: how much of each feature (species) is enough. Here, we target protecting ≥50% of a species' total probability of presence.
+- **Costs and a budget**: what protecting a site costs, and how much total we can spend.
 
 The plan is the set of sites that comes closest to meeting every target within the budget. We use the `prioritizr` package. Our planning units are the 101 surveyed sites, because that is where we have data.
 
@@ -270,7 +270,7 @@ cov_equal |> summarise(met = sum(held >= target - 1e-9), of = n())
 
 Click on `cov_equal` in the Environment tab to view it. It has one row per species, with the share of its presence that the plan holds (`held`).
 
-Only 38 of the 108 species meet their target. With 20 sites, the plan cannot hold half of every species.
+Only 32 of the 108 species meet their target. With 20 sites, the plan cannot hold half of every species.
 
 ### What did we just do?
 
@@ -346,7 +346,7 @@ bind_rows(
             .groups = "drop")
 ```
 
-The two plans share 18 of their 20 sites. Swapping just 2 sites raises the number of threatened species that meet their target from 3 to 5, out of 12.
+The two plans share 17 of their 20 sites. Swapping just 3 sites raises the number of threatened species that meet their target from 3 to 4, out of 12.
 
 > **Discuss.** Did weighting help the species we care about most? What did it cost the others? There is no right answer, only a trade-off that a manager has to choose.
 
@@ -381,7 +381,7 @@ bind_rows(
             .groups = "drop")
 ```
 
-The plan now picks less modified sites, and so it can afford 31 sites instead of 20.
+The plan now picks less modified sites, and so it can afford 32 sites instead of 20.
 
 > Look at the map of Plan 3. Where did the extra sites end up? Do you think the threatened species still do as well?
 
@@ -424,13 +424,13 @@ plot_plan(plan_wild,
           "Plan 4: wild species only, Red List weights, cost = human modification")
 ```
 
-Leaving out the 9 domestic species keeps 99 species in the plan and changes 6 sites from Plan 3.
+Leaving out the 9 domestic species keeps 99 species in the plan and changes 7 sites from Plan 3.
 
 > Why would leaving out livestock move any sites at all?
 
 ## How much of each plan is already protected?
 
-Session 3 found that most species are more likely to be present where the stream rises inside a reserve. So we might expect the plans to pick reserve sites. Do they? We count, for each plan, how many of its sites are inside a reserve.
+Session 3 found that nine wild species are credibly more likely to be present where the stream rises inside a reserve, and that for most species the data cannot tell. Do the plans pick reserve sites? We count, for each plan, how many of its sites are inside a reserve.
 
 ```{r reserve-overlap}
 inside_reserve <- sites |>
@@ -456,7 +456,7 @@ sites |> summarise(sites_inside_reserve = sum(streamOrigin == "insideGLGS"),
                    of = n())
 ```
 
-Only 51 of the 101 sites are inside a reserve, but every plan puts about four in five of its sites there.
+Only 51 of the 101 sites are inside a reserve, about half, but every plan puts two in three to three in four of its sites there (0.65 to 0.73). That is more than the half that picking sites at random would give, but with only 20 to 33 sites in a plan, part of the difference could be chance.
 
 > **Discuss.** If most of a plan's sites are already inside a reserve, the plan mainly says "keep protecting what is protected". The sites it picks outside the reserves are the new proposals. Which are they, and which species do they serve? Is a reserve site worth paying for, if it is protected already?
 

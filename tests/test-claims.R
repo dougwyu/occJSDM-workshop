@@ -97,18 +97,6 @@ test_that("Session 2: the saved dhole fit supports the text", {
   expect_true(all(b$q2.5 < 0 & b$q97.5 > 0))        # "every interval here crosses it"
   cond <- computeConditionalOccupancyProbs(fit)[, 1]
   expect_gt(mean(cond < 0.1 | cond > 0.9), 0.5)     # "most sites are close to certain"
-  joint <- f$occ[f$occ$species == "Cuon alpinus", ]
-  expect_gt(cor(cond[joint$Site], joint$cond_mean), 0.9)   # Session 3: "both fits agree"
-})
-
-test_that("Session 3: no mammal-wide effect for the dhole excludes zero, and the intervals are not more precise", {
-  eff <- readRDS(derived_path("dhole_check.rds"))$effects
-  expect_true(all(eff$lo < 0 & eff$hi > 0))         # as in the one-species fit, every interval crosses zero
-  fit <- readRDS(derived_path("dhole_fit.rds"))
-  invisible(capture.output(diag <- occJSDM::returnConvergenceDiagnostics(fit)))
-  single <- diag[diag$param == "beta_psi", ]
-  width_joint <- (eff$hi - eff$lo)[match(single$label1, eff$covariate)]
-  expect_gt(mean(width_joint > single$q97.5 - single$q2.5), 0.5)   # "mostly wider, not narrower"
 })
 
 test_that("Session 3: convergence counts quoted in the text", {
