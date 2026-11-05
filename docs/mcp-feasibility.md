@@ -22,10 +22,12 @@ Doug built the shared template project from the GitHub repository and installed 
 - **Cache warming.** Assistant's "Keep prompt cache warm by sending keepalive pings" was on, for 30 minutes. It was turned off in the template, because idle students would pay for pings. Whether this setting travels with a copied project is not yet known.
 - **Git.** `.gitignore` now covers `mcp/`, `artifacts/` (where the MCP writes every call's output and its fit registry) and `.posit/assistant`. A commit from the Cloud project therefore cannot pick up the runtime or the Assistant settings.
 - **Before sharing.** `artifacts/` held the test fits and was deleted, so student copies start without them. The MCP recreates it on its next call, so clear it again after any later test in the template. Assistant keeps no chat history in the project: `.posit/assistant` holds only `settings.json`.
+- **Session 3 in 4.5 GB.** It runs. The `returnConvergenceDiagnostics(fit_full)` line in the `fit-tables` chunk takes about a minute (8 seconds on the laptop), and R's memory peaks at about 3.7 GB (3.2 GB on the laptop), which leaves about 0.8 GB. Students must restart R before Session 3. The minute is mostly coda's `gelman.diag()`, which builds full covariance matrices across each parameter block even for one R-hat per parameter: on the laptop the 972 occupancy effects alone take 5 seconds. It is single-threaded R code, so more CPUs would not help. Doug will tell students the line takes about a minute.
+- **BLAS threads.** The container sees 16 cores but may use 2 (`nproc` 16; `cpu.max` 200000 100000). OpenBLAS starts a thread per visible core, so small matrix work in the main R session queued: the diagnostics line had used 3 minutes of CPU at 230% before it was stopped. `.Renviron` (commit 98da336) sets `OPENBLAS_NUM_THREADS=1` for every copy. It does not affect the occJSDM fits, which set their own threads, or the MCP, which runs R with `--vanilla`.
 
 ## Findings that change the session text
 
-- **The same seed gives different fits on the laptop and on Cloud.** With seed 2026 the laptop flags 3 of 16 parameters (the rain effect on `rhat`, 1.03; `p` and `q` on `ess`, 215 and 203). On Cloud, both the MCP fit and Session 2's own live fit in R flag 2 (`p` and `q`, `ess` 218 and 239); the two Cloud fits match each other, and the Cloud live fit is not identical to the saved laptop fit (`data-derived/dhole_fit.rds`). The cause is floating-point differences between the platforms (Apple's Accelerate on the laptop, Linux on Cloud), which make the chains follow different paths. Students will see the Cloud numbers, so Session 2's prose and its saved fallback fits should come from a Cloud run. The rain effect's `rhat` flag on the laptop was borderline, and the text should not rest on it.
+- **The same seed gives different fits on the laptop and on Cloud.** With seed 2026 the laptop flags 3 of 16 parameters (the rain effect on `rhat`, 1.03; `p` and `q` on `ess`, 215 and 203). On Cloud, both the MCP fit and Session 2's own live fit in R flag 2 (`p` and `q`, `ess` 218 and 239); the two Cloud fits match each other, and the Cloud live fit is not identical to the saved laptop fit (`data-derived/dhole_fit.rds`). The cause is floating-point differences between the platforms (Apple's Accelerate on the laptop, Linux on Cloud), which make the chains follow different paths. Students see the Cloud numbers, so Session 2's saved fallback fits now come from a Cloud render, and its prose and tests follow them (commit 85edb7c; see `REFIT-NOTES.md`).
 - **Step 2 of the MCP section must give the detection threshold.** Asked to fit without one, the assistant asks for it, and students may not know the answer (1, as in the session's own fits). Giving the seed (2026) as well lets students compare the assistant's diagnostics with their own.
 - **The assistant raised covariate scaling, which does not apply.** After `validate_data` it suggested checking the covariates' scales before fitting. `runOccJSDM()` rescales numeric covariates itself, so this is a dead end for students.
 - **Haiku 5.5 made one stray tool call.** During `diagnostics` it called a shell tool as a "no-op placeholder", which did nothing. Worth watching for in class.
@@ -33,10 +35,9 @@ Doug built the shared template project from the GitHub repository and installed 
 ## Still to do
 
 1. Record the time for `source("setup/00-install.R")` on Cloud.
-2. Knit Session 2 on Cloud with `WORKSHOP_NO_MCP=1`, compare its numbers with the text, and save the Cloud fits as the fallback files.
-3. Run Session 3 on Cloud in a 4.5 GB session and record the memory peak of the `fit-tables` chunk (laptop: about 3.2 GB, 15 seconds).
-4. Check that `settings.json` holds no OpenRouter key, then make a fresh copy of the template from a second account. Confirm `check_setup()` is all `[ok]`, the server shows as Connected, one `validate_data` call works, and whether cache warming is still off.
-5. Run `validate_data` on `data-derived/mammal_input.rds`.
-6. Set the spending cap on the OpenRouter key.
+2. Add a comment above the diagnostics line in `03-many-species.Rmd` saying it takes about a minute, and make sure Session 3 opens by telling students to restart R.
+3. Check that `settings.json` holds no OpenRouter key, then make a fresh copy of the template from a second account. Confirm `check_setup()` is all `[ok]`, the server shows as Connected, one `validate_data` call works, and whether cache warming is still off.
+4. Run `validate_data` on `data-derived/mammal_input.rds`.
+5. Set the spending cap on the OpenRouter key.
 
 If the MCP fails in a fresh copy, the fallback is the non-AI route in `class/non-ai-workflow.R`, with the MCP as an instructor demonstration. Doug decides.
