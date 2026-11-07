@@ -2,6 +2,8 @@
 
 Run on 1 November 2026 from the cached fit (`analysis/dhole-check.R`, draws from `fit_Mammal_d4_fixed.rds`). **Verdict: pass, with a caution about what to teach.**
 
+**Out of date (4 Nov 2026).** This check used the old fixed-prior fit. In the community-prior fit the sessions now use, the dhole's Southwest effect no longer excludes zero (-1.09, 95% interval -3.77 to 1.65), and all 9 of its mammal-wide intervals cross zero. `data-derived/dhole_check.rds` was rebuilt from the new fit, but this page was not rewritten. See `docs/fits.md`.
+
 ## What the fit says about the dhole (*Cuon alpinus*)
 
 - The dhole's chains have settled: the largest R-hat is 1.002 for its detection parameters and 1.03 for its occupancy effects (occJSDM's `returnConvergenceDiagnostics()`). That is not true of every species in this fit; see `docs/instructor-notes.md`. True-positive rate 0.55 (95% interval 0.46 to 0.64), false-positive rate 0.023 (0.013 to 0.034).

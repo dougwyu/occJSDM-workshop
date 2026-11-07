@@ -1,5 +1,5 @@
 # Where does the mammal fit's reserve effect come from?
-# Reads the derived files only; prints the numbers quoted in REFIT-NOTES.md
+# Reads the derived files only; prints the numbers quoted in docs/fits.md
 # ("Where the reserve effect comes from"). Run from the repository root.
 # Detections here are raw: a site counts if any PCR of the species was positive,
 # so false positives are included.

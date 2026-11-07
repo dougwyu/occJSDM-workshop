@@ -17,7 +17,7 @@
 - Students can read tidyverse and ggplot2 code and no more. All plots are ggplot2.
 - Dataset: Ji et al. (2025) Gaoligongshan survey, Zenodo DOI 10.5281/zenodo.17113196. Mammals: 101 sites, 108 species.
 - The 101 sites are the SCP planning units. No prediction over the landscape.
-- Pin occJSDM to `6256791d4e16b20a5aa3cdc8252a11a8955fbb28` (main, fixed intercept prior), the commit that produced `fit_Mammal_d4_fixed.rds`. Move to `553e37c` (PR 36) only if the community-prior fit is shown instead.
+- Pin occJSDM to `6256791d4e16b20a5aa3cdc8252a11a8955fbb28` (main, fixed intercept prior), the commit that produced `fit_Mammal_d4_fixed.rds`. Move to `553e37c` (PR 36) only if the community-prior fit is shown instead. **Superseded:** the fits were remade with the community prior at `1b4a2cd` on 4 Nov 2026, and the pin is now `5cba0db` (`v0.3.0-beta`, 5 Nov 2026); see `docs/fits.md`.
 - Live sessions use cached fits only. No live refits.
 - Wednesday species: the dhole (*Cuon alpinus*). If it fails the acceptance check in Task 6, stop and report to Doug. Do not swap silently.
 - SCP cost is `Human_modification_1km`. Weightings come from Red List status in `glgs/data/SP_withBODYSIZE.txt`. SCP uses posterior mean occupancy, and the sessions say so.
