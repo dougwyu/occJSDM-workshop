@@ -15,7 +15,7 @@ As before, the first code chunk is only for the workshop, and the second loads t
 
 ```{r workshop-setup}
 source("setup/pins.R")
-use_workshop_lib()                  # use the packages installed for the workshop
+use_workshop_lib()            # for testing only; it does nothing here
 mcp_off <- Sys.getenv("WORKSHOP_NO_MCP") == "1"
 ```
 
@@ -23,75 +23,45 @@ mcp_off <- Sys.getenv("WORKSHOP_NO_MCP") == "1"
 library(tidyverse)
 library(prioritizr)   # systematic conservation planning
 library(highs)        # the solver prioritizr uses here
+library(patchwork)    # multiple plots
 ```
 
-## How do we turn probabilities into a plan?
+## How do we turn occupancy probabilities into a conservation plan?
 
-Session 3 gave us the probability that each of 108 mammals is present at each of 101 sites. A manager has a different question: **which sites should we protect, if we cannot protect them all?**
+Session 3 gave us the probability that each of 108 mammals is present at each of 101 sites.
+
+A manager has a different question: **Which sites should we protect, if we cannot protect them all?**
 
 Systematic conservation planning answers this question with three inputs.
 
-- **Features**: what we want to protect. Here, each species, with its probability of presence at each site.
+- **Features**: the things we want to protect. Usually, features = species, and for each species, we need to know its probability of presence at each site.
 - **Targets**: how much of each feature (species) is enough. Here, we target protecting ≥50% of a species' total probability of presence.
 - **Costs and a budget**: what protecting a site costs, and how much total we can spend.
 
 The plan is the set of sites that comes closest to meeting every target within the budget. We use the `prioritizr` package. Our planning units are the 101 surveyed sites, because that is where we have data.
 
-How does `prioritizr` find the plan? With 101 sites and room for 20, there are more than 10^20^ possible sets of sites, far too many to try one by one. So `prioritizr` writes the problem as a set of equations and hands it to a solver (here `highs`), which can rule out large groups of poor answers at once. The solver looks for the set of sites that stays within the budget and leaves the smallest total shortfall: for each species, how far it falls short of its target, multiplied by the species' weight.
+How does `prioritizr` find the plan? With 101 sites and room for 20, there are more than 10^20^ possible sets of sites, far too many to try one by one.
 
-First we read the data and set the planning choices.
-
-```{r inputs}
-occ <- read.csv("data-derived/occupancy_long.csv")
-status <- read.csv("data-derived/species.csv")
-info <- read.csv("data-derived/info.csv")
-
-# one row per site, as in Session 1
-sites <- info |>
-  distinct(Site, .keep_all = TRUE) |>
-  select(-Sample, -Primer, -Filter_vol, -PrevDayRain) |>
-  arrange(Site)
-
-# the three columns the plan needs
-occ_in <- occ |> select(Site, species, cond_mean)
-
-# two ways to cost a site, one row per site
-cost_equal <- sites |> select(Site) |> mutate(cost = 1)
-cost_human <- sites |> select(Site, cost = Human_modification_1km)
-
-# protect 20% of the sites, and aim for 50% of each species
-budget_frac <- 0.2
-target <- 0.5
+```{r}
+choose(101, 20) # how many combinations of 20 can be selected out of 101?
 ```
 
-Click on `occ` in the Environment tab to view it.
+So `prioritizr` writes the problem as a set of equations and hands it to a solver (the package called `highs`), which can rule out large groups of poor answers at once. The solver looks for the set of sites that stays within the budget and leaves the smallest total shortfall: for each species, how far it falls short of its target, multiplied by the species' weight.
 
-- It is the long table saved at the end of Session 3: one row per site and species.
-- `cond_mean` is the probability that the species is present at the site, given the detections.
-- `psi_mean` is the probability that a site with these characteristics is occupied. It is what the maps in Ji et al. (2025) show.
-- The other columns carry each species' taxonomy and Red List status.
+## First, a plan where we know the answer
 
-We plan with `cond_mean`. A plan should protect the sites where a species actually is, and `cond_mean` is the probability that uses what the survey found at each site: a site where the species was detected again and again counts fully, and one whose few detections the model judged to be false positives counts for little. `psi_mean` leaves out each site's own detections, so it rates sites by their covariates alone. You can try planning with it in the group exercise.
-
-> `occ` has 10,908 rows. Can you see where that number comes from?
-
-We start by treating every site as equally expensive and allowing 20% of them, which is 20 sites. Costs come later.
-
-## Which 20 sites should we protect if every species counts equally?
-
-### First, a plan where we know the answer
-
-Before we plan for 108 species, we try `prioritizr` on a survey small enough to solve in our heads: four sites, three species, and a budget of two sites.
+Before we plan for 108 species, we learn to use `prioritizr` on a survey that is small enough that we can solve it in our heads: 4 sites, 3 species, and a budget of 2 sites. In other words, which 2 sites should we pick out of 4 possible?
 
 ```{r toy}
 # one row per site: its id, its cost, and each species' probability of presence
+# pu = planning unit. this is a term from conservation planning
 toy_pu <- tibble(id = 1:4,
                  cost = 1,
                  species_A = c(0.9, 0.8, 0, 0),
                  species_B = c(0.9, 0.8, 0, 0),
                  species_C = c(0, 0, 0.9, 0))
 
-toy_solution <- problem(toy_pu,
+toy_solution <- prioritizr::problem(toy_pu,
                         features = c("species_A", "species_B", "species_C"),
                         cost_column = "cost") |>
   # get as close to every target as a budget of 2 sites allows
@@ -100,7 +70,7 @@ toy_solution <- problem(toy_pu,
   add_relative_targets(0.5) |>
   # each site is either protected or not
   add_binary_decisions() |>
-  add_highs_solver(verbose = FALSE) |>
+  add_highs_solver(verbose = TRUE) |>
   solve(run_checks = FALSE)
 
 toy_solution
@@ -108,14 +78,59 @@ toy_solution
 
 Click on `toy_pu` in the Environment tab to view it. This is the table `prioritizr` wants: one row per planning unit (site), its cost, and one column per feature (species) holding its amount at that site.
 
+> Before looking at the solution, which 2 sites should we protect? Remember that our goal is to protect at least 50% of each species' total probability of presence.
+
+Click on `toy_solution` in the Environment tab to view it:
+
+- This is the same table as `pu` plus one more column: `solution_1`
 - Sites 1 and 2 are the richest: each holds species A and B. Site 3 is the only site with species C, and site 4 has nothing.
 - If we simply protected the two richest sites (1 and 2), species C would get nothing.
-- The plan (`solution_1`) picks sites 1 and 3 instead. Site 1 alone holds 0.9 of species A's total of 1.7, and the same share of species B, which meets their 50% targets, and site 3 holds all of species C.
-- So a plan does not simply pick the richest sites. It picks sites that complement each other, so that together they meet the targets.
+- The plan (`solution_1`) picks sites 1 and 3. Site 1 alone holds 0.9 of species A's total of 1.7, and the same share of species B, which meets their 50% targets, and site 3 holds all of species C.
+- So a plan does not simply pick the richest sites. **Pick sites that complement each other, so that together they meet the targets**.
 
-### The plan for 108 species
+## Which 20 sites should we protect if every species counts equally?
 
-We make the same kind of table for the real survey from `occ_in` with `pivot_wider()`.
+Now we make conservation plans for the 108 mammals in 101 sites. First we read the data and set the planning choices.
+
+```{r inputs}
+occ <- read.csv("data-derived/occupancy_long.csv")
+status <- read.csv("data-derived/species.csv")
+info <- read.csv("data-derived/info.csv")
+
+# create a table with one row per site, as in Session 1
+sites <- info |>
+  distinct(Site, .keep_all = TRUE) |>
+  select(-Sample, -Primer, -Filter_vol, -PrevDayRain) |>
+  arrange(Site)
+
+# create a table with the three columns that the plan needs
+occ_in <- occ |> select(Site, species, cond_mean)
+
+# we create 2 cost tables for 2 different scenarios. one where every site costs the same and one where the cost of conservation is higher where there is more human modification (farming, housing, roads), one row per site
+cost_equal <- sites |> select(Site) |> mutate(cost = 1)
+cost_human <- sites |> select(Site, cost = Human_modification_1km)
+
+# we set a conservation target and a budget limit:  
+target <- 0.5 # and aim to protect 50% of each species' expected occupied sites
+budget_frac <- 0.2 # spend ≤20% of what protecting every site would cost. So if every site costs the same, we protect 20 (~ 20/101) sites. If sites cost different amounts, then spend 20% of what it would cost to protect all 101 sites. This means that we can protect more than 20 sites if we protect the cheap ones. 
+```
+
+Click on `occ` in the Environment tab to view it.
+
+- It is the long table saved at the end of Session 3: one row per site and species.
+- `cond_mean` is the probability that the species is present at the site, taking into accoun the data from each site's detections.
+- `psi_mean` is the probability that a site with these covariates is occupied (not taking into account the detections in that site). It is what the maps in Ji et al. (2025) show.
+- The other columns carry each species' taxonomy and Red List status.
+
+In this lesson, we will use with `cond_mean`. `psi_mean` leaves out each site's own detections, so it rates sites by their covariates alone. You can try planning with it in the group exercise.
+
+> `occ` has 10,908 rows. Can you see where that number comes from?
+
+We start by treating every site as equally expensive and allowing 20% of them, which is 20 sites. Costs come later.
+
+### 1. Baseline conservation plan for 108 species: equal species weights and site costs
+
+We `pivot_wider()` to reformat `occ_in` so that it has the same dimensions as `toy_pu`.
 
 ```{r planning-units}
 pu <- occ_in |>
@@ -136,30 +151,47 @@ Click on `pu` in the Environment tab to view it.
 
 > `pu` has 111 columns, but there are only 108 species. What are the other three columns?
 
-Every species gets weight 1, so a shortfall for any species counts the same. Now we set up the problem and solve it.
+Every species gets weight 1, so this exercise does not try to save some species over others (of course, we usually weight some species more than others).
+
+Now we set up the baseline planning problem.
 
 ```{r baseline}
+# we create a species weight table, here all with the same weight
 w_equal <- status |> select(species) |> mutate(weight = 1)
 
+# set up the problem
+# see below for why we need the features and cost_column arguments
 problem_equal <- problem(pu,
-                         features = w_equal$species,
+                         features = w_equal$species, 
                          cost_column = "cost") |>
   # get as close to every target as the budget allows
   add_min_shortfall_objective(budget = budget_frac * nrow(pu)) |>
   # each target: this share of the species' total
   add_relative_targets(target) |>
-  # how much each species' shortfall counts
+  # how much each species counts
   add_feature_weights(w_equal$weight) |>
   # each site is either protected or not
   add_binary_decisions() |>
   # a near-best answer, within 30 seconds
   add_highs_solver(gap = 0.01,
                    time_limit = 30,
-                   verbose = FALSE)
+                   verbose = TRUE)
+```
 
+The `prioritizr::problem()` command does not know which columns in `pu` are species or costs, so you have to tell it.
+
+- The `features = w_equal$species` argument gives prioritizr the names of the columns that hold the species data.
+- The `cost_column = "cost"` argument gives prioritizr the name of the site cost column.
+- `add_relative_targets(target)` uses the consevation target that we defined previously: `target <- 0.5`.
+
+Now we solve the baseline planning problem
+
+```{r baseline-solution}
+# solve the problem
 solution <- solve(problem_equal, run_checks = FALSE)
 
-# one row per site: TRUE if it is in the plan
+# summarise the solution, with one row per site: 
+# TRUE means that the site is in the conservation plan
 plan_equal <- solution |>
   mutate(selected = solution_1 == 1) |>
   select(Site, selected)
@@ -167,7 +199,121 @@ plan_equal <- solution |>
 count(plan_equal, selected)
 ```
 
-We will build several plans, changing one ingredient at a time. So we put the same steps in a function. A species with weight 0 is left out of the plan altogether.
+`prioritizr` outputs are known as **plans**.
+
+Click on `plan_equal` in the Environment tab to view it. It is just a list of the sites. 20 are selected for conservation, and 81 are not.
+
+Now let's map the sites in `plan_equal`. We start with the plainest map: each point is a site, and red sites are in the plan, and remember that we have the site locations in the `sites` table.
+
+```{r plan-map-plain}
+sites |>
+  left_join(plan_equal, by = "Site") |> # first we join the tables
+  ggplot(aes(Xs.1, Xs.2, colour = selected)) + # identify the coordinates
+  geom_point(size = 2.5) + # map
+  scale_colour_manual(values = c(`TRUE` = "firebrick", `FALSE` = "grey75")) +
+  coord_quickmap() + 
+  labs(x = "Longitude", y = "Latitude", colour = "In the plan") +
+  theme_minimal()
+```
+
+> Are the 20 chosen sites bunched together, or spread out?
+
+This map cannot tell us which chosen sites are already protected. So we add a shape for the existing Gaoligongshan nature reserves: triangles are sites whose stream rises inside a reserve, circles are outside them.
+
+We will map several **plans**, so we put the mapping code in a function called `plot_plan()`. The function adds a title and legends, and marks the sites by whether they are in a reserve.
+
+```{r plot-helper}
+plot_plan <- function(plan, title) {
+  sites |>
+    left_join(plan, by = "Site") |>
+    mutate(reserve = if_else(streamOrigin == "insideGLGS", "inside", 
+                             "outside")) |>
+    ggplot(aes(Xs.1, Xs.2, colour = selected, size = selected, 
+               shape = reserve)) +
+    geom_point() +
+    scale_colour_manual(values = c(`TRUE` = "firebrick", `FALSE` = "grey75"),
+                        labels = c(`TRUE` = "yes", `FALSE` = "no"),
+                        name = "In the plan") +
+    # chosen sites are drawn larger, so they stand out
+    scale_size_manual(values = c(`TRUE` = 4, `FALSE` = 1.8),
+                      guide = "none") +
+    scale_shape_manual(values = c(inside = 17, outside = 16),
+                       name = "Stream rises in\na reserve") +
+    coord_quickmap() +
+    labs(x = "Longitude", y = "Latitude", title = title) +
+    theme_minimal()
+}
+
+# map plan_equal again
+p1 <- plot_plan(plan_equal, "Plan 1: equal weights, equal costs"); p1
+```
+
+How well does the plan perform? For each species, `held` is the share of its total probability of presence inside the protected sites. **Our target was 50% of the sum of `cond_mean` for each species.** Did we achieve it for all the species?
+
+We make a function that sums `cond_mean` for each species, only in the conserved sites.
+
+In the histogram, each bar counts species.
+
+- Species to the right of the red dashed line meet their target.
+- Species to the left fall short by the distance to the line.
+
+```{r coverage-equal}
+# define the function
+coverage <- function(plan) { 
+  occ_in |>
+    left_join(plan, by = "Site") |> # join occ_in with plan, using site
+    group_by(species) |>
+    summarise(held = sum(cond_mean[selected]) / sum(cond_mean), 
+              .groups = "drop") # can you understand this?
+}
+
+# run the function
+cov_equal <- coverage(plan_equal) 
+
+# makea histogram of the proportion of cond_mean conserved for each species
+ggplot(cov_equal, aes(held)) +
+  geom_histogram(binwidth = 0.05, fill = "grey40") +
+  geom_vline(xintercept = target, linetype = 2, colour = "firebrick") +
+  labs(x = "Share of the species' presence held in protected sites",
+       y = "Number of species",
+       title = "Within this budget, many species fall short of the target") +
+  theme_minimal()
+
+# the tiny allowance (1e-9) stops rounding error from failing
+# a species that only just meets its target
+cov_equal |> summarise(met = sum(held >= target - 1e-9), of = n())
+```
+
+Click on `cov_equal` in the Environment tab to view it. It has one row per species, with the share of its presence that the plan holds (`held`).
+
+Only 32 of the 108 species meet their target. **With a budget of only 20 sites, the plan cannot achieve its target of holding half the occupancy of every species.**
+
+### What did we just do?
+
+- We tried `prioritizr` on a toy survey where we knew the answer, and saw that it picks sites that complement each other, not just the richest ones.
+- We then applied `prioritizr` on our real dataset with 108 mammal species.
+  - We turned the **long table** of probabilities into a **wide table** with one row per site, with one column per species (`pu`).
+  - We told `prioritizr` the budget, the target and the weights, and solved for the best set of 20 sites.
+  - We mapped the plan, and counted how many species meet their target.
+
+## A function to make more conservation plans
+
+We will build and solve three other planning problems, changing one aspect at a time.
+
+In programming, if you are going to repeat code three or more times, you should put the code into a function, so that you only have to maintain one thing. Thus, we create a function to make the input tables, set up the problem, and solve it. There are three arguments:
+
+- **`weights`**: a table with one row per species, with columns `species` and `weight`. This is where we make some **species** worth more than others.
+
+- **`cost`**: a cost table with one row per site, with columns `Site` and `cost` (`cost_equal` or `cost_human`). This is where we make some **sites** cost more than others.
+
+- **`budget`**: the total the plan may spend.
+
+`make_plan()` repeats the steps of the baseline plan above:
+
+- drop any species with weight 0, so it is left out of the plan altogether;
+- build the planning-unit table: one row per site, one column per species, plus its cost;
+- set up the problem for `prioritizr`: reach `target` (50%) of each species as closely as the budget allows, counting each species' shortfall by its weight;
+- use `prioritzr` to solve the problem, and return one row per site with `Site` and `selected` (`TRUE` if the site is in the plan).
 
 ```{r make-plan}
 make_plan <- function(weights, cost, budget) {
@@ -190,7 +336,7 @@ make_plan <- function(weights, cost, budget) {
     add_binary_decisions() |>
     add_highs_solver(gap = 0.01,
                      time_limit = 30,
-                     verbose = FALSE) |>
+                     verbose = TRUE) |>
     solve(run_checks = FALSE)
 
   solution |>
@@ -199,87 +345,7 @@ make_plan <- function(weights, cost, budget) {
 }
 ```
 
-Now let's map the plan. We start with the plainest map: each point is a site, and red sites are in the plan.
-
-```{r plan-map-plain}
-sites |>
-  left_join(plan_equal, by = "Site") |>
-  ggplot(aes(Xs.1, Xs.2, colour = selected)) +
-  geom_point(size = 2.5) +
-  scale_colour_manual(values = c(`TRUE` = "firebrick", `FALSE` = "grey75")) +
-  coord_quickmap() +
-  labs(x = "Longitude", y = "Latitude", colour = "In the plan") +
-  theme_minimal()
-```
-
-> Are the 20 chosen sites bunched together, or spread out?
-
-This map cannot tell us which chosen sites are already protected. So we add a shape for the existing Gaoligongshan nature reserves: triangles are sites whose stream rises inside a reserve, circles are outside them. We will map several plans, so we put the map in a function.
-
-```{r plot-helper}
-plot_plan <- function(plan, title) {
-  sites |>
-    left_join(plan, by = "Site") |>
-    mutate(reserve = if_else(streamOrigin == "insideGLGS", "inside", "outside")) |>
-    ggplot(aes(Xs.1, Xs.2, colour = selected, size = selected, shape = reserve)) +
-    geom_point() +
-    scale_colour_manual(values = c(`TRUE` = "firebrick", `FALSE` = "grey75"),
-                        labels = c(`TRUE` = "yes", `FALSE` = "no"),
-                        name = "In the plan") +
-    # chosen sites are drawn larger, so they stand out
-    scale_size_manual(values = c(`TRUE` = 4, `FALSE` = 1.8),
-                      guide = "none") +
-    scale_shape_manual(values = c(inside = 17, outside = 16),
-                       name = "Stream rises in\na reserve") +
-    coord_quickmap() +
-    labs(x = "Longitude", y = "Latitude", title = title) +
-    theme_minimal()
-}
-
-plot_plan(plan_equal, "Plan 1: equal weights, equal costs")
-```
-
-How well does the plan do? For each species, `held` is the share of its total probability of presence inside the protected sites. The target is 0.5. In the histogram, each bar counts species.
-
-- Species to the right of the red dashed line meet their target.
-- Species to the left fall short by the distance to the line.
-
-```{r coverage-equal}
-coverage <- function(plan) {
-  occ_in |>
-    left_join(plan, by = "Site") |>
-    group_by(species) |>
-    summarise(held = sum(cond_mean[selected]) / sum(cond_mean),
-              .groups = "drop")
-}
-
-cov_equal <- coverage(plan_equal)
-
-ggplot(cov_equal, aes(held)) +
-  geom_histogram(binwidth = 0.05, fill = "grey40") +
-  geom_vline(xintercept = target, linetype = 2, colour = "firebrick") +
-  labs(x = "Share of the species' presence held in protected sites",
-       y = "Number of species",
-       title = "Within this budget, many species fall short of the target") +
-  theme_minimal()
-
-# the tiny allowance stops rounding error from failing
-# a species that only just meets its target
-cov_equal |> summarise(met = sum(held >= target - 1e-9), of = n())
-```
-
-Click on `cov_equal` in the Environment tab to view it. It has one row per species, with the share of its presence that the plan holds (`held`).
-
-Only 32 of the 108 species meet their target. With 20 sites, the plan cannot hold half of every species.
-
-### What did we just do?
-
-- We tried `prioritizr` on a toy survey where we knew the answer, and saw that it picks sites that complement each other, not just the richest ones.
-- We turned the long table of probabilities into one row per site, with one column per species (`pu`).
-- We told `prioritizr` the budget, the target and the weights, and solved for the best set of 20 sites.
-- We mapped the plan, and counted how many species meet their target.
-
-## What if threatened species count more?
+## 2. Give threatened species higher weights
 
 The Red List says that some species are closer to extinction. We can ask the plan to care more about them, by weighting each species by its IUCN category.
 
@@ -288,56 +354,77 @@ The Red List says that some species are closer to extinction. We can ask the pla
 - Where neither list has an entry, we give weight 1.
 - A weight of 3 or more is therefore what those sessions called threatened (VU, EN, CR).
 
+Our goal in this chunk is to replace the `w_equal` weights table with a new one: `w_redlist`. Everything else stays the same.
+
 ```{r weights}
+# we give each category a numerical weight
 category_weights <- tibble(category = c("CR", "EN", "VU", "NT", "LC", "DD"),
                            weight   = c(5, 4, 3, 2, 1, 1))
 
+# we weight the species according to their category
 w_redlist <- status |>
   # IUCN first, then the China Red List
   mutate(category = coalesce(iucn, china_red_list)) |>
   left_join(category_weights, by = "category")
 
-# the species with no usable status
+# these are the species with no usable status
 w_redlist |> filter(is.na(weight)) |> select(species, iucn, china_red_list)
 
+
+# this is new weights table
+# set the species with no usable status to weight = 1
 w_redlist <- w_redlist |>
   mutate(weight = replace_na(weight, 1)) |>
   select(species, weight)
 
+# the number of species in each category
 count(w_redlist, weight)
 ```
 
-Click on `w_redlist` in the Environment tab to view it. It has one row per species, with its weight.
+Click on `w_redlist` in the Environment tab to view it. It has one row per species, with its weight. Click on the `weight` column to sort by weight.
 
-> 13 species have no status on either list. Which of them are domestic animals? Why might the wild ones have no status?
+12 species get weight ≥3: these are the threatened species.
 
-12 species get weight 3 or more: these are the threatened species. Now we make the plan again with the new weights.
+> Scroll up in the console. We found 13 species that have no status on either list. Which of them are domestic animals? Why might the wild ones have no status?
+
+Now we set up and solve the new conservation plan `plan_redlist`, using the new weights.
 
 ```{r weighted-plan}
-plan_redlist <- make_plan(w_redlist,
-                          cost_equal,
-                          budget = budget_frac * nrow(cost_equal))
-plot_plan(plan_redlist, "Plan 2: Red List weights, equal costs")
+plan_redlist <- make_plan(w_redlist, # new weights table
+                          cost_equal, # same cost table 
+                          budget = budget_frac * nrow(cost_equal)) 
+# the budget says we can save 0.2 * 101 = 20.2 sites, which really means 20 sites
+# this is the same rule we used for baseline. 
+
+# plot the new plan
+p2 <- plot_plan(plan_redlist, "Plan 2: Red List weights, equal costs"); p2
+
+p1 + p2 + plot_layout(guides = "collect") 
 ```
 
-How much did the choice of sites change, and who gained? First we count the sites the two plans share, then we compare how the threatened species do in each.
+> How much did the conservation plan (the conserved sites) change?
+
+First we count the sites the two plans share, then we compare how the threatened species do in each.
 
 ```{r compare-weights}
+# how many sites are only in plan_equal, how many are only in plan_redlist, and how many are in both?
 plan_equal |>
   left_join(plan_redlist, by = "Site", suffix = c("_1", "_2")) |>
-  summarise(only_plan_1 = sum(selected_1 & !selected_2),
+  summarise(size_plan_1 = sum(selected_1),
+            size_plan_2 = sum(selected_2),
+            only_plan_1 = sum(selected_1 & !selected_2),
             shared = sum(selected_1 & selected_2),
             only_plan_2 = sum(!selected_1 & selected_2))
 
-# Vulnerable or worse, on either Red List
+# the vulnerable or worse species, on either Red List
 threatened <- w_redlist |>
   filter(weight >= 3) |>
   pull(species)
 
+# compare the two plans. does plan_redlist cover more endangered species?
 bind_rows(
   coverage(plan_equal) |> mutate(plan = "Plan 1: equal weights"),
-  coverage(plan_redlist) |> mutate(plan = "Plan 2: Red List weights")
-) |>
+  coverage(plan_redlist) |> mutate(plan = "Plan 2: Red List weights")) |>
   filter(species %in% threatened) |>
   group_by(plan) |>
   summarise(threatened_species = n(),
@@ -346,16 +433,23 @@ bind_rows(
             .groups = "drop")
 ```
 
-The two plans share 17 of their 20 sites. Swapping just 3 sites raises the number of threatened species that meet their target from 3 to 4, out of 12.
+Each plan has 20 sites (determined by our budget):
 
-> **Discuss.** Did weighting help the species we care about most? What did it cost the others? There is no right answer, only a trade-off that a manager has to choose.
+- `only_plan_1` + `shared` for Plan 1
+- `only_plan_2` + `shared` for Plan 2
+- The two plans share 17 of their 20 sites
 
-## What if sites cost different amounts?
+Weighting the endangered species increases the number of endangered species that meet the target from 3 to 4, out of 12. A small gain.
 
-Protecting a heavily modified site is usually more expensive: land is more costly, and conflicts are likelier. We use the human modification of each site as a stand-in for cost. The budget is still 20%, now of the total cost of all sites.
+## Let the sites cost different amounts
+
+Protecting a human-modified site is usually more expensive because the land is being used for something. We use the human modification of each site as a stand-in for cost. The budget is still 20% of the total cost of all sites, but now some sites cost more, some less.
+
+Create a third plan. Continue weighting endangered species more.
 
 ```{r cost-plan}
 budget_human <- budget_frac * sum(cost_human$cost)
+
 plan_cost <- make_plan(w_redlist,
                        cost_human,
                        budget = budget_human)
@@ -363,12 +457,13 @@ plan_cost <- make_plan(w_redlist,
 plot_plan(plan_cost, "Plan 3: Red List weights, cost = human modification")
 ```
 
-Next we compare the sites that Plans 2 and 3 pick: how many, how modified, and their total cost.
+Next we compare the sites that Plans 2 and 3 pick: how many, how modified, and their total cost. The first row is all 101 sites, for reference.
 
 ```{r cost-compare}
 site_costs <- sites |> select(Site, Human_modification_1km)
 
 bind_rows(
+  sites |> select(Site) |> mutate(selected = TRUE, plan = "All 101 sites"),
   plan_redlist |> mutate(plan = "Plan 2: equal costs"),
   plan_cost |> mutate(plan = "Plan 3: cost = human modification")
 ) |>
@@ -381,9 +476,9 @@ bind_rows(
             .groups = "drop")
 ```
 
-The plan now picks less modified sites, and so it can afford 32 sites instead of 20.
+The budget is 20% of the total cost of all 101 sites, which buys 20 sites of average modification (0.35). Plan 3's sites average 0.22, so the same budget buys 32. Plan 2's sites were almost as unmodified (0.24), but with equal costs that saved nothing: every site cost the same.
 
-> Look at the map of Plan 3. Where did the extra sites end up? Do you think the threatened species still do as well?
+> Look at the map of Plan 3. Where are the extra sites? Do you think the threatened species still do as well?
 
 Run the next chunk to check your answer.
 
@@ -399,9 +494,9 @@ bind_rows(
             .groups = "drop")
 ```
 
-## Should livestock count?
+## Do not count domesticated animals
 
-Nine species in the data are domestic, such as cattle, buffalo and goats, and they are not conservation targets. We can leave them out of the plan by giving them weight 0.
+Nine species in the data are domestic, such as cattle, buffalo and goats, and they are not conservation targets. We leave them out of the plan by giving them weight = 0.
 
 ```{r wild-plan}
 w_wild <- w_redlist |>
