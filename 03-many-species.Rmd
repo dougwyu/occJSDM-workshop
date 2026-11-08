@@ -5,6 +5,9 @@ output:
     toc: true
     toc_float: true
     df_print: paged
+editor: visual
+editor_options:
+  chunk_output_type: console
 ---
 
 ```{r setup, include = FALSE}
@@ -16,7 +19,6 @@ As before, the first code chunk is only for the workshop, and the second loads t
 ```{r workshop-setup}
 source("setup/pins.R")
 use_workshop_lib()                  # use the packages installed for the workshop
-mcp_off <- Sys.getenv("WORKSHOP_NO_MCP") == "1"
 ```
 
 ```{r packages}
@@ -229,9 +231,9 @@ Click on `conv` in the Environment tab to view it. It has one row per species.
 - `sites_detected` is the number of sites where the species was detected.
 - `detection_settled`, `effects_settled` and `settled` say whether the species passes each check, and both.
 
-> Look at the `sites_detected` column of the second table. What do most of the unsettled species have in common? Which ones break the pattern?
+> Look at the `sites_detected` column of the second table the chunk printed in the Console, the list of unsettled species. What do most of the unsettled species have in common? Which ones break the pattern?
 
-Each panel below is a histogram of species. Species to the right of the red dashed line have at least one parameter whose chains have not settled.
+The next chunk draws a histogram of species for each check, in the Plots pane. Species to the right of the red dashed line have at least one parameter whose chains have not settled.
 
 ```{r rhat-plot}
 conv |>
@@ -429,7 +431,7 @@ takin |>
 
 > **Discuss.** A manager asks where the takin lives. Which map would you show, and why? Would your answer change if they asked which sites to check for takin with camera traps?
 
-The histogram below counts site-species pairs. Pairs at either end are settled; pairs in the middle are ones the data cannot decide. There are few of these.
+The next chunk draws a histogram, in the Plots pane, that counts site-species pairs. Pairs at either end are settled; pairs in the middle are ones the data cannot decide. There are few of these.
 
 ```{r certainty}
 ggplot(occ, aes(cond_mean)) +
@@ -756,16 +758,15 @@ An association is not an interaction. Two species can co-occur because they shar
 
 > Click on `assoc` in the Environment tab and look for the dhole (*Cuon alpinus*). Which species go with it, and which of the three explanations above seems most likely for each? Hint: you can use the Filter button in the RStudio viewer to search for *Cuon*.
 
-```{r mcp, echo = FALSE, results = "asis", eval = !mcp_off}
-cat('**Ask the assistant.** Posit Assistant can help you write R against the tables above. Try these, and read the code it writes before you run it.
+## Ask the assistant (optional)
 
-- Which species have a false-positive rate above 0.1, and what share of them are domestic?
-- Map the expected richness of carnivores only.
-- Which five species are most likely to be present at the site with the highest expected richness?
+Posit Assistant can help you write R against the tables in this session. In the Posit Assistant pane, try:
 
-The assistant is a helper for R here. The occJSDM tools it used on Wednesday need data and a new fit, which we do not do today.
-')
-```
+- *Which species have a false-positive rate above 0.1, and what share of them are domestic?*
+- *Map the expected richness of carnivores only.*
+- *Which five species are most likely to be present at the site with the highest expected richness?*
+
+Read the code it writes before you run it. Today the assistant only helps you write R. The occJSDM tools it used in Session 2 need data and a new fit, which we do not do in this session.
 
 ## What you take away
 

@@ -16,7 +16,7 @@ Doug edits markdown here using RStudio's *Visual* mode, which rewrites the whole
 
 - All plots are ggplot2. Students can read tidyverse code and no more.
 - Live sessions use cached fits only. Joins go by site name, never by row position.
-- Every session must render with `WORKSHOP_NO_MCP=1` so a failed key or server never blocks a student.
+- Every session must run and render without the assistant, so a failed key or server never blocks a student. The "Ask the assistant" sections are plain text, not code chunks, because students read the sessions in RStudio's Visual mode.
 - Helper functions in `R/` may hide only teaching prep (library paths, reading the prepared data). Any code students would run in their own analysis (ordination, plotting, prioritizr, extracting results from a fit) is written out in the session. Test it by running the session's own chunks, not a copy in `R/`.
 - Each session opens with a workshop-only setup chunk, then a separate chunk of `library()` calls.
 - The design is in `docs/design.md` and the build plan in `docs/plan.md`.

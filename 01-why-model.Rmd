@@ -5,6 +5,9 @@ output:
     toc: true
     toc_float: true
     df_print: paged
+editor: visual
+editor_options:
+  chunk_output_type: console
 ---
 
 ```{r setup, include = FALSE}
@@ -17,7 +20,6 @@ The first code chunk is only for the workshop. It points R at the workshop's pac
 source("setup/pins.R")
 use_workshop_lib()              # use the packages installed for the workshop
 source("R/schematic.R")         # data_schematic() and traits_schematic(): drawings of the tables
-mcp_off <- Sys.getenv("WORKSHOP_NO_MCP") == "1"
 ```
 
 The second loads some R packages, as you would in any analysis of your own.
@@ -632,6 +634,10 @@ Then we fit the same model to the real dhole data and try to find the false-nega
 - In a survey where we know the truth, the false negatives are plain to see, and in the data they look exactly like absences.
 - Session 2 builds that model for the dhole and maps it. Session 4 turns the answer for all species into a conservation plan.
 
-```{r mcp-note, echo = FALSE, results = "asis", eval = !mcp_off}
-cat("**Optional: ask the assistant.** In Posit Assistant, try: *Using the objects in my session, make the same map and table for the takin, Budorcas taxicolor.* The assistant helps you write R here. It does not use the occJSDM tools yet.\n")
-```
+## Ask the assistant (optional)
+
+In the Posit Assistant pane, try:
+
+- *Using the objects in my session, make the same map and table for the takin, Budorcas taxicolor.*
+
+Read the code it writes before you run it. Here the assistant only helps you write R. It does not use the occJSDM tools yet: they come in Session 2.

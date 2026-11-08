@@ -5,6 +5,9 @@ output:
     toc: true
     toc_float: true
     df_print: paged
+editor: visual
+editor_options:
+  chunk_output_type: console
 ---
 
 ```{r setup, include = FALSE}
@@ -16,7 +19,6 @@ As before, the first code chunk is only for the workshop, and the second loads t
 ```{r workshop-setup}
 source("setup/pins.R")
 use_workshop_lib()            # for testing only; it does nothing here
-mcp_off <- Sys.getenv("WORKSHOP_NO_MCP") == "1"
 ```
 
 ```{r packages}
@@ -652,12 +654,13 @@ In groups, choose one change and report how the plan responds.
 
 For each, say which sites move, and whether the answer would change what you tell a park manager.
 
-```{r mcp, echo = FALSE, results = "asis", eval = !mcp_off}
-cat('**Ask the assistant.** Posit Assistant can help you change the code above. Try: *Weight carnivores three times higher than other species and show me which sites move.* Read the code it writes before you run it, and check the result against the plan you already have.
+## Ask the assistant (optional)
 
-The occJSDM tools are not used in this session, because the plan is built from the finished fit, not from new data.
-')
-```
+Posit Assistant can help you change the code above. In the Posit Assistant pane, try:
+
+- *Weight carnivores three times higher than other species and show me which sites move.*
+
+Read the code it writes before you run it, and check the result against the plan you already have. The occJSDM tools are not used in this session, because the plan is built from the finished fit, not from new data.
 
 ## What you take away
 

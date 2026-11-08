@@ -6,7 +6,7 @@ The design is in `docs/design.md` and the build plan in `docs/plan.md`. Student 
 
 ## Installing the occJSDM MCP agent
 
-The MCP agent lets Posit Assistant check a data file, fit a model and read its diagnostics through four occJSDM tools: `validate_data`, `fit_model`, `diagnostics` and `summarise_fit`. It is optional: every session also runs without it, and rendering with `WORKSHOP_NO_MCP=1` leaves out the MCP steps. Its source is in the occJSDM repository under [`mcp/paper2agent`](https://github.com/AlexDiana/occJSDM/tree/main/mcp/paper2agent). For Posit Cloud, use the ready-made bundle, which also carries the occJSDM source it needs.
+The MCP agent lets Posit Assistant check a data file, fit a model and read its diagnostics through four occJSDM tools: `validate_data`, `fit_model`, `diagnostics` and `summarise_fit`. It is optional: every session runs without it, and each session's assistant section is plain text that students can skip. Its source is in the occJSDM repository under [`mcp/paper2agent`](https://github.com/AlexDiana/occJSDM/tree/main/mcp/paper2agent). For Posit Cloud, use the ready-made bundle, which also carries the occJSDM source it needs.
 
 1.  Download `occJSDM-cloud-pilot-v0.3.0.zip` from the occJSDM [v0.3.0-beta release](https://github.com/AlexDiana/occJSDM/releases/tag/v0.3.0-beta), and upload it to the root of the Posit Cloud project with the Files pane. Posit Cloud unpacks it into a folder called `occJSDM-mcp`. Delete the zip afterwards, so that it is not copied into every student's project.
 

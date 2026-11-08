@@ -5,6 +5,9 @@ output:
     toc: true
     toc_float: true
     df_print: paged
+editor: visual
+editor_options:
+  chunk_output_type: console
 ---
 
 ```{r setup, include = FALSE}
@@ -20,7 +23,6 @@ source("R/data.R")              # derived_path(), used by read_fit_summary()
 source("R/fit.R")               # read_fit_summary(): saved results of the model fitted to all mammals
 source("R/schematic.R")         # data_schematic() and traits_schematic(): drawings of the tables
 source("R/session1.R")          # session1_dhole_map(): Session 1's dhole figure, redrawn
-mcp_off <- Sys.getenv("WORKSHOP_NO_MCP") == "1"
 ```
 
 ```{r packages}
@@ -348,7 +350,7 @@ ggplot(map_long, aes(Xs.1, Xs.2)) +
 
 > **Discuss.** If you were the park manager, which map would you use to decide where to look for dholes? Why? What additional checks might you run?
 
-Each bar of the histogram below counts sites. Bars at the left are sites where the dhole is almost certainly absent, bars at the right where it is almost certainly present, and bars in the middle are sites the data cannot settle.
+The next chunk draws a histogram in the Plots pane. Each bar counts sites. Bars at the left are sites where the dhole is almost certainly absent, bars at the right where it is almost certainly present, and bars in the middle are sites the data cannot settle.
 
 ```{r certainty}
 ggplot(map_data, aes(model)) +
@@ -423,8 +425,8 @@ map_data |>
             expected_occupied = round(sum(model), 1))
 ```
 
-- **The false negatives.** Session 1 asked how many of the 60 empty circles are false negatives. The model's answer is about 1.8 sites (`expected_occupied` in the first table).
-- **In total**, adding up the probabilities over all 101 sites, the model expects the dhole at about 17 sites, against the 41 where it was detected (the second table).
+- **The false negatives.** Session 1 asked how many of the 60 empty circles are false negatives. The model's answer is about 1.8 sites (`expected_occupied` in the first of the two tables the chunk prints in the Console).
+- **In total**, adding up the probabilities over all 101 sites, the model expects the dhole at about 17 sites, against the 41 where it was detected (the second table in the Console).
 
 > **Discuss.** The model expects the dhole at fewer sites than the raw map shows. What does this mean about the kind of error, false positives or false negatives, in the dhole dataset?
 
@@ -653,7 +655,7 @@ flagged
 
 Click on `diag` in the Environment tab to view it. It has one row per parameter.
 
-- In the fit this page was written from, 3 of the 16 parameters break the `rhat` or `ess` rule. Yours may show 2: see below for why.
+- In the fit this page was written from, 2 of the 16 parameters break the `rhat` or `ess` rule. A run on another computer may show 3: see below for why.
 - `param` is the kind of parameter:
   - `beta0_psi` for the baseline occupancy
   - `beta_psi` for the effect of an occupancy covariate
@@ -664,7 +666,7 @@ Click on `diag` in the Environment tab to view it. It has one row per parameter.
 - `mean`, `sd`, `q2.5` and `q97.5` summarise the tries (technically, the word is 'draws'): their mean value, their spread, and the ends of the 95% interval.
 - `rhat` and `ess` are the two checks described above.
 
-> Find `beta_theta` for the effect of `PrevDayRain` and `p` and `q` for 12S in `diag`. Which of the two rules does each one break?
+> Find `beta_theta` for the effect of `PrevDayRain` and `p` and `q` for 12S in `diag`. Which of the two rules, if either, does each one break?
 
 The lab detection and false-positive rates, `p` and `q`, break the `ess` rule: their chains agree, but the draws are so alike from one to the next that they add up to only about 200 independent ones. The effect of rain on collection (`beta_theta` for the effect of `PrevDayRain`) sits right at the `rhat` rule. In the fit this page was written from, its `rhat` is 1.002, just under 1.01, so it is not flagged. In a run of the same model, with the same seed, on another computer it came out at 1.03, just over, and was flagged. Nothing about the parameter has changed. The rules are conventions, not a line between good and bad chains. Just as p = 0.049 and p = 0.051 are not really different, an `rhat` just over 1.01 and one just under it tell you the same thing: look at the chains. We can look at the traceplots to show the draws of each chain in order. Here is `p`, beside the baseline occupancy, which is not flagged, and then the rain effect.
 
@@ -879,18 +881,13 @@ compare_rain |>
 
 ## Do it with the assistant (using the occJSDM tools)
 
-```{r mcp, echo = FALSE, results = "asis", eval = !mcp_off}
-cat('Your instructor has connected Posit Assistant to the occJSDM tools: `validate_data`, `fit_model`, `diagnostics` and `summarise_fit`. They do the same steps you just ran.
+Your instructor has connected Posit Assistant to four occJSDM tools: `validate_data`, `fit_model`, `diagnostics` and `summarise_fit`. They do the same steps you just ran. Type each request into the Posit Assistant pane, in your own words.
 
-1. Ask the assistant to check the data file `data-derived/dhole_input.rds` with `validate_data`, using the occupancy covariates `annual_precipitation`, `mean_temperature`, `Human_modification_1km`, `Percent_of_forest_cover_1km`, `Patch_density_1km`, `Edge_density_1km`, `streamOrigin` and `Regional_Division`, and the collection covariates `Filter_vol` and `PrevDayRain`. Ask it to explain any problem before fitting.
-
-2. Ask it to fit the model with two chains of 5000 burn-in and 5000 kept iterations, no hidden environmental covariates (`n_factors = 0`), and a seed you choose.
-
-3. Ask it for the convergence diagnostics, and compare its count of flagged parameters with yours.
+1. Ask the assistant to check the data file `data-derived/dhole_input.rds` with `validate_data`. Give it the occupancy covariates `annual_precipitation`, `mean_temperature`, `Human_modification_1km`, `Percent_of_forest_cover_1km`, `Patch_density_1km`, `Edge_density_1km`, `streamOrigin` and `Regional_Division`, and the collection covariates `Filter_vol` and `PrevDayRain`. Ask it to explain any problem before fitting.
+2. Ask it to fit the model with a detection threshold of 1, two chains of 5000 burn-in and 5000 kept iterations, no hidden environmental covariates (`n_factors = 0`), and seed 2026, the seed you used above.
+3. Ask it for the convergence diagnostics. Compare its count of flagged parameters with the count in your own `diag` table. With the same seed, they should match.
 
 If the assistant reports an error, tell your instructor and carry on with the code above. It does the same thing.
-')
-```
 
 ## What you take away
 
