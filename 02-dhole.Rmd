@@ -883,9 +883,9 @@ compare_rain |>
 
 Your instructor has connected Posit Assistant to four occJSDM tools: `validate_data`, `fit_model`, `diagnostics` and `summarise_fit`. They do the same steps you just ran. Type each request into the Posit Assistant pane, in your own words.
 
-1. Ask the assistant to check the data file `data-derived/dhole_input.rds` with `validate_data`. Give it the occupancy covariates `annual_precipitation`, `mean_temperature`, `Human_modification_1km`, `Percent_of_forest_cover_1km`, `Patch_density_1km`, `Edge_density_1km`, `streamOrigin` and `Regional_Division`, and the collection covariates `Filter_vol` and `PrevDayRain`. Ask it to explain any problem before fitting.
-2. Ask it to fit the model with a detection threshold of 1, two chains of 5000 burn-in and 5000 kept iterations, no hidden environmental covariates (`n_factors = 0`), and seed 2026, the seed you used above.
-3. Ask it for the convergence diagnostics. Compare its count of flagged parameters with the count in your own `diag` table. With the same seed, they should match.
+1.  Ask the assistant to check the data file `data-derived/dhole_input.rds` with `validate_data`. Give it the occupancy covariates `annual_precipitation`, `mean_temperature`, `Human_modification_1km`, `Percent_of_forest_cover_1km`, `Patch_density_1km`, `Edge_density_1km`, `streamOrigin` and `Regional_Division`, and the collection covariates `Filter_vol` and `PrevDayRain`. Ask it to explain any problem before fitting.
+2.  Ask it to fit the model with a detection threshold of 1, two chains of 5000 burn-in and 5000 kept iterations, no hidden environmental covariates (`n_factors = 0`), and seed 2026, the seed you used above.
+3.  Ask it for the convergence diagnostics. Compare its count of flagged parameters with the count in your own `diag` table. With the same seed, they should match.
 
 If the assistant reports an error, tell your instructor and carry on with the code above. It does the same thing.
 

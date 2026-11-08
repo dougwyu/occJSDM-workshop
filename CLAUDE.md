@@ -5,6 +5,7 @@
 Doug edits markdown here using RStudio's *Visual* mode, which rewrites the whole file to canonical form on every save. Anything written in a form Visual mode would reformat comes back on the next open as a diff nobody authored.
 
 - **Do not hard-wrap.** Write each paragraph as a single line. Never add an `editor_options: markdown: wrap:` block to a file.
+- **Write lists and code blocks the way Visual mode does.** Numbered items take two spaces after the number (`1.  Text`), and bullets nested under a numbered item are indented four spaces. Bullets nested under a bullet are indented two. A plain code block opens with ` ``` r `, with a space. Visual mode rewrote `1. ` and ` ```r ` the first time a student copy opened the files (8 Nov 2026).
 - **No pipe tables.** Use bullet lists instead.
 - **Keep inline code spans short.**
 - **Escape markdown-significant characters in prose.** Write `-\>` not `->`, and `\~` not `~`. Same for a literal `\<`, `\>` or `\|` in running text.
