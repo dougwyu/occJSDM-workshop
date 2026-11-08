@@ -1,0 +1,779 @@
+---
+title: "Sesi 3: Banyak spesies sekaligus"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    df_print: paged
+editor: visual
+editor_options:
+  chunk_output_type: console
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE, fig.width = 8, fig.height = 5.5)
+```
+
+Seperti sebelumnya, chunk kode pertama hanya untuk keperluan lokakarya, dan chunk kedua memuat paket-paket yang diperlukan.
+
+```{r workshop-setup}
+source("setup/pins.R")
+use_workshop_lib()                  # gunakan paket yang dipasang untuk lokakarya
+```
+
+```{r packages}
+library(tidyverse)
+library(ggrepel)      # label yang tidak saling tumpang tindih, di ggplot2
+library(occJSDM)      # untuk membaca hasil fit mamalia
+```
+
+## Mengapa memodelkan semua spesies sekaligus?
+
+Sebuah rencana konservasi perlu mengetahui keberadaan banyak spesies, bukan hanya satu. Kita dapat melakukan fit 108 model distribusi spesies secara terpisah, tetapi sebuah **model distribusi spesies gabungan** (JSDM) melakukan fit semua spesies sekaligus, sehingga model ini dapat **berbagi informasi antarspesies, dan dengan demikian mengungkap efek lokasi tersembunyi yang tidak Anda ukur, atau yang tidak Anda ketahui perlu diukur.**
+
+**Apa itu efek lokasi tersembunyi?** Lokasi selalu berbeda dalam hal-hal yang tidak kita ukur, seperti iklim mikro, riwayat gangguan, atau tingkat keterisolasian. Seperti kovariat okupansi yang kita ukur, perbedaan semacam itu dapat memengaruhi beberapa spesies sekaligus. Dalam survei, perbedaan ini tampak sebagai kelompok spesies yang muncul bersama di beberapa lokasi dan sama-sama tidak ada di lokasi lain.
+
+Jadi, meskipun JSDM tidak dapat melihat *penyebab*, JSDM dapat melihat *akibat*: spesies yang muncul bersama atau sama-sama tidak ada lebih sering daripada yang dapat dijelaskan oleh kovariat yang diukur.
+
+Anda memberi tahu JSDM berapa banyak kovariat lingkungan tersembunyi yang harus diestimasi dari data survei (`n_factors` dalam `runOccJSDM()`). Kita menetapkan `n_factors = 0` untuk ajag karena hanya ada 1 spesies sehingga tidak ada informasi yang dapat dibagi antarspesies. Pada sesi ini, kita akan melakukan fit occJSDM pada 108 spesies, dan menetapkan `n_factors = 4`. (Ada teknik untuk mengestimasi jumlah `n_factors` terbaik, tetapi kita akan melewatinya dalam pelajaran ini).
+
+Fit occJSDM pada 108 mamalia memakan waktu terlalu lama untuk kelas, jadi saya telah melakukan fit sebelumnya dan menyimpan seluruh hasil fit sebagai satu file: dua rantai, masing-masing dengan 10.000 iterasi burn-in dan 10.000 iterasi, dengan menyimpan setiap draw kedua. Alih-alih menjalankan `runOccJSDM()`, kita memuat file tersebut dan menggunakan fungsi-fungsi keluaran occJSDM padanya, seperti yang Anda lakukan pada ajag di Sesi 2.
+
+Sebagai catatan, berikut adalah perintah yang menghasilkan fit tersebut. Perintah ini dijalankan sekali, di luar kelas (terdapat di `analysis/fit-mammal.R`, dan memakan waktu sekitar 6 menit pada dua inti laptop).
+
+``` r
+inp <- readRDS("data-derived/mammal_input.rds")   # 108 mamalia, dalam bentuk yang diharapkan runOccJSDM()
+
+set.seed(20261018)
+fit_full <- runOccJSDM(inp$data,
+                       listParams = list(n_factors = 4),   # empat kovariat lingkungan tersembunyi
+                       threshold = 1,
+                       occCovariates = c("annual_precipitation",
+                                         "mean_temperature",
+                                         "Human_modification_1km",
+                                         "Percent_of_forest_cover_1km",
+                                         "Patch_density_1km",
+                                         "Edge_density_1km",
+                                         "streamOrigin",
+                                         "Regional_Division"),
+                       collCovariates = c("Filter_vol",
+                                          "PrevDayRain"),
+                       MCMCparams = list(nchain = 2,
+                                         nburn = 10000,
+                                         niter = 5000,   # draw yang disimpan per rantai, setelah thinning
+                                         nthin = 2,      # simpan setiap draw kedua
+                                         ncores = 2))
+```
+
+Sesi ini membutuhkan lebih banyak memori dibandingkan sesi lainnya, sekitar 3 GB pada puncaknya. Sebelum memulai, mulai ulang R (Session \> Restart R), agar tidak ada sisa dari Sesi 1 dan 2 yang masih tersimpan di memori.
+
+Kita memuat hasil fit, dan tabel data masukan yang sama seperti di Sesi 1.
+
+```{r load}
+fit_full <- readRDS("fits/fit_Mammal_d4_community_1b4a2cd_10k.rds")   # hasil fit lengkap mamalia, 235 MB
+status <- read.csv("data-derived/species.csv")
+info <- read.csv("data-derived/info.csv")
+OTU <- as.matrix(read.csv("data-derived/OTU.csv"))
+
+# tabel dengan satu baris per lokasi beserta koordinatnya, untuk membuat peta
+sites <- info |>
+  distinct(Site, Xs.1, Xs.2)
+
+# seperti di Sesi 1: suatu spesies terdeteksi di suatu lokasi jika salah satu dari 18 PCR di lokasi itu positif
+presence <- info |>
+  select(Site) |>
+  bind_cols(as_tibble(OTU)) |>
+  pivot_longer(-Site, names_to = "otu_id", values_to = "positive") |>
+  group_by(Site, otu_id) |>
+  summarise(present = as.numeric(any(positive > 0)), .groups = "drop")
+
+# jumlah lokasi tempat setiap spesies terdeteksi
+sites_detected <- presence |>
+  group_by(otu_id) |>
+  summarise(sites_detected = sum(present))
+```
+
+Klik `presence` dan `sites_detected` di tab Environment untuk melihatnya.
+
+Sekarang kita menggunakan fungsi-fungsi keluaran occJSDM untuk mengubah hasil fit menjadi lima tabel. Anda sudah mengenal fungsi-fungsi keluaran ini dari 02-dhole.Rmd, tetapi sekarang file-filenya 108 kali lebih besar karena menyimpan keluaran untuk 108 spesies.
+
+Chunk ini memakan waktu total sekitar 5 menit. Langkah terakhirnya, asosiasi spesies, membutuhkan banyak memori.
+
+```{r fit-tables}
+species_ids <- fit_full$infos$speciesNames   # otu_id setiap spesies, sesuai urutan dalam model
+species_names <- status |>
+  select(otu_id, species)
+
+# occ: peluang kehadiran dengan mengetahui deteksi (cond_mean), dan sebelum mengetahui deteksi (psi_mean)
+# satu baris per lokasi, satu kolom per spesies
+cond <- computeConditionalOccupancyProbs(fit_full)
+psi <- computePredictiveOccupancyProbs(fit_full)
+
+# satu baris per kombinasi lokasi dan spesies
+occ <- as_tibble(cond, rownames = "Site") |>
+  pivot_longer(-Site,
+               names_to = "otu_id",
+               values_to = "cond_mean") |>
+  left_join(as_tibble(psi, rownames = "Site") |>
+              pivot_longer(-Site,
+                           names_to = "otu_id",
+                           values_to = "psi_mean"),
+            by = c("Site", "otu_id")) |>
+  left_join(species_names, by = "otu_id") |>
+  select(Site, otu_id, species, cond_mean, psi_mean)
+
+
+# params: rata-rata dan interval 95% dari laju deteksi setiap spesies theta0, p, dan q, dari draw-nya seperti di Sesi 2
+summarise_rate <- function(param) {
+  draws <- returnPosteriorDraws(fit_full, param)[1, , , ]   # spesies x iterasi x rantai
+  tibble(mean = apply(draws, 1, mean),
+         lo = apply(draws, 1, quantile, probs = 0.025),
+         hi = apply(draws, 1, quantile, probs = 0.975))
+}
+p <- summarise_rate("p")             # laju positif benar per PCR
+q <- summarise_rate("q")             # laju positif palsu per PCR
+theta0 <- summarise_rate("theta0")   # laju positif palsu di lapangan
+# satu baris per spesies
+params <- tibble(otu_id = species_ids,
+                 p_mean = p$mean, p_lo = p$lo, p_hi = p$hi,
+                 q_mean = q$mean, q_lo = q$lo, q_hi = q$hi,
+                 theta0_mean = theta0$mean, theta0_lo = theta0$lo, 
+                    theta0_hi = theta0$hi) |>
+  left_join(species_names, by = "otu_id")
+
+
+# diagnostik: R-hat terbesar per spesies, untuk deteksi dan untuk efek okupansi
+# Baris ini memakan waktu sekitar 5 menit di Posit Cloud: baris ini memeriksa 1.729 parameter. Tunggu hingga selesai
+diag <- returnConvergenceDiagnostics(fit_full) |>
+  filter(param != "mu_b0") |>   # rata-rata komunitas dari okupansi dasar tidak dimiliki oleh satu spesies pun
+  mutate(otu_id = if_else(label2 %in% species_ids, label2, label1))   # spesiesnya ada di salah satu dari keduanya
+# Satu baris per spesies
+diagnostics <- diag |>
+  mutate(group = if_else(param %in% c("beta0_psi", "beta_psi"),
+                         "rhat_effects",
+                         "rhat_detection")) |>
+  group_by(otu_id, group) |>
+  summarise(rhat = max(rhat, na.rm = TRUE), .groups = "drop") |>
+  pivot_wider(names_from = group,
+              values_from = rhat) |>
+  left_join(species_names, by = "otu_id") |>
+  select(otu_id, species, rhat_detection, rhat_effects)
+
+
+# effects: efek setiap kovariat okupansi terhadap setiap spesies
+# satu baris per spesies dan kovariat
+effects <- diag |>
+  filter(param == "beta_psi") |>
+  left_join(species_names, by = "otu_id") |>
+  select(otu_id, species, covariate = label1, mean, lo = q2.5, hi = q97.5, rhat)
+
+
+# assoc: korelasi residual bawah, median, dan atas untuk setiap pasangan spesies
+# baris ini memakan waktu sekitar 1 menit dan 3,7 GB di Posit Cloud
+sig <- returnResidualCorrelationMatrix(fit_full)   # 3 x spesies x spesies
+pairs <- which(upper.tri(sig[1, , ]), arr.ind = TRUE)
+# satu baris untuk setiap pasangan spesies
+assoc <- tibble(otu_a = species_ids[pairs[, 1]],
+                otu_b = species_ids[pairs[, 2]],
+                lo = sig[1, , ][pairs],
+                median = sig[2, , ][pairs],
+                hi = sig[3, , ][pairs])
+
+
+# simpan kelima tabel bersama dalam satu list, dan bersihkan potongan-potongannya
+fit <- list(occ = occ,
+            params = params,
+            diagnostics = diagnostics,
+            effects = effects,
+            assoc = assoc)
+rm(cond, psi, occ, p, q, theta0, params, diag, diagnostics, effects, sig, pairs, assoc)
+```
+
+Klik `fit` di tab Environment untuk melihatnya. Objek ini adalah sebuah list berisi tabel-tabel. Setiap tabel memuat `otu_id` spesies (nama kolomnya di `OTU`) dan nama `species`-nya.
+
+- `occ`: satu baris per lokasi dan spesies. `cond_mean` dan `psi_mean` adalah peluang kehadiran, yang dijelaskan di bawah.
+- `params`: satu baris per spesies. Kolom `p_` adalah laju positif benar, kolom `q_` adalah laju positif palsu, masing-masing dengan rata-ratanya dan ujung-ujung interval 95%-nya (`_lo`, `_hi`).
+- `diagnostics`: satu baris per spesies, dengan dua nilai R-hat. Setiap spesies memiliki banyak parameter, dan setiap parameter memiliki R-hat sendiri, seperti baris-baris tabel diagnostik di Sesi 2. Di sini parameter-parameter tersebut dikelompokkan menjadi dua kelompok, dan setiap kolom hanya menyimpan R-hat terburuk (terbesar) dalam kelompoknya.
+  - `rhat_detection` mencakup parameter deteksi, yang di Sesi 2 dicantumkan dengan nama `param`-nya: pengambilan sampel (`beta_theta`), laju positif palsu di lapangan (`theta0`), serta laju deteksi dan laju positif palsu di laboratorium (`p` dan `q`).
+  - `rhat_effects` mencakup parameter okupansi: okupansi dasar (`beta0_psi`) dan efek setiap kovariat okupansi (`beta_psi`).
+  - Jika R-hat terburuk dalam suatu kelompok dapat diterima, maka semua parameter dalam kelompok itu juga dapat diterima.
+- `effects`: satu baris per spesies dan kovariat okupansi: rata-rata efek kovariat okupansi, interval 95%-nya (`lo`, `hi`), dan R-hat-nya. Ini adalah bagian `beta_psi` dari tabel diagnostik yang Anda temui di Sesi 2.
+- `assoc`: satu baris per pasangan spesies (5.778 pasangan untuk 108 spesies). `otu_a` dan `otu_b` adalah kedua spesies tersebut, sedangkan `median`, `lo`, dan `hi` adalah korelasi residualnya dan ujung-ujung interval 95%-nya. Spesies di tabel ini hanya memiliki `otu_id`; kita menambahkan namanya saat menggunakannya.
+
+## Dapatkah kita memercayai hasil komputasinya?
+
+Kali ini kita memeriksa rantai terlebih dahulu, seperti yang juga sebaiknya Anda lakukan dalam pekerjaan Anda sendiri. Dengan 108 spesies, terdapat ratusan parameter. Untuk setiap spesies, kita mengambil R-hat terbesar dalam dua kelompok:
+
+- parameter **deteksi**-nya: laju positif benar dan positif palsu serta efek kovariat pengambilan sampel;
+- **efek kovariat**-nya terhadap okupansi.
+
+Seperti di Sesi 2, `rhat` yang mendekati 1 berarti kedua rantai sepakat. Sesi 2 menggunakan aturan yang ketat, paling tinggi 1,01. Di sini kita menggunakan 1,1, yang merupakan tingkat peringatan bawaan untuk `runOccJSDM()`. Jadi kita menyebut suatu kelompok stabil jika `rhat` **terbesar**-nya memenuhi `rhat ≤ 1.1`. Agar `diagnostics` tetap ringkas, kita hanya memeriksa `rhat`.
+
+```{r convergence}
+conv <- fit$diagnostics |>
+  left_join(sites_detected, by = "otu_id") |>
+  mutate(detection_settled = rhat_detection <= 1.1,
+         effects_settled = rhat_effects <= 1.1,
+         settled = detection_settled & effects_settled)
+
+conv |> count(detection_settled, effects_settled)
+
+# spesies yang gagal dalam salah satu pemeriksaan, yang paling jarang terlebih dahulu
+conv |>
+  filter(!settled) |>
+  arrange(sites_detected) |>
+  select(species, sites_detected, rhat_detection, rhat_effects)
+```
+
+Klik `conv` di tab Environment untuk melihatnya. Tabel ini memiliki satu baris per spesies.
+
+- `rhat_detection` dan `rhat_effects` adalah `rhat` terbesar spesies tersebut dalam setiap kelompok.
+- `sites_detected` adalah jumlah lokasi tempat spesies tersebut terdeteksi.
+- `detection_settled`, `effects_settled`, dan `settled` menunjukkan apakah spesies tersebut lolos setiap pemeriksaan, dan keduanya.
+
+> Lihat kolom `sites_detected` pada tabel kedua yang dicetak chunk tersebut di Console, yaitu daftar spesies yang belum stabil. Apa kesamaan sebagian besar spesies yang belum stabil? Spesies mana yang tidak mengikuti pola tersebut?
+
+Chunk berikutnya menggambar histogram spesies untuk setiap pemeriksaan, di panel Plots. Spesies di sebelah kanan garis putus-putus merah memiliki setidaknya satu parameter yang rantainya belum stabil.
+
+```{r rhat-plot}
+conv |>
+  pivot_longer(c(rhat_detection, rhat_effects),
+               names_to = "parameters",
+               values_to = "rhat") |>
+  ggplot(aes(rhat)) +
+  geom_histogram(binwidth = 0.02, fill = "grey40") +
+  geom_vline(xintercept = 1.1, linetype = 2, colour = "firebrick") +
+  facet_wrap(~ parameters, ncol = 1) +
+  labs(x = "R-hat terbesar per spesies",
+       y = "Jumlah spesies",
+       title = "Deteksi telah stabil untuk hampir semua spesies, dan efek kovariat untuk sebagian besar spesies") +
+  theme_minimal()
+```
+
+- Deteksi telah stabil untuk semua spesies kecuali 1 (*Micromys erythrotis*).
+- Efek kovariat lebih buruk: untuk 5 spesies, setidaknya satu efek belum stabil.
+- Secara keseluruhan, 5 spesies gagal dalam salah satu pemeriksaan. **3 di antaranya terdeteksi di enam lokasi atau kurang, dan kelimanya di 11 lokasi atau kurang, sehingga informasinya sedikit.** Spesies yang jarang terdeteksi memang sulit dimodelkan.
+- **Tidak ada spesies umum dalam daftar tersebut.**
+- Ajag lolos kedua pemeriksaan.
+
+Obat untuk ketidakkonvergenan adalah menjalankan model lebih lama, yang memakan waktu terlalu lama untuk kelas. Sampai saat itu, jangan membaca efek kovariat dari 5 spesies ini, dan perlakukan peluang kehadirannya dengan hati-hati, karena peluang tersebut dibangun dari efek yang sama. Ini adalah keterbatasan hasil fit ini, bukan alasan untuk meninggalkan analisis occJSDM.
+
+## Seberapa andal deteksi setiap spesies?
+
+Model memberikan laju positif benar dan laju positif palsu tersendiri untuk setiap spesies. Pertama, kita menggabungkan status liar atau domestik setiap spesies dengan laju-lajunya.
+
+```{r detection-rates}
+profile <- fit$params |>
+  left_join(status |> select(otu_id, local_status), by = "otu_id")
+```
+
+Klik `profile` di tab Environment untuk melihatnya. `p_mean` adalah laju positif benar spesies per PCR dan `q_mean` adalah laju positif palsunya, masing-masing dengan ujung-ujung interval 95%-nya (`_lo`, `_hi`).
+
+Kita mulai dengan plot yang paling sederhana: satu titik per spesies.
+
+```{r detection-plain}
+ggplot(profile, aes(q_mean, p_mean)) +
+  geom_point(size = 2, colour = "grey40") +
+  labs(x = "Laju positif palsu per PCR (q)",
+       y = "Laju positif benar per PCR (p)",
+       title = "Setiap titik adalah satu spesies") +
+  theme_minimal()
+```
+
+Cara membacanya:
+
+- Semakin ke atas berarti PCR positif lebih mungkin terjadi ketika DNA spesies tersebut ada. Spesies di dekat bagian atas mudah dideteksi.
+- Semakin ke kanan berarti PCR lebih sering positif ketika spesies tersebut tidak ada. Spesies di sebelah kanan memiliki deteksi yang melebih-lebihkan tempat hidupnya, akibat kontaminasi PCR.
+- Posisi terbaik adalah kiri atas.
+
+Apa yang dapat kita baca dari versi sederhana ini?
+
+- Laju positif benar tersebar luas, dari sekitar 0,17 hingga 0,95. Sebagian spesies mudah dideteksi dan sebagian lainnya sulit.
+- Sebagian besar spesies (95 dari 108) berada di paling kiri, dengan laju positif palsu di bawah 0,05.
+- Beberapa spesies berada jauh di sebelah kanan.
+
+Yang tidak dapat kita baca adalah spesies apa saja itu, apakah spesies tersebut liar atau domestik, atau seberapa yakin model terhadap setiap laju. Jadi kita mewarnai titik-titik berdasarkan status liar atau domestik, menambahkan interval 95% setiap spesies sebagai garis samar, dan memberi label pada enam spesies dengan laju positif palsu tertinggi.
+
+```{r detection-profile}
+# warna yang sama seperti di Sesi 1
+status_colours <- c(wild = "grey35",
+                    dom = "purple3",
+                    wild_or_dom = "darkorange")
+status_labels <- c(wild = "wild",
+                   dom = "domestic",
+                   wild_or_dom = "wild or domestic")
+
+# enam spesies yang diberi label
+worst <- profile |> slice_max(q_mean, n = 6)
+
+ggplot(profile, aes(q_mean, p_mean, colour = local_status)) +
+  geom_linerange(aes(xmin = q_lo, xmax = q_hi), alpha = 0.3) +
+  geom_linerange(aes(ymin = p_lo, ymax = p_hi), alpha = 0.3) +
+  geom_point(size = 2) +
+  geom_text_repel(data = worst,
+                  aes(label = species),
+                  size = 3,
+                  fontface = "italic",
+                  min.segment.length = 0,
+                  show.legend = FALSE,
+                  seed = 1) +
+  scale_colour_manual(values = status_colours,
+                      labels = status_labels,
+                      name = "Spesies") +
+  labs(x = "Laju positif palsu per PCR (q)",
+       y = "Laju positif benar per PCR (p)",
+       title = "Kualitas deteksi sangat bervariasi antarspesies") +
+  theme_minimal()
+```
+
+Berikut adalah sepuluh spesies dengan laju positif palsu tertinggi, beserta jumlah lokasi tempat masing-masing terdeteksi.
+
+```{r worst-fp}
+profile |>
+  arrange(desc(q_mean)) |>
+  left_join(sites_detected, by = "otu_id") |>
+  select(species,
+         local_status,
+         sites_detected,
+         false_positive = q_mean,
+         true_positive = p_mean) |>
+  mutate(false_positive = round(false_positive, 3),
+         true_positive = round(true_positive, 2)) |>
+  head(10)
+```
+
+Laju positif palsu tertinggi dimiliki oleh spesies yang terdeteksi di sebagian besar lokasi. Spesies tersebut mencakup babi dan sapi, yang DNA-nya kemungkinan mencapai sungai dari peternakan dan permukiman, tetapi juga beberapa mamalia kecil yang umum. Model tidak dapat menjelaskan mengapa suatu spesies memiliki laju yang tinggi, hanya bahwa deteksi mentahnya melebih-lebihkan tempat hidupnya.
+
+> **Diskusikan.** Jika laju positif palsu suatu spesies tinggi, apa artinya bagi peta deteksi mentahnya? Menurut Anda, mengapa beberapa spesies ini memiliki laju kontaminasi laboratorium `q` yang tinggi?
+
+## Seberapa besar kemungkinan setiap spesies berada di setiap lokasi?
+
+Untuk setiap lokasi dan setiap spesies, model memberikan dua peluang bahwa spesies tersebut hadir. Rencana konservasi di Sesi 4 menggunakan salah satunya. Kita menambahkan ordo taksonomi setiap spesies, yang kita gunakan di bawah.
+
+```{r occupancy}
+occ <- fit$occ |>
+  left_join(status |> select(otu_id, order),
+            by = "otu_id")
+```
+
+Klik `occ` di tab Environment untuk melihatnya. Tabel ini memiliki 10.908 baris.
+
+> **Diskusikan**. Dapatkah Anda menjelaskan mengapa?
+
+Tabel ini memuat dua peluang kehadiran:
+
+- `psi_mean` adalah peluang bahwa suatu lokasi dengan karakteristik ini terokupansi. Peluang ini dihitung dari kovariat okupansi yang terukur dan tersembunyi saja, bukan dari deteksi spesies itu sendiri di lokasi tersebut. Inilah yang disebut occJSDM sebagai peluang okupansi prediktif (`computePredictiveOccupancyProbs()`). Karena didasarkan pada bagaimana kovariat bekerja di seluruh lokasi, peluang ini merupakan ukuran yang lebih kokoh tentang tempat hidup suatu spesies, dan inilah yang ditampilkan oleh peta-peta dalam Ji et al. (2025). Kovariat tersembunyi diestimasi dari survei itu sendiri, sehingga ini bukan prediksi untuk lokasi yang tidak disurvei.
+- `cond_mean` adalah peluang bahwa spesies tersebut hadir di lokasi ini, berdasarkan deteksi. **Peluang ini mempertimbangkan respons spesies terhadap kovariat setiap lokasi (seperti `psi_mean`) ditambah hasil PCR spesies tersebut di lokasi ini**. Inilah yang disebut occJSDM sebagai peluang okupansi kondisional, singkatan dari okupansi yang dikondisikan pada data deteksi (`computeConditionalOccupancyProbs()`). Secara desain, okupansi kondisional dipengaruhi oleh deteksi di satu lokasi, yang berguna jika lokasi tersebut berbeda dari lokasi terokupansi lainnya tetapi spesiesnya memang ada di sana, tetapi menyesatkan jika suatu lokasi memiliki banyak positif palsu, seperti yang dapat ditimbulkan oleh kontaminasi berat.
+- Keduanya adalah rata-rata posterior. Paket ini belum mengembalikan interval untuk keduanya, yang akan kita bahas kembali di Sesi 4.
+
+Untuk melihat perbedaan keduanya, kita memetakan keduanya untuk takin (*Budorcas taxicolor*), seperti yang dilakukan Supplementary Figure 12 dalam Ji et al. (2025). Latihan pertama di Sesi 2 melakukan fit untuk takin saja; di sini takin berasal dari model untuk seluruh 108 mamalia.
+
+```{r takin}
+takin_id <- status |>
+  filter(species == "Budorcas taxicolor") |>
+  pull(otu_id)
+
+# PCR positif per lokasi, dari 18, dan dua peluang takin
+takin <- info |>
+  select(Site) |>
+  mutate(positive = OTU[, takin_id]) |>
+  count(Site, wt = positive, name = "positive_pcrs") |>
+  left_join(occ |>
+              filter(otu_id == takin_id) |>
+              select(Site, cond_mean, psi_mean),
+            by = "Site") |>
+  left_join(sites, by = "Site")
+
+# lokasi dengan setidaknya satu PCR positif, dari selatan ke utara
+takin |>
+  filter(positive_pcrs > 0) |>
+  arrange(Xs.2) |>
+  mutate(across(c(cond_mean, psi_mean), \(x) round(x, 2))) |>
+  select(Site, latitude = Xs.2, positive_pcrs, cond_mean, psi_mean)
+```
+
+```{r takin-map, fig.width = 7, fig.height = 7}
+takin |>
+  pivot_longer(c(cond_mean, psi_mean),
+               names_to = "probability",
+               values_to = "value") |>
+  mutate(probability = recode(probability,
+                              cond_mean = "cond_mean:\nberdasarkan\ndeteksi",
+                              psi_mean = "psi_mean:\ndi lokasi dengan\nkarakteristik ini")) |>
+  ggplot(aes(Xs.1, Xs.2)) +
+  # cincin hijau menandai setiap lokasi dengan setidaknya satu PCR positif: titik hijau
+  # yang lebih besar digambar terlebih dahulu, agar warna lokasi itu sendiri tetap utuh di atasnya
+  geom_point(data = \(d) filter(d, positive_pcrs > 0),
+             size = 5.5,
+             colour = "green3") +
+  geom_point(aes(colour = value),
+             size = 3) +
+  facet_wrap(~ probability) +
+  # skala akar kuadrat merenggangkan peluang yang rendah, sehingga 0,1 dan 0,3 tampak berbeda
+  scale_colour_viridis_c(option = "C",
+                         limits = c(0, 1),
+                         trans = "sqrt",
+                         breaks = c(0, 0.05, 0.25, 0.5, 1),
+                         name = "Peluang\nkehadiran") +
+  coord_quickmap() +
+  labs(x = "Bujur",
+       y = "Lintang",
+       title = "Dua peluang kehadiran takin") +
+  theme_minimal()
+```
+
+- Di enam lokasi tempat sebagian besar PCR positif (13 hingga 18 positif dari 18), `cond_mean` bernilai 1: deteksi dengan jelas menunjukkan okupansi. Sebaliknya, `psi_mean` hanya 0,5 hingga 0,9 di lokasi-lokasi tersebut, karena `psi_mean` tidak menggunakan data deteksi, hanya data kovariat lokasi. Lokasi-lokasi ini semuanya berada di utara (kuning dan oranye). Kedua peluang menunjukkan bahwa takin hadir, meskipun `psi_mean` kurang yakin.
+- Di seluruh 16 lokasi yang hanya memiliki 1 hingga 4 PCR positif (lokasi-lokasi lain yang dilingkari), `cond_mean` bernilai ≤ 0,15: model menilai deteksi tersebut sebagai positif palsu, mengingat betapa kuatnya deteksi di enam lokasi tempat takin jelas berada, sehingga peluang okupansi diestimasi rendah. Lingkaran-lingkaran ini berwarna gelap pada peta `cond_mean`.
+- Sebaliknya, `psi_mean` sebagian besar lebih tinggi di 9 lokasi deteksi lemah di utara dibandingkan di 7 lokasi lainnya.
+  - Di 4 lokasi di selatan, tempat kita mengetahui secara independen bahwa takin tidak ditemukan (Ji et al. 2025), `psi_mean` bernilai ≤ 0,03, dan di 3 lokasi di jalur timur nilainya ≤ 0,08. Ketujuh lokasi ini berwarna gelap.
+  - Di 9 lokasi di utara, dekat dengan lokasi yang ditempati takin, `psi_mean` mencapai 0,3, dan 6 di antaranya di atas 0,1. Ini karena lokasi-lokasi tersebut memiliki nilai kovariat yang memberi peluang cukup besar untuk dihuni takin. Sebagian besar berwarna ungu hingga merah muda.
+- **Jadi, membandingkan `cond_mean` dan `psi_mean` menunjukkan deteksi lemah mana yang mungkin tetap nyata**. Lokasi dengan deteksi lemah (`cond_mean` rendah) tetapi `psi_mean` sedang (kovariat yang mendukung) layak disurvei kembali.
+
+> **Diskusikan.** Seorang pengelola bertanya di mana takin hidup. Peta mana yang akan Anda tunjukkan, dan mengapa? Apakah jawaban Anda akan berubah jika mereka bertanya lokasi mana yang perlu diperiksa untuk takin dengan kamera jebak?
+
+Chunk berikutnya menggambar histogram, di panel Plots, yang menghitung pasangan lokasi-spesies. Pasangan di kedua ujung sudah pasti; pasangan di tengah adalah yang tidak dapat diputuskan oleh data. Jumlahnya hanya sedikit.
+
+```{r certainty}
+ggplot(occ, aes(cond_mean)) +
+  geom_histogram(binwidth = 0.05, fill = "grey40") +
+  labs(x = "Peluang kehadiran berdasarkan deteksi",
+       y = "Pasangan lokasi-spesies",
+       title = "Sebagian besar pasangan lokasi-spesies sudah pasti; sebagian kecil tidak pasti") +
+  theme_minimal()
+```
+
+## Berapa banyak spesies di setiap lokasi?
+
+Jumlah mentah spesies yang terdeteksi di suatu lokasi dan jumlah spesies harapan dari model adalah dua hal yang berbeda. Jumlah harapan adalah jumlah dari peluang-peluang kehadiran.
+
+```{r richness}
+# jumlah spesies yang terdeteksi di setiap lokasi
+detected_per_site <- presence |>
+  group_by(Site) |>
+  summarise(detected = sum(present))
+
+richness <- occ |>
+  group_by(Site) |>
+  summarise(expected = sum(cond_mean)) |>
+  left_join(detected_per_site, by = "Site") |>
+  left_join(sites, by = "Site")
+
+richness |>
+  summarise(detected = mean(detected),
+            expected = mean(expected))
+```
+
+> **Diskusikan**. Rata-rata, di suatu lokasi terdeteksi 22,5 spesies, tetapi model hanya mengharapkan 11,4. Ingat kembali laju positif palsu. Mengapa model mungkin mengharapkan lebih sedikit spesies daripada yang terdeteksi?
+
+Sekarang kita memetakan kedua ukuran tersebut berdampingan.
+
+```{r richness-map, fig.width = 10}
+richness |>
+  pivot_longer(c(detected, expected),
+               names_to = "measure",
+               values_to = "species") |>
+  ggplot(aes(Xs.1, Xs.2, colour = species)) +
+  geom_point(size = 3) +
+  facet_wrap(~ measure) +
+  scale_colour_viridis_c(option = "C", name = "Spesies") +
+  coord_quickmap() +
+  labs(x = "Bujur", y = "Lintang") +
+  theme_minimal()
+```
+
+Kekayaan spesies dapat dipecah menurut ordo taksonomi, untuk melihat kelompok mana yang mendorong pola tersebut.
+
+```{r richness-order}
+occ |>
+  group_by(order, Site) |>
+  summarise(expected = sum(cond_mean), .groups = "drop") |>
+  group_by(order) |>
+  summarise(mean_per_site = round(mean(expected), 2)) |>
+  arrange(desc(mean_per_site))
+```
+
+Sesi 4 hanya membutuhkan peluang-peluang kehadiran ini, bukan seluruh hasil fit, sehingga sesi tersebut membacanya dari sebuah tabel kecil, `data-derived/occupancy_long.csv`. Tabel ini memiliki satu baris per lokasi dan spesies, dengan taksonomi dan status konservasi yang disertakan. Chunk di bawah menunjukkan cara tabel tersebut disimpan. Chunk ini tidak dijalankan di kelas, karena filenya sudah tersedia.
+
+```{r save-for-session-4, eval = FALSE}
+# fit$occ |>
+#   select(Site, otu_id, cond_mean, psi_mean) |>
+#   left_join(status |> select(otu_id, species, order, family, iucn, china_red_list, local_status),
+#             by = "otu_id") |>
+#   write_csv("data-derived/occupancy_long.csv")
+```
+
+### Apa yang baru saja kita lakukan?
+
+- Kita memeriksa rantai terlebih dahulu, dan menyisihkan 5 spesies yang rantainya belum stabil.
+- Kita membaca laju deteksi setiap spesies (`p` dan `q`), dan menemukan bahwa deteksi mentah beberapa spesies melebih-lebihkan tempat hidupnya.
+- Kita mengenal dua peluang kehadiran. `psi_mean` menilai suatu lokasi berdasarkan kovariatnya, dan `cond_mean` menambahkan hasil PCR spesies itu sendiri di lokasi tersebut. Untuk takin, `cond_mean` menyisihkan seluruh 16 lokasi dengan deteksi lemah sebagai positif palsu, sedangkan `psi_mean` menandai lokasi-lokasi di utara, dekat tempat takin hidup, sebagai lokasi yang layak disurvei kembali.
+- Kita menjumlahkan peluang kehadiran di setiap lokasi, dan menemukan bahwa model mengharapkan lebih sedikit spesies per lokasi daripada yang terdeteksi.
+
+## Apakah cagar alam berpengaruh, setelah modifikasi manusia diperhitungkan?
+
+Dalam ordinasi di Sesi 1, lokasi yang hulu sungainya berada di dalam salah satu cagar alam Gaoligongshan berada di ujung yang berlawanan dari lokasi yang paling banyak termodifikasi. Jadi gambar tersebut tidak dapat menunjukkan apakah spesies merespons modifikasi manusia atau status cagar alam atau keduanya.
+
+- Model mencakup kedua kovariat tersebut, dan mengestimasi efek masing-masing dengan kovariat lainnya dibuat tetap.
+- Sesi 2 tidak dapat menjawab pertanyaan ini untuk ajag saja. Di sini kita menanyakannya untuk semua spesies.
+
+Chunk berikutnya menyiapkan efek-efek untuk diplot.
+
+- Model melaporkan status cagar alam sebagai `streamOriginoutsideGLGS`: di luar dibandingkan dengan di dalam. Kita membalik tandanya, sehingga nilai positif berarti suatu spesies lebih mungkin hadir di tempat hulu sungai berada di dalam cagar alam.
+- Kita hanya menyimpan spesies yang rantainya stabil.
+- Kita mengelompokkan spesies berdasarkan status Daftar Merah, seperti di Sesi 1.
+
+```{r reserve-effects}
+reserve_effects <- fit$effects |>
+  filter(covariate %in% c("streamOriginoutsideGLGS", "Human_modification_1km")) |>
+  # balik luar-vs-dalam menjadi dalam-vs-luar; pembalikan menukar ujung-ujung interval
+  mutate(sign = if_else(covariate == "streamOriginoutsideGLGS", -1, 1),
+         estimate = sign * mean,
+         lower = pmin(sign * lo, sign * hi),
+         upper = pmax(sign * lo, sign * hi),
+         covariate = if_else(covariate == "Human_modification_1km",
+                             "More human modification",
+                             "Stream rises inside a reserve")) |>
+  left_join(status |> select(otu_id, iucn, china_red_list, local_status, body_mass),
+            by = "otu_id") |>
+  # hanya simpan spesies yang rantainya stabil
+  left_join(conv |> select(otu_id, settled), by = "otu_id") |>
+  filter(settled) |>
+  # IUCN terlebih dahulu, kemudian Daftar Merah China
+  mutate(red_list = coalesce(iucn, china_red_list),
+         red_list = case_when(red_list %in% c("VU", "EN", "CR") ~ "threatened (VU, EN, CR)",
+                              red_list %in% c("LC", "NT") ~ "not threatened (LC, NT)",
+                              .default = "not assessed, or data deficient"))
+```
+
+Klik `reserve_effects` di tab Environment untuk melihatnya. Tabel ini memiliki dua baris per spesies, satu untuk setiap kovariat: `estimate` adalah efeknya, sedangkan `lower` dan `upper` adalah ujung-ujung interval 95%-nya, setelah pembalikan.
+
+Setiap baris pada gambar adalah satu spesies, dengan efek dan interval 95%-nya. Spesies domestik, dan spesies yang dapat berstatus liar atau domestik, digambar sebagai segitiga dan persegi di atas pita oranye pucat. Titik di sebelah kanan garis putus-putus berarti lebih mungkin hadir; interval yang melintasi garis tersebut tidak dapat dibedakan dari tidak adanya efek.
+
+```{r reserve-plot, fig.height = 11}
+# warna yang sama seperti di Sesi 1
+red_list_colours <- c("threatened (VU, EN, CR)" = "firebrick",
+                      "not threatened (LC, NT)" = "grey50",
+                      "not assessed, or data deficient" = "steelblue")
+
+reserve_plot_data <- reserve_effects |>
+  # urutkan spesies berdasarkan efek cagar alamnya, di kedua panel
+  mutate(species = fct_reorder(species,
+                               if_else(covariate == "Stream rises inside a reserve", estimate, NA),
+                               .na_rm = TRUE),
+         status = recode(local_status,
+                         wild = "wild",
+                         dom = "domestic",
+                         wild_or_dom = "wild or domestic"))
+
+ggplot(reserve_plot_data, aes(estimate, species)) +
+  # pita pucat di belakang setiap spesies domestik, agar menonjol di sepanjang gambar
+  geom_tile(data = \(d) filter(d, status != "wild"),
+            aes(x = 0),
+            width = Inf,
+            height = 1,
+            fill = "orange",
+            alpha = 0.25) +
+  geom_vline(xintercept = 0, linetype = 2, colour = "grey50") +
+  geom_pointrange(aes(xmin = lower, xmax = upper, colour = red_list, shape = status),
+                  size = 0.3) +
+  facet_wrap(~ covariate) +
+  # pertahankan setiap spesies sesuai urutan di atas; tanpa ini, spesies dari lapisan pita muncul lebih dulu
+  scale_y_discrete(drop = FALSE) +
+  scale_colour_manual(values = red_list_colours, name = "Daftar Merah") +
+  scale_shape_manual(values = c(wild = 16,
+                                domestic = 17,
+                                "wild or domestic" = 15),
+                     name = "Spesies") +
+  labs(x = "Efek terhadap log-odds kehadiran",
+       y = NULL,
+       title = "Sembilan spesies liar secara kredibel lebih mungkin\nhadir di dalam cagar alam") +
+  guides(colour = guide_legend(nrow = 2),
+         shape = guide_legend(nrow = 2)) +
+  theme_minimal() +
+  theme(axis.text.y = element_text(size = 6, face = "italic"),
+        legend.position = "bottom",
+        legend.box = "vertical")
+```
+
+Pertanyaan yang penting adalah spesies mana yang merespons, dan seberapa besar. Tabel berikutnya mencantumkan setiap spesies yang intervalnya tidak mencakup nol, untuk salah satu kovariat. `odds_multiplier` adalah `exp(estimate)`: berapa kali odds kehadiran dikalikan di tempat hulu sungai berada di dalam cagar alam, atau di tempat modifikasi manusia satu unit lebih tinggi.
+
+```{r reserve-credible}
+responding_species <- reserve_effects |>
+  filter(lower > 0 | upper < 0) |>
+  mutate(odds_multiplier = round(exp(estimate), 1),
+         across(c(estimate, lower, upper), \(x) round(x, 2))) |>
+  arrange(covariate, desc(estimate)) |>
+  select(covariate, species, red_list, estimate, lower, upper, odds_multiplier)
+
+responding_species
+```
+
+Klik `responding_species` di tab Environment untuk melihatnya.
+
+Apa yang dikatakan model, dengan modifikasi manusia dibuat tetap:
+
+- Sembilan spesies liar secara kredibel lebih mungkin hadir di tempat hulu sungai berada di dalam cagar alam: musang luwak (*Paradoxurus hermaphroditus*), dua bajing (*Callosciurus quinquestriatus* dan *C. phayrei*), landak ekor sikat (*Atherurus macrourus*), dua kelelawar buah (*Cynopterus brachyotis* dan *Eonycteris spelaea*), kukang benggala (*Nycticebus bengalensis*), monyet assam (*Macaca assamensis*), dan seekor bajing terbang (*Petaurista yunanensis*).
+- Efek estimasinya besar: efek tersebut mengalikan odds kehadiran sekitar 5 kali (bajing terbang) hingga 25 kali (musang). Namun, intervalnya lebar, dan ujung bawahnya dekat dengan nol, sehingga efek sebenarnya bisa lebih kecil.
+- Satu spesies secara kredibel *kurang* mungkin hadir di sana: celurut air *Nectogale elegans*, yang hidup di air.
+- Untuk 81 spesies liar lainnya, intervalnya melintasi nol: data tidak dapat menunjukkan apakah spesies tersebut merespons, ke arah mana pun.
+- Tidak ada hewan domestik yang memiliki efek cagar alam yang kredibel secara individual. Namun, sebagai kelompok, hewan-hewan tersebut cenderung berada di bagian bawah gambar (pita-pita oranye): 8 dari 9 spesies domestik, dan ketiga spesies yang dapat berstatus liar atau domestik, berada di separuh bawahnya. Hal ini sesuai dengan ternak yang sebagian besar dipelihara di luar cagar alam.
+- Dengan status cagar alam dibuat tetap, modifikasi manusia memiliki efek yang kredibel untuk 5 dari 103 spesies. Empat spesies kurang mungkin hadir di tempat modifikasi lebih tinggi, dan tiga dari empat spesies tersebut (musang, *Callosciurus quinquestriatus*, dan monyet) juga termasuk di antara sembilan spesies cagar alam. Spesies kelima, kambing (*Capra hircus*), lebih mungkin hadir.
+
+Jadi, pola yang tidak dapat diuraikan oleh ordinasi di Sesi 1 kini memiliki jawaban per spesies. Dengan kedua kovariat dalam model, segelintir spesies merespons cagar alam secara kredibel, segelintir merespons modifikasi manusia, tiga merespons keduanya, dan untuk sebagian besar spesies data tidak dapat menunjukkannya.
+
+Di mana kesembilan spesies itu hidup? Peta-peta menunjukkan peluang kehadiran setiap spesies berdasarkan deteksi. Segitiga adalah lokasi yang hulu sungainya berada di dalam cagar alam.
+
+```{r reserve-maps, fig.width = 10, fig.height = 10}
+# sembilan spesies, dari efek cagar alam terbesar hingga terkecil
+nine <- reserve_effects |>
+  filter(covariate == "Stream rises inside a reserve",
+         local_status == "wild",
+         lower > 0) |>
+  arrange(desc(estimate)) |>
+  pull(species)
+
+# apakah hulu sungai setiap lokasi berada di dalam cagar alam
+site_reserve <- info |>
+  distinct(Site, streamOrigin) |>
+  mutate(reserve = if_else(streamOrigin == "insideGLGS", "inside a reserve", "outside"))
+
+occ |>
+  filter(species %in% nine) |>
+  mutate(species = factor(species, levels = nine)) |>
+  left_join(sites, by = "Site") |>
+  left_join(site_reserve, by = "Site") |>
+  arrange(cond_mean) |>   # gambar lokasi yang paling mungkin terakhir, di atas
+  ggplot(aes(Xs.1, Xs.2, colour = cond_mean, shape = reserve)) +
+  geom_point(size = 2.5) +
+  facet_wrap(~ species,
+             nrow = 2,
+             labeller = label_wrap_gen(width = 12)) +
+  # satu warna, dari abu-abu pucat (tidak mungkin) hingga hijau tua (mungkin), pada skala akar kuadrat
+  scale_colour_gradient(low = "grey85",
+                        high = "darkgreen",
+                        limits = c(0, 1),
+                        trans = "sqrt",
+                        breaks = c(0, 0.1, 0.5, 1),
+                        name = "Peluang kehadiran\nberdasarkan deteksi") +
+  guides(colour = guide_colourbar(barwidth = 10)) +
+  scale_shape_manual(values = c("inside a reserve" = 17,
+                                outside = 16),
+                     name = "Hulu sungai") +
+  scale_x_continuous(breaks = c(97.5, 98.5)) +
+  coord_quickmap() +
+  labs(x = "Bujur",
+       y = "Lintang",
+       title = "Tempat kesembilan spesies cagar alam kemungkinan berada") +
+  theme_minimal() +
+  theme(strip.text = element_text(face = "italic"),
+        legend.position = "bottom")
+```
+
+- Untuk tujuh dari sembilan spesies, sebagian besar lokasi tempat spesies tersebut kemungkinan hadir (`cond_mean` di atas 0,5) berada di sudut barat daya terjauh wilayah studi, dan 61 dari 62 lokasi tersebut memiliki hulu sungai di dalam cagar alam. Sudut itu hanya mencakup 18 dari 101 lokasi, 12 di antaranya di dalam cagar alam.
+- Hanya monyet dan bajing terbang yang juga kemungkinan hadir di banyak lokasi cagar alam di tempat lain.
+- Jadi, untuk sebagian besar dari kesembilan spesies, efek cagar alam yang kredibel bertumpu pada sekitar selusin lokasi cagar alam di satu sudut. Model tidak dapat membedakan efek cagar alam dari faktor tak terukur apa pun yang membuat sudut itu berbeda.
+
+Berhati-hatilah tentang apa yang ditunjukkan dan tidak ditunjukkan oleh hasil ini.
+
+- Interval yang melintasi nol bukanlah bukti tidak adanya efek. Dengan 101 lokasi, dan sedikit deteksi untuk banyak spesies, model kemungkinan tidak memiliki informasi yang cukup untuk menangkap efek yang sedang.
+- Di Gaoligongshan, wilayah utara dan timur memiliki tingkat indeks modifikasi manusia yang rendah, yang berarti habitat di dalam dan di luar cagar alam di utara dan timur sebagian besar setara. Hal ini akan melemahkan efek apa pun dari kovariat cagar alam.
+- Bahkan untuk sembilan spesies dengan efek yang kredibel, model hanya menunjukkan bahwa spesies tersebut lebih sering hadir di lokasi cagar alam. Model tidak dapat menunjukkan bahwa perlindungan adalah penyebabnya.
+
+> **Diskusikan.** Apa kesamaan kesembilan spesies cagar alam tersebut? Seorang pengelola kawasan bertanya mamalia mana yang terbantu oleh cagar alam. Apa yang akan Anda katakan kepada mereka, dan apa yang tidak akan Anda klaim?
+
+## Spesies mana yang ditemukan bersama atau terpisah lebih sering daripada yang dapat dijelaskan oleh kovariat okupansi?
+
+Model menjelaskan asosiasi-asosiasi ini dengan empat kovariat lingkungan tersembunyinya (`n_factors = 4`): spesies yang merespons dengan cara yang sama terhadap suatu kovariat tersembunyi cenderung ditemukan bersama. `returnOrdinationScores()` memberikan skor setiap lokasi pada setiap kovariat tersembunyi. Peta-peta menunjukkan skor median setiap lokasi, dengan segitiga untuk lokasi yang hulu sungainya berada di dalam cagar alam, seperti sebelumnya.
+
+```{r hidden-covariates, fig.width = 10, fig.height = 7}
+# kuantil (2,5%, 50%, 97,5%) x lokasi x kovariat tersembunyi
+scores <- returnOrdinationScores(fit_full)
+
+hidden <- scores["50%", , ] |>
+  as.data.frame() |>
+  setNames(paste("hidden covariate", 1:4)) |>
+  rownames_to_column("Site") |>
+  pivot_longer(-Site,
+               names_to = "hidden",
+               values_to = "score") |>
+  left_join(sites, by = "Site") |>
+  left_join(site_reserve, by = "Site")
+
+ggplot(hidden, aes(Xs.1, Xs.2, colour = score, shape = reserve)) +
+  geom_point(size = 2.5) +
+  facet_wrap(~ hidden, nrow = 1) +
+  # tanda suatu kovariat tersembunyi bersifat arbitrer: yang penting hanyalah lokasi mana yang serupa
+  scale_colour_gradient2(low = "sienna",
+                         mid = "grey90",
+                         high = "darkgreen",
+                         midpoint = 0,
+                         name = "Skor lokasi") +
+  scale_shape_manual(values = c("inside a reserve" = 17,
+                                outside = 16),
+                     name = "Hulu sungai") +
+  scale_x_continuous(breaks = c(97.5, 98.5)) +
+  coord_quickmap() +
+  labs(x = "Bujur",
+       y = "Lintang",
+       title = "Tempat keempat kovariat lingkungan tersembunyi bernilai tinggi dan rendah") +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+```
+
+- Tanda dan skala suatu kovariat tersembunyi bersifat arbitrer, jadi hanya polanya yang penting: lokasi mana yang serupa.
+- Skor-skor tersebut tidak pasti. Di hampir setiap lokasi, interval 95% dari setiap skor melintasi nol. Bacalah peta-peta ini sebagai pola umum, bukan lokasi per lokasi.
+- Kovariat tersembunyi 1 lebih tinggi di sudut barat daya terjauh dibandingkan di tempat lain, dan sudut itu adalah tempat hidup sebagian besar dari sembilan spesies cagar alam. Kovariat tersembunyi 3 dan 4 berkaitan dengan status cagar alam: kovariat 3 lebih tinggi di lokasi cagar alam, dan kovariat 4, yang paling sedikit bervariasi di antara keempatnya, lebih rendah. Jadi sebagian dari apa yang membedakan lokasi cagar alam juga dimiliki oleh kovariat tersembunyi, yang merupakan satu alasan lagi untuk membaca efek cagar alam dengan hati-hati.
+
+> **Diskusikan.** Kira-kira apa saja kovariat tersembunyi ini? Pikirkan hal-hal yang tidak diukur, seperti ketinggian, tipe hutan, ukuran sungai, atau jarak ke desa.
+
+Setelah lingkungan diperhitungkan, beberapa spesies masih muncul bersama atau terpisah lebih sering daripada yang diduga secara kebetulan. Model mengestimasi asosiasi residual ini sebagai korelasi. Kita hanya menyimpan pasangan yang interval 95%-nya tidak mencakup nol, menambahkan nama spesies, dan mencantumkan sepuluh yang terkuat.
+
+```{r associations}
+assoc <- fit$assoc |>
+  filter(lo > 0 | hi < 0) |>
+  left_join(status |> select(otu_id, species_a = species),
+            by = c("otu_a" = "otu_id")) |>
+  left_join(status |> select(otu_id, species_b = species),
+            by = c("otu_b" = "otu_id"))
+
+assoc |>
+  summarise(credible_pairs = n(),
+            positive = sum(median > 0),
+            negative = sum(median < 0))
+
+assoc |>
+  arrange(desc(median)) |>
+  select(species_a, species_b, correlation = median) |>
+  mutate(correlation = round(correlation, 2)) |>
+  head(20)
+```
+
+Korelasi sebesar 1 berarti dua spesies selalu ditemukan bersama, setelah kovariat dan efek lokasi tersembunyi diperhitungkan; 0 berarti mengetahui satu spesies tidak memberi tahu Anda apa pun tentang spesies lainnya.
+
+- 235 pasangan memiliki interval yang tidak mencakup nol, dan tidak satu pun bernilai negatif: tidak ada pasangan yang secara kredibel kurang mungkin muncul bersama dibandingkan secara kebetulan.
+- Yang terkuat adalah antara kerabat dekat (*Rattus nitidus* dengan *R. tanezumi* dan celurut *Episoriculus leucops* dengan *E. caudatus*).
+- Beberapa asosiasi ini mungkin disebabkan oleh pemecahan taksonomi yang berlebihan, yaitu satu spesies diwakili oleh dua OTU atau lebih.
+
+Asosiasi bukanlah interaksi. Dua spesies dapat muncul bersama karena berbagi habitat yang tidak terukur, karena DNA dari keduanya terbawa ke air yang sama, atau karena keduanya memang berinteraksi. Tabel ini adalah titik awal untuk bertanya, bukan jawaban.
+
+> Klik `assoc` di tab Environment dan cari ajag (*Cuon alpinus*). Spesies mana yang menyertainya, dan dari tiga penjelasan di atas, mana yang paling mungkin untuk masing-masing? Petunjuk: Anda dapat menggunakan tombol Filter di penampil RStudio untuk mencari *Cuon*.
+
+## Bertanya kepada asisten (opsional)
+
+Posit Assistant dapat membantu Anda menulis kode R untuk tabel-tabel dalam sesi ini. Di panel Posit Assistant, cobalah:
+
+- *Spesies mana yang memiliki laju positif palsu di atas 0,1, dan berapa proporsi di antaranya yang domestik?*
+- *Petakan kekayaan harapan untuk karnivora saja.*
+- *Lima spesies mana yang paling mungkin hadir di lokasi dengan kekayaan harapan tertinggi?*
+
+Bacalah kode yang ditulisnya sebelum Anda menjalankannya. Hari ini asisten hanya membantu Anda menulis kode R. Alat-alat occJSDM yang digunakannya di Sesi 2 membutuhkan data dan fit baru, yang tidak kita lakukan dalam sesi ini.
+
+## Yang dapat Anda bawa pulang
+
+- Model gabungan memberikan dua peluang kehadiran untuk setiap spesies di setiap lokasi, dengan positif palsu telah diperhitungkan. `psi_mean` berlaku untuk lokasi dengan karakteristik ini; `cond_mean` menambahkan deteksi spesies itu sendiri di lokasi tersebut. Membandingkan keduanya menunjukkan deteksi lemah mana yang mungkin tetap nyata.
+- Periksa konvergensi untuk setiap spesies, dan ketahui spesies mana yang ditandai.
+- Kualitas deteksi (`p` dan `q`) sangat bervariasi antarspesies. Untuk sebagian spesies, deteksi mentah melebih-lebihkan tempat hidupnya.
+- Kekayaan harapan dan kekayaan mentah menceritakan kisah yang berbeda.
+- Apakah cagar alam berpengaruh adalah pertanyaan yang harus dijawab per spesies. Dengan modifikasi manusia dibuat tetap, sembilan spesies liar secara kredibel lebih mungkin hadir di lokasi cagar alam, sebagian besar di satu sudut barat daya, dan satu spesies secara kredibel kurang mungkin hadir. Untuk sebagian besar spesies data tidak dapat menunjukkannya, dan spesies domestik cenderung berada di bagian bawah gambar cagar alam. Itu adalah asosiasi, bukan bukti bahwa perlindungan berhasil.
+- Asosiasi yang tersisa setelah kovariat diperhitungkan adalah titik awal untuk bertanya spesies mana yang hidup bersama, bukan jawaban.
+- Sesi 4 menggunakan `occupancy_long.csv` untuk menanyakan di mana perlindungan perlu dilakukan.

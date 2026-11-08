@@ -1,0 +1,898 @@
+---
+title: "Sesi 2: Di mana sebenarnya ajag berada?"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    df_print: paged
+editor: visual
+editor_options:
+  chunk_output_type: console
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE, fig.width = 8, fig.height = 5.5)
+```
+
+Seperti pada Sesi 1, chunk kode pertama hanya untuk keperluan lokakarya, sedangkan chunk kedua memuat paket-paket yang akan Anda gunakan dalam proyek Anda sendiri.
+
+```{r workshop-setup}
+source("setup/pins.R")
+use_workshop_lib()              # gunakan paket-paket yang dipasang untuk lokakarya
+source("R/data.R")              # derived_path(), digunakan oleh read_fit_summary()
+source("R/fit.R")               # read_fit_summary(): hasil tersimpan dari model yang di-fit pada semua mamalia
+source("R/schematic.R")         # data_schematic() dan traits_schematic(): gambar tabel-tabel
+source("R/session1.R")          # session1_dhole_map(): gambar ajag dari Sesi 1, digambar ulang
+```
+
+```{r packages}
+library(tidyverse)
+library(occJSDM)
+```
+
+## Apa yang ingin kita ketahui
+
+Sesi 1 diakhiri dengan peta deteksi mentah ajag. Sebagian deteksi mungkin merupakan positif palsu, dan sebagian lokasi tanpa deteksi mungkin merupakan negatif palsu. Sesi ini melakukan fitting model okupansi yang memperhitungkan keduanya dan menjawab pertanyaan berikut:
+
+> Untuk setiap lokasi, seberapa besar kemungkinan ajag benar-benar ada di sana, mengingat semua yang kita deteksi?
+
+Sebelum menjalankan model ajag, kita terlebih dahulu memeriksa model pada spesies simulasi dari akhir Sesi 1, yang kebenarannya sudah kita ketahui.
+
+Dalam sesi ini, kita melakukan langkah-langkah dengan urutan agak terbalik. Kita melihat hasil model terlebih dahulu, karena ini lebih mudah untuk belajar, lalu di bagian akhir kita memeriksa apakah hasil fitting dapat dipercaya. **Dalam pekerjaan Anda sendiri, Anda harus memeriksa hasil fitting sebelum membaca hasil apa pun**.
+
+## Bagaimana data disusun
+
+Model eDNA dua tahap perlu mengetahui struktur survei: ulangan PCR berada di dalam sampel lapangan, dan sampel lapangan berada di dalam lokasi. Struktur inilah yang memungkinkan model memisahkan kehadiran hewan dari deteksi DNA-nya.
+
+Kita membaca file CSV yang sama seperti pada Sesi 1, mempertahankan seluruh `info` dan hanya kolom ajag dari `OTU`, lalu menaruh keduanya dalam sebuah list bernama `d`, bentuk yang diharapkan oleh `runOccJSDM()`.
+
+```{r layout}
+info <- read.csv("data-derived/info.csv")
+OTU <- as.matrix(read.csv("data-derived/OTU.csv"))
+
+dhole_col <- str_subset(colnames(OTU), "Cuon_alpinus")   # cari nama lengkap kolom ajag di tabel OTU
+
+d <- list(info = info,
+          # drop = FALSE mempertahankan OTU sebagai matriks
+          OTU = OTU[, dhole_col, drop = FALSE])
+
+dim(d$OTU) # 1818 baris X 1 spesies, urutan baris sama dengan info
+```
+
+Klik `d` di tab Environment untuk melihatnya. Apakah Anda memahami mengapa `d$OTU` memiliki jumlah baris yang sama dengan `d$info`?
+
+- `d$info` adalah tabel dari Sesi 1, tanpa perubahan: satu baris per ulangan PCR, dengan `Site`, `Sample`, kovariat okupansi, dan kovariat pengambilan sampel.
+  - **Kovariat okupansi** juga dikenal sebagai **kovariat lokasi** dan **kovariat lingkungan**. Kovariat ini menggambarkan lokasi (iklim, hutan, modifikasi manusia, wilayah, dan apakah sungai berhulu di dalam cagar alam). Kovariat ini dapat memengaruhi apakah ajag hidup di sana.
+  - **Kovariat pengambilan sampel** menggambarkan bagaimana sampel diambil (volume air yang disaring, hujan pada hari sebelumnya). Kovariat ini dapat memengaruhi apakah sampel menangkap DNA ajag, jika ajag memang ada di sana.
+- `d$OTU` adalah matriks dengan 1.818 baris yang sama dan satu kolom, yaitu ajag. Nilai 1 berarti PCR positif. Ia harus tetap berupa matriks dengan nama kolom, meskipun hanya ada satu spesies, itulah sebabnya kita menulis `drop = FALSE`.
+- Baris-baris kedua tabel harus berada dalam urutan yang sama. Di sini urutannya sudah sama, karena keduanya berasal dari file yang sama.
+
+```{r}
+# ingat kembali bagaimana info dan OTU disusun
+data_schematic()
+```
+
+## Pertama, lakukan fitting model occJSDM pada data simulasi, yang jawabannya kita ketahui
+
+Sebelum membaca hasil ajag, kita mencoba model pada spesies simulasi dari akhir Sesi 1. Kita tahu di mana spesies itu hidup, karena ia disimulasikan, sehingga kita dapat memeriksa jawaban model. Ini adalah kode yang sama seperti pada Sesi 1, dengan seed yang sama, sehingga mensimulasikan survei yang sama.
+
+```{r simulate-survey}
+set.seed(2026)   # agar setiap peserta mendapatkan survei "acak" yang sama
+
+# 1. Spesies lebih mungkin hadir di tempat dengan tutupan hutan yang tinggi.
+truth <- info |>
+  distinct(Site, forest = Percent_of_forest_cover_1km) |>
+  mutate(prob_present = plogis(-0.5 + 2 * as.vector(scale(forest))),
+         # plogis() mengubah skor menjadi peluang
+         present = rbinom(n(), 1, prob_present))  # 1 = hadir, 0 = absen
+
+# 2. Sampel lapangan menangkap DNA spesies hanya 40% dari waktu ketika spesies ada di lokasi
+sim_samples <- info |>
+  distinct(Site, Sample) |>
+  left_join(truth, by = "Site") |>
+  mutate(dna = present * rbinom(n(), 1, 0.4))
+
+# 3. PCR mendeteksi DNA hanya 60% dari waktu ketika DNA ada di dalam sampel.
+sim_pcrs <- info |>
+  select(Site, Sample) |>
+  left_join(sim_samples, by = c("Site", "Sample")) |>
+  mutate(positive = dna * rbinom(n(), 1, 0.6))
+```
+
+Klik `sim_pcrs` di tab Environment untuk melihatnya.
+
+`sim_pcrs` adalah survei simulasi, satu baris per PCR, seperti `info`:
+
+- `present` adalah kebenarannya: 1 jika spesies hidup di lokasi tersebut, 0 jika tidak.
+- `dna` bernilai 1 jika sampel lapangan menangkap DNA spesies (peluang 40% ketika spesies hadir).
+- `positive` adalah deteksi simulasi: 1 jika PCR mendeteksi DNA (peluang 60% ketika DNA ada di dalam sampel).
+
+occJSDM memerlukan deteksi yang disusun seperti `OTU`: matriks dengan satu baris per PCR, dalam urutan yang sama dengan `info`, dan satu kolom bernama untuk spesies.
+
+```{r simulated-otu}
+sim_OTU <- matrix(sim_pcrs$positive, ncol = 1,
+                  dimnames = list(NULL, "simulated"))
+```
+
+Kita melakukan fitting dengan `runOccJSDM()`, pemanggilan yang sama dengan yang kita gunakan untuk ajag di bawah, dengan dua perbedaan. Satu-satunya kovariat okupansi adalah tutupan hutan, yaitu faktor yang direspons oleh spesies ini. Dan tidak ada kovariat pengambilan sampel, karena dalam survei kita setiap sampel memiliki peluang yang sama untuk menangkap DNA. Fitting ini memerlukan beberapa detik.
+
+```{r simulated-fit, message = TRUE}
+# agar setiap peserta mendapatkan hasil fitting yang sama
+set.seed(2026)
+
+sim_fit <- runOccJSDM(
+  data = list(info = info,
+              OTU = sim_OTU),
+  listParams = list(n_factors = 0),
+  threshold = 1,
+  occCovariates = "Percent_of_forest_cover_1km",
+  collCovariates = character(),
+  spatCovariates = character(),
+  MCMCparams = list(nchain = 2,
+                    nburn = 5000,
+                    niter = 5000,
+                    nthin = 1,
+                    ncores = 2),
+  summarisedLatentPresences = TRUE
+)
+
+# jika runOccJSDM() gagal, Anda dapat menghapus tanda komentar pada perintah ini dan memuat hasil fitting yang tersimpan
+# sim_fit <- readRDS("data-derived/simulated_fit.rds")
+```
+
+Arti dari argumen-argumen tersebut:
+
+- `n_factors` adalah jumlah kovariat lingkungan tersembunyi yang digunakan bersama oleh beberapa spesies. Dengan satu spesies tidak ada yang dapat dibagi, sehingga nilainya 0. Sesi 3 menggunakan ini.
+- `threshold`: sebuah PCR dihitung sebagai deteksi jika nilainya paling sedikit sebesar ini. `OTU` kita berisi 0 dan 1, sehingga 1 adalah nilai yang tepat. Dengan jumlah read, Anda biasanya juga menggunakan 1, dan Anda tidak boleh membuang jumlah read yang rendah terlebih dahulu: model memerlukan deteksi lemah untuk memperkirakan positif palsu. Namun, kami tetap menyediakan pilihan untuk menetapkan threshold yang lebih tinggi.
+- `occCovariates` dan `collCovariates` menyebutkan kolom-kolom `info` yang digunakan untuk okupansi dan untuk pengambilan sampel.
+- `spatCovariates = character()` menghilangkan bagian spasial dari model, yang memerlukan jauh lebih banyak lokasi daripada yang dimiliki kebanyakan survei.
+- `MCMCparams` mengatur berapa lama model dijalankan. Model di-fit dengan MCMC, yang mengambil serangkaian panjang draw acak dari parameter. Komentar pada fitting ajag di bawah menjelaskan fungsi setiap pengaturan, dan bagian "Apakah komputasinya dapat dipercaya?" menjelaskan MCMC.
+- `summarisedLatentPresences = TRUE` hanya menyimpan rata-rata kehadiran atau ketidakhadiran di setiap lokasi, sehingga ukuran hasil fitting tetap kecil.
+
+### Apakah model menemukan di mana spesies benar-benar berada?
+
+Perintah `computeConditionalOccupancyProbs()` memberikan, untuk setiap lokasi, perkiraan occJSDM tentang peluang bahwa spesies hadir di sana, berdasarkan apa yang terdeteksi.
+
+```{r simulated-check}
+# sebuah matriks: satu baris per lokasi, satu kolom per spesies
+sim_prob <- computeConditionalOccupancyProbs(sim_fit)
+
+# ubah sim_prob menjadi tabel, agar dapat digabungkan dengan kebenaran berdasarkan nama lokasi
+sim_prob <- tibble(Site = rownames(sim_prob),
+                   probability = sim_prob[, 1])
+```
+
+Klik `sim_prob` di tab Environment untuk melihatnya.
+
+Untuk setiap lokasi, gunakan kebenaran yang diketahui di `sim_pcrs` (di kolom `present`) untuk mengelompokkan setiap lokasi berdasarkan apakah spesies dinilai dengan benar sebagai absen atau hadir, atau apakah spesies hadir tetapi terlewat (negatif palsu). Lalu gabungkan ini dengan perkiraan peluang kehadiran dari occJSDM.
+
+```{r simulated-classify}
+# kelompokkan sim_pcrs dan gabungkan dengan sim_prob
+sim_check <- sim_pcrs |>
+  group_by(Site) |>
+  summarise(present = first(present), positive = sum(positive)) |>   # PCR positif, dari 18
+  mutate(status = case_when(present == 0 ~ "absent",
+                            positive > 0 ~ "present, detected",
+                            TRUE         ~ "present, missed")) |>
+  left_join(sim_prob, by = "Site")
+
+sim_check |>
+  group_by(status) |>
+  summarise(sites = n(),
+            mean_probability = round(mean(probability), 2),
+            lowest = round(min(probability), 2),
+            highest = round(max(probability), 2))
+```
+
+Klik `sim_check` di tab Environment untuk melihatnya.
+
+Sekarang kita membuat plot `sim_check`.
+
+```{r simulated-plot, fig.height = 3.5}
+ggplot(sim_check, aes(probability, status, colour = status)) +
+  # sebarkan titik-titik sedikit ke atas dan ke bawah, agar tidak saling menutupi
+  geom_jitter(height = 0.15, width = 0, size = 2, alpha = 0.7) +
+  scale_colour_manual(values = c("absent" = "grey50",
+                                 "present, detected" = "#cb181d",
+                                 "present, missed" = "orange"),
+                      guide = "none") +
+  scale_x_continuous(limits = c(0, 1)) +
+  labs(x = "Model: peluang spesies hadir",
+       y = "Kebenaran") +
+  theme_minimal()
+```
+
+Bagaimana kinerja model? Ada tiga baris:
+
+- **absent** (absen): spesies benar-benar absen dari lokasi-lokasi tersebut dalam simulasi.
+  - Di 55 lokasi ini, occJSDM memperkirakan bahwa spesies hadir dengan peluang rata-rata hanya 0,14 (dari 0,01 hingga sedikit di bawah 0,5). Ini masuk akal.
+- **present, detected** (hadir, terdeteksi): spesies benar-benar hadir di lokasi-lokasi tersebut dalam simulasi.
+  - Di 37 lokasi ini, occJSDM memperkirakan bahwa spesies hadir dengan peluang rata-rata 0,98 (dari sekitar 0,85 hingga 1,00). Ini juga masuk akal.
+  - occJSDM tidak memperkirakan tepat 1,0 karena occJSDM menganggap ada kemungkinan kecil terjadinya positif palsu.
+- **present, missed** (hadir, terlewat): spesies benar-benar hadir di lokasi-lokasi tersebut tetapi deteksinya gagal.
+  - Di 9 lokasi ini, occJSDM memperkirakan bahwa spesies hadir dengan peluang rata-rata 0,40 (dari 0,20 hingga 0,49).
+  - Perhatikan bahwa 9 lokasi ini *tampak* seperti absen yang sebenarnya (0, 0, 0), tetapi occJSDM belajar dari lokasi **present, detected** bahwa spesies lebih mungkin ditemukan di lokasi berhutan, dan model menghitung kira-kira berapa banyak lokasi tanpa deteksi yang kemungkinan merupakan negatif palsu. Model menggabungkan kedua fakta ini untuk memilih lokasi yang kemungkinan merupakan negatif palsu.
+  - Tentu saja, model tidak dapat yakin sepenuhnya, dan hanya memberikan peluang kehadiran "mungkin".
+  - Model juga tidak dapat menentukan lokasi mana yang terlewat. Beberapa lokasi berhutan lebat tempat spesies benar-benar absen mendapat peluang setinggi lokasi yang terlewat (titik-titik abu-abu antara 0,4 dan 0,5). Tidak ada apa pun dalam data yang dapat membedakan keduanya.
+
+**Jumlahkan peluang-peluang tersebut** di semua lokasi, dan kita mendapatkan jumlah lokasi tempat model memperkirakan spesies hadir.
+
+```{r simulated-total}
+# menjumlahkan peluang memberikan perkiraan jumlah lokasi yang dihuni spesies
+sim_check |>
+  summarise(truly_present = sum(present),
+            detected = sum(positive > 0),
+            expected_present = round(sum(probability), 1))
+```
+
+Model memperkirakan spesies hadir di sekitar 47 atau 48 lokasi. Kebenarannya adalah 46. Lumayan! Deteksi mentah hanya memberikan 37.
+
+### Apakah model memperoleh kembali laju pengambilan sampel dan PCR?
+
+Model juga dapat memperoleh kembali laju pengambilan sampel dan laju deteksi PCR yang kita gunakan untuk membuat survei.
+
+```{r simulated-rates}
+c(collection = mean(sim_fit$results_output$theta_output),   # kita menggunakan 0.4
+  pcr        = mean(sim_fit$results_output$p_output))       # kita menggunakan 0.6
+```
+
+### Apa yang baru saja kita lakukan?
+
+- Kita melakukan fitting occJSDM pada survei yang kebenarannya kita ketahui.
+- Model tidak mengubah lokasi oranye menjadi merah. Model mengatakan "mungkin" (rata-rata peluang = 0,40) di mana pun spesies bisa berada, dan secara keseluruhan model mendapatkan jumlah lokasi yang kira-kira benar.
+- Model juga memperoleh kembali seberapa sering sampel menangkap DNA dan seberapa sering PCR mendeteksinya.
+
+Sekarang kita membaca hasil ajag dengan cara yang sama, hanya saja ini adalah dataset nyata sehingga kita tidak mengetahui kebenarannya. (Kita menggunakan simulasi dan kerja lapangan tambahan untuk menguji model okupansi.)
+
+## Sekarang lakukan fitting occJSDM pada data survei ajag
+
+### Fitting model
+
+Fitting untuk satu spesies memerlukan sekitar satu menit, sehingga kita menjalankannya secara langsung. Jika fitting gagal karena alasan apa pun, hapus tanda komentar pada baris terakhir chunk dan jalankan untuk memuat salinan tersimpan dari hasil fitting yang persis sama, agar Anda dapat melanjutkan.
+
+```{r fit, message = TRUE}
+# agar setiap peserta mendapatkan hasil fitting yang sama
+set.seed(2026)
+
+fit <- runOccJSDM(
+  data = d,
+  # satu spesies, sehingga tidak ada kovariat lingkungan tersembunyi yang digunakan bersama
+  listParams = list(n_factors = 0),
+  # sebuah ulangan positif jika nilainya paling sedikit 1
+  threshold = 1,
+  occCovariates = c("annual_precipitation",
+                    "mean_temperature",
+                    "Human_modification_1km",
+                    "Percent_of_forest_cover_1km",
+                    "Patch_density_1km",
+                    "Edge_density_1km",
+                    "streamOrigin",
+                    "Regional_Division"),
+  collCovariates = c("Filter_vol",
+                     "PrevDayRain"),
+  spatCovariates = character(),
+  MCMCparams = list(nchain = 2,     # dua rangkaian draw yang independen (rantai)
+                    nburn = 5000,   # draw yang dibuang di awal setiap rantai
+                    niter = 5000,   # draw yang disimpan dari setiap rantai
+                    nthin = 1,      # simpan setiap draw
+                    ncores = 2),    # jalankan kedua rantai secara bersamaan
+  summarisedLatentPresences = TRUE
+)
+
+# jika runOccJSDM() gagal, Anda dapat menghapus tanda komentar pada perintah ini dan memuat hasil fitting yang tersimpan
+# fit <- readRDS("data-derived/dhole_fit.rds")
+```
+
+### Berapa peluang kehadiran ajag di setiap lokasi?
+
+Seperti yang kita lakukan pada spesies simulasi, `computeConditionalOccupancyProbs()` menghasilkan matriks dengan satu baris per lokasi dan satu kolom per spesies (di sini hanya ajag). Setiap nilai adalah peluang bahwa ajag hadir di lokasi tersebut, berdasarkan apa yang terdeteksi di sana. occJSDM juga memberikan peluang kedua, yang tidak memperhitungkan deteksi di lokasi itu sendiri. Sesi 3 membandingkan keduanya.
+
+```{r probability}
+cond <- computeConditionalOccupancyProbs(fit)
+
+sites <- info |>
+  distinct(Site, .keep_all = TRUE) |>
+    # satu baris per lokasi, seperti pada Sesi 1
+  select(-Sample, -Primer, -Filter_vol, -PrevDayRain) |>
+  arrange(Site)
+
+positive_pcrs <- d$info |>
+  mutate(positive = d$OTU[, 1]) |>
+  count(Site, wt = positive, name = "positive_pcrs")
+    # PCR positif per lokasi, dari 18
+
+model_probs <- tibble(Site = rownames(cond), model = cond[, 1])
+  # cond sebagai tabel, satu baris per lokasi
+
+map_data <- sites |>
+  left_join(positive_pcrs, by = "Site") |>
+    # cocokkan berdasarkan nama lokasi
+  left_join(model_probs, by = "Site") |>
+  mutate(raw = positive_pcrs / 18, .before = model) |>
+    # proporsi PCR yang positif
+  select(-positive_pcrs)
+```
+
+Klik `cond` lalu `map_data` di tab Environment untuk melihatnya. Kolom mana di `map_data` yang berasal dari `cond`?
+
+Berikut adalah deteksi mentah dari Sesi 1 di samping perkiraan model, digambar dengan cara yang sama. Lingkaran kosong adalah lokasi tanpa deteksi (peta mentah, "Raw"), atau lokasi tempat occJSDM menganggap ajag hampir pasti absen, dengan peluang di bawah 0,1 (peta model, "Model").
+
+```{r maps, fig.width = 9, fig.height = 7}
+map_long <- map_data |>
+  pivot_longer(c(raw, model), names_to = "map", values_to = "value") |>
+  mutate(map = factor(map, levels = c("raw", "model"),
+                      labels = c("Raw: share of PCRs positive",
+                                 "Model: probability present")),
+         # NA menggambar lingkaran kosong: tidak ada deteksi, atau peluang model di bawah 0.1
+         value = if_else(value == 0 | (map == "Model: probability present" & value < 0.1),
+                         NA,
+                         value))
+
+ggplot(map_long, aes(Xs.1, Xs.2)) +
+  geom_point(data = filter(map_long, is.na(value)),
+             shape = 21, size = 2.2, colour = "grey55", fill = NA) +
+  geom_point(data = filter(map_long, !is.na(value)),
+             aes(fill = value),
+             shape = 21, size = 3.2, colour = "grey25", stroke = 0.3) +
+  scale_fill_gradient(low = "#fee0d2",
+                      high = "#67000d",
+                      limits = c(0, 1),
+                      name = NULL) +
+  facet_wrap(~ map) +
+  coord_quickmap() +
+  labs(x = "Bujur", y = "Lintang") +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+```
+
+- Peta model (sisi kanan) memiliki lebih sedikit lingkaran terisi. Hampir setiap lokasi dengan satu PCR positif dari 18 hilang, sebagian besar di selatan: model menganggap deteksi tersebut sebagai positif palsu.
+- Lokasi dengan beberapa PCR positif sebagian besar menjadi lebih gelap, di utara dan di tengah jalur timur. Di sana model bahkan lebih yakin bahwa ajag hadir dibandingkan yang ditunjukkan oleh data mentah.
+
+> **Diskusikan.** Jika Anda adalah pengelola kawasan, peta mana yang akan Anda gunakan untuk memutuskan di mana mencari ajag? Mengapa? Pemeriksaan tambahan apa yang mungkin Anda lakukan?
+
+Chunk berikutnya menggambar histogram di panel Plots. Setiap batang menghitung jumlah lokasi. Batang di sebelah kiri adalah lokasi tempat ajag hampir pasti absen, batang di sebelah kanan adalah lokasi tempat ajag hampir pasti hadir, dan batang di tengah adalah lokasi yang tidak dapat dipastikan oleh data.
+
+```{r certainty}
+ggplot(map_data, aes(model)) +
+  geom_histogram(binwidth = 0.05, fill = "grey40") +
+  labs(x = "Peluang ajag hadir di lokasi",
+       y = "Jumlah lokasi",
+       title = "Sebagian besar lokasi hampir pasti, ke satu arah atau yang lain") +
+  theme_minimal()
+
+map_data |>
+  mutate(verdict = cut(model, c(-Inf, 0.1, 0.5, 0.9, Inf),
+                       labels = c("hampir pasti absen",
+                                  "kemungkinan absen",
+                                  "kemungkinan hadir",
+                                  "hampir pasti hadir"))) |>
+  count(verdict)
+```
+
+### Kembali ke peta ajag dari Sesi 1
+
+Pada Sesi 1, kita membuat peta deteksi ajag. Berikut peta itu lagi:
+
+```{r session1-map, fig.width = 8, fig.height = 10}
+# menjalankan kode Sesi 1 untuk gambar ini, sehingga Anda tidak perlu menjalankan ulang Sesi 1
+session1_dhole_map()
+```
+
+Kita telah menunjuk 4 lokasi (GLG23055, GLG23052, GLG23053, GLG23064) yang kemungkinan merupakan **positif palsu** (0,0,1) dan satu lokasi (GLG39) yang kemungkinan merupakan **deteksi yang benar**.
+
+Apa pendapat occJSDM tentang lokasi-lokasi ini?
+
+Selain itu, dari 60 lokasi yang tidak memiliki deteksi (0,0,0), berapa banyak lokasi yang dianggap occJSDM sebagai **negatif palsu**?
+
+```{r session1-sites}
+# patterns adalah jumlah PCR positif (mis. 2,2,1 atau 0,3,2) di setiap sampel.
+patterns <- d$info |>
+  mutate(positive = d$OTU[, 1]) |>
+  group_by(Site, Sample) |>
+  summarise(positive = sum(positive), .groups = "drop") |>
+  group_by(Site) |>
+  summarise(pattern = paste(positive, collapse = ", "))     # mis. "0, 2, 3"
+
+map_data <- map_data |> left_join(patterns, by = "Site")
+
+map_data |>
+  # panah-panah dari Sesi 1, GLG39 dan GLG28
+  filter(Site %in% c("GLG23055", "GLG23052", "GLG23053", "GLG23064",
+                     "GLG39", "GLG28")) |>
+  select(Site, pattern, probability = model) |>
+  mutate(probability = round(probability, 3)) |>
+  arrange(probability)
+```
+
+- **Keempat kemungkinan positif palsu** dari Sesi 1 (GLG23055, GLG23052, GLG23053, GLG23064), masing-masing dengan pola deteksi (0,0,1), semuanya mendapat peluang beberapa persen atau kurang. Ini berarti occJSDM menyimpulkan bahwa deteksi tersebut adalah positif palsu.
+- **GLG39**, dengan dua sampel yang baik dan satu sampel kosong (0,2,3), mendapat peluang tinggi: sampel kosong tersebut adalah negatif palsu, dan model mengabaikannya.
+- **GLG28**, positif di seluruh 18 PCR (6,6,6), sudah pasti.
+
+Menjumlahkan peluang memberikan perkiraan jumlah lokasi yang dihuni ajag. Kita melakukannya untuk lokasi tanpa deteksi, lalu untuk seluruh 101 lokasi.
+
+```{r expected-sites}
+# Lokasi tanpa deteksi: berapa banyak yang diperkirakan model dihuni ajag?
+map_data |>
+  filter(raw == 0) |>
+  summarise(undetected_sites = n(),
+            expected_occupied = round(sum(model), 1),
+            highest_probability = round(max(model), 2))
+
+# Semua lokasi: berapa yang terdeteksi, dan berapa banyak yang diperkirakan model dihuni ajag?
+map_data |>
+  summarise(sites = n(),
+            detected = sum(raw > 0),
+            expected_occupied = round(sum(model), 1))
+```
+
+- **Negatif palsu.** Sesi 1 menanyakan berapa banyak dari 60 lingkaran kosong yang merupakan negatif palsu. Jawaban model adalah sekitar 1,8 lokasi (`expected_occupied` pada tabel pertama dari dua tabel yang dicetak chunk di Console).
+- **Secara keseluruhan**, dengan menjumlahkan peluang di seluruh 101 lokasi, model memperkirakan ajag hadir di sekitar 17 lokasi, dibandingkan dengan 41 lokasi tempat ajag terdeteksi (tabel kedua di Console).
+
+> **Diskusikan.** Model memperkirakan ajag hadir di lebih sedikit lokasi dibandingkan yang ditunjukkan peta mentah. Apa artinya ini tentang jenis kesalahan, positif palsu atau negatif palsu, dalam dataset ajag?
+
+## Seberapa luas sebaran ajag?
+
+`returnOccupancyRates()` memberikan **okupansi dasar** ajag: peluang bahwa ajag menghuni lokasi "rata-rata". Di sini artinya:
+
+- **Nilai rata-rata dari enam kovariat okupansi numerik** (iklim, hutan, modifikasi manusia, kepadatan patch dan kepadatan tepi). `runOccJSDM()` menskalakan ulang masing-masing ke rata-rata 0 sebelum fitting, sehingga nilai dasar berada pada rata-ratanya.
+- **Level acuan dari dua kovariat kategori**, yang tidak memiliki rata-rata: di wilayah Timur, dengan sungai yang berhulu di dalam cagar alam.
+
+Fungsi ini menghasilkan satu nilai untuk setiap draw model, sehingga kita dapat melaporkan rata-rata dan interval 95%.
+
+```{r baseline}
+# satu baris per draw posterior
+baseline <- tibble(draw = returnOccupancyRates(fit)[, 1])
+
+baseline |>
+  summarise(mean = mean(draw),
+            lower = quantile(draw, 0.025),
+            upper = quantile(draw, 0.975)) |>
+  round(2)
+```
+
+Sebuah lokasi acuan rata-rata memiliki peluang sekitar 20% untuk dihuni ajag, tetapi interval 95%-nya lebar: 0,08 hingga 0,38.
+
+## Seberapa baik DNA ajag terkumpul dan terdeteksi?
+
+Deteksi terjadi dalam dua tahap, dan masing-masing dapat keliru ke dua arah.
+
+- **Di lapangan.** Sampel air dari lokasi tempat ajag hidup menangkap DNA-nya dengan **peluang pengambilan sampel**. Sampel dari lokasi tempat ajag tidak hidup tetap dapat menangkap DNA-nya, misalnya yang terbawa arus dari hulu, dengan **laju positif palsu lapangan**.
+- **Di laboratorium.** PCR pada sampel yang mengandung DNA mendeteksinya dengan **peluang deteksi**. PCR pada sampel tanpa DNA tersebut tetap dapat positif akibat kontaminasi, dengan **laju positif palsu laboratorium**.
+
+`returnPosteriorDraws()` menghasilkan draw dari parameter apa pun. Kita meringkas masing-masing dari keempat parameter dengan rata-rata dan interval 95%-nya.
+
+```{r detection}
+# Rata-rata dan interval 95% dari sekumpulan draw posterior, sebagai tabel satu baris
+summarise_draws <- function(x) {
+  tibble(mean = mean(x),
+         lower = quantile(x, 0.025),
+         upper = quantile(x, 0.975))
+}
+
+# returnPosteriorDraws() memberikan array 4 dimensi: primer (atau kovariat), spesies, iterasi, rantai.
+# [1, 1, , ] mengambil satu-satunya primer dan satu-satunya spesies, dan menyimpan semua draw dari kedua rantai.
+
+# peluang pengambilan sampel pada nilai rata-rata kovariat pengambilan sampel;
+# plogis() mengubah log-odds menjadi peluang
+collection_draws <- plogis(returnPosteriorDraws(fit, "beta_theta")["(Intercept)", 1, , ])
+
+detection_draws <- returnPosteriorDraws(fit, "p")[1, 1, , ]
+
+field_fp_draws <- returnPosteriorDraws(fit, "theta0")[1, 1, , ]
+
+lab_fp_draws <- returnPosteriorDraws(fit, "q")[1, 1, , ]
+
+rates <- bind_rows(
+  "Lapangan: peluang pengambilan sampel" = summarise_draws(collection_draws),
+  "Lapangan: laju positif palsu" = summarise_draws(field_fp_draws),
+  "Lab: peluang deteksi per PCR" = summarise_draws(detection_draws),
+  "Lab: laju positif palsu per PCR" = summarise_draws(lab_fp_draws),
+  .id = "rate")                               # nama-nama menjadi sebuah kolom
+
+rates |> mutate(across(where(is.numeric), \(x) round(x, 3)))
+```
+
+Sampel dari lokasi yang dihuni ajag menangkap DNA-nya sekitar tujuh dari sepuluh kali, dan PCR pada sampel tersebut mendeteksinya sekitar enam dari sepuluh kali. Kedua laju positif palsu bernilai beberapa persen. Kedengarannya kecil, tetapi dengan 18 PCR di setiap 101 lokasi, beberapa persen sudah cukup untuk menghasilkan positif tunggal yang tersebar di lokasi-lokasi yang tidak dihuni ajag.
+
+### Apakah cara pengambilan sampel berpengaruh?
+
+Kovariat pengambilan sampel mengubah peluang pengambilan sampel. Setiap titik adalah efek satu kovariat terhadap log-odds pengambilan sampel, per simpangan baku kovariat, dengan interval 95%-nya.
+
+```{r collection-covariates, fig.height = 3}
+collection_effects <- returnPosteriorDraws(fit, "beta_theta")
+effect_table <- bind_rows(
+  Filter_vol = summarise_draws(collection_effects["Filter_vol", 1, , ]),
+  PrevDayRain = summarise_draws(collection_effects["PrevDayRain", 1, , ]),
+  .id = "covariate")
+
+ggplot(effect_table, aes(mean, covariate)) +
+  geom_vline(xintercept = 0, linetype = 2, colour = "grey50") +
+  geom_pointrange(aes(xmin = lower, xmax = upper)) +
+  labs(x = "Efek terhadap log-odds pengambilan sampel", y = NULL) +
+  theme_minimal()
+```
+
+Hujan pada hari sebelum pengambilan sampel jelas menurunkan peluang bahwa sampel menangkap DNA ajag: intervalnya berada di bawah nol. (Ini berlawanan dengan hipotesis kerja kita.)
+
+Menyaring lebih banyak air mungkin membantu, tetapi intervalnya melewati nol, sehingga kita tidak dapat memastikannya. Namun, perhatikan bahwa kita hanya menguji dalam rentang volume air yang digunakan dalam studi ini, yang mungkin tidak cukup lebar untuk menangkap efek yang jelas. Untuk menguji secara sengaja efek volume air terhadap deteksi, seseorang sebaiknya melakukan eksperimen.
+
+### Apakah lebih banyak sampel lapangan atau PCR akan membantu?
+
+Dari peluang pengambilan sampel dan peluang deteksi, kita dapat menghitung seberapa sering survei dengan `M` sampel lapangan per lokasi dan `K` PCR per sampel akan mendeteksi ajag di lokasi tempat ajag hadir. Kita melakukan perhitungan ini untuk setiap draw, sehingga jawabannya disertai interval.
+
+```{r design}
+# Peluang bahwa lokasi yang dihuni ajag menghasilkan ≥1 PCR positif.
+# Sebuah sampel mendeteksi ajag jika menangkap DNA (collection_draws) dan setidaknya satu dari K PCR-nya menemukannya: semua K PCR gagal dengan peluang (1 - p)^K.
+# Lokasi mendeteksi ajag kecuali semua M sampel gagal.
+detect_site <- function(M, K) {
+  per_sample <- collection_draws * (1 - (1 - detection_draws)^K)
+  1 - (1 - per_sample)^M
+}
+
+designs <- expand_grid(field_samples = c(1, 2, 3, 6),
+                       pcrs_per_sample = c(1, 3, 6, 12)) |>
+  # satu ringkasan (rata-rata dan interval 95%) per desain
+  mutate(detection = map2(field_samples, pcrs_per_sample,
+                          \(M, K) summarise_draws(detect_site(M, K)))) |>
+  unnest(detection) |>
+  mutate(across(c(mean, lower, upper), \(x) round(x, 2)))
+
+designs
+```
+
+Klik `designs` di tab Environment untuk melihatnya. Sekarang kita membuat plotnya: satu garis untuk setiap jumlah sampel lapangan.
+
+```{r design-plot, fig.height = 4.5}
+ggplot(designs, aes(pcrs_per_sample, mean,
+                    colour = factor(field_samples),
+                    fill = factor(field_samples))) +
+  # interval 95% dari setiap desain
+  geom_ribbon(aes(ymin = lower, ymax = upper),
+              alpha = 0.15,
+              colour = NA) +
+  geom_line() +
+  geom_point() +
+  # desain survei ini: 3 sampel lapangan, masing-masing 6 PCR
+  annotate("point",
+           x = 6,
+           y = designs$mean[designs$field_samples == 3 & designs$pcrs_per_sample == 6],
+           shape = 21,
+           size = 5,
+           colour = "black") +
+  scale_x_continuous(breaks = c(1, 3, 6, 12)) +
+  scale_y_continuous(limits = c(0, 1)) +
+  labs(x = "PCR per sampel lapangan",
+       y = "Peluang mendeteksi ajag\ndi lokasi tempat ajag hadir",
+       colour = "Sampel lapangan\nper lokasi",
+       fill = "Sampel lapangan\nper lokasi") +
+  theme_minimal()
+```
+
+- Dengan desain survei ini (3 sampel, masing-masing 6 PCR), ajag terdeteksi di sekitar 96% lokasi tempat ajag hidup. Itulah sebabnya model memperkirakan sangat sedikit negatif palsu.
+- Menambah lebih dari 6 PCR hampir tidak memberi tambahan apa pun. Begitu sebuah sampel mengandung DNA, enam PCR hampir selalu menemukannya. Yang membatasi deteksi adalah apakah sampel menangkap DNA sama sekali.
+- Jadi, lebih banyak sampel lapangan akan lebih membantu daripada lebih banyak PCR.
+
+> Latihan 2 di bawah mengurangi survei menjadi dua sampel lapangan per lokasi. Temukan desain tersebut di tabel. Berapa banyak deteksi yang akan hilang?
+
+## Ciri lingkungan apa yang menjelaskan keberadaan ajag?
+
+Pertanyaan yang lebih sulit adalah mengapa. Kita melihat efek setiap kovariat okupansi terhadap peluang kehadiran ajag.
+
+```{r effects}
+# satu baris per parameter, dengan ringkasannya; penjelasan lebih lanjut tentang tabel ini di bawah
+diag <- returnConvergenceDiagnostics(fit)
+
+# beta_psi: efek kovariat okupansi
+effects <- diag |>
+  filter(param == "beta_psi") |>
+  select(covariate = label1, mean, lower = q2.5, upper = q97.5)
+
+ggplot(effects, aes(mean, covariate)) +
+  geom_vline(xintercept = 0, linetype = 2, colour = "grey50") +
+  geom_pointrange(aes(xmin = lower, xmax = upper)) +
+  labs(x = "Efek terhadap log-odds kehadiran",
+       y = NULL,
+       title = "Ketika data lemah, interval menjadi lebar") +
+  theme_minimal()
+
+effects |>
+  summarise(effects = n(),
+            intervals_crossing_zero = sum(lower < 0 & upper > 0))
+```
+
+Cara membaca gambar ini:
+
+- Setiap baris adalah satu kovariat okupansi. Titik adalah perkiraan terbaik dari efeknya, dan garis adalah interval 95%-nya.
+- Untuk kovariat numerik, seperti `Human_modification_1km`, efeknya dinyatakan per simpangan baku kovariat. Efek positif berarti ajag lebih mungkin hadir di tempat yang nilai kovariatnya lebih tinggi.
+- Untuk kovariat kategori, efek membandingkan satu level dengan level acuan yang tidak mendapat baris. `streamOriginoutsideGLGS` membandingkan lokasi yang sungainya berhulu di luar cagar alam Gaoligongshan dengan lokasi yang sungainya berhulu di dalam cagar alam. `Regional_DivisionNorthwest` dan `Regional_DivisionSouthwest` membandingkan wilayah-wilayah tersebut dengan wilayah Timur.
+- Interval yang melewati garis putus-putus berarti kita tidak dapat menentukan apakah kovariat tersebut berpengaruh. Kesembilan interval melewati garis tersebut, sehingga data deteksi yang kita miliki untuk ajag tidak cukup untuk melihat efek yang jelas dari kovariat mana pun.
+- Menguji efek kovariat berbeda dengan menanyakan di mana suatu spesies berada. Bagaimanapun, kovariat yang kita ukur mungkin memang tidak menjelaskan di mana ajag hidup. Namun, meskipun kita tidak tahu mengapa ajag berada di tempatnya, kita dapat memercayai perkiraan model tentang di mana ajag berada, seperti yang ditunjukkan bagian berikutnya ("Apakah komputasinya dapat dipercaya?").
+
+Efek pada skala log-odds sulit dibayangkan, sehingga `plotOccupancyGradient()` menggambar salah satunya sebagai peluang, dengan menahan kovariat lain pada nilai tipikal:
+
+```{r gradient}
+plotOccupancyGradient(fit, covName = "Human_modification_1km")
+```
+
+Pita yang diarsir adalah interval 95%. Anda dapat menarik garis horizontal melalui pita dari kiri ke kanan, dan garis horizontal berarti kovariat tidak memiliki efek. Ini adalah pesan yang sama dengan interval efek yang melewati nol pada gambar di atas.
+
+- Pada Sesi 1, ordinasi menunjukkan bahwa ajag lebih sering ditemukan di lokasi di dalam cagar alam dan di lokasi dengan sedikit modifikasi manusia, tetapi kita tidak dapat mengatakan mana yang lebih penting dalam menjelaskan sebaran spesies.
+
+- Sebuah model dapat mencoba membedakan keduanya, karena model memperkirakan efek setiap kovariat sambil menahan kovariat lain tetap. Pada dasarnya, model membandingkan lokasi yang sama-sama termodifikasi tetapi berbeda dalam hal apakah sungainya berhulu di dalam cagar alam, dan membandingkan lokasi yang sungainya berhulu di tempat yang sama tetapi berbeda dalam modifikasi manusia. Namun, untuk ajag, deteksinya tidak cukup banyak, dan mungkin variasi independen kedua kovariat juga tidak cukup, untuk menemukan efek yang jelas dari salah satunya.
+
+- Pada Sesi 3, kita kembali ke pertanyaan ini dengan model yang di-fit pada seluruh 108 spesies mamalia sekaligus. Model tersebut tetap memperkirakan efek terpisah untuk setiap spesies, dan kita menghitung berapa banyak spesies yang merespons setiap kovariat.
+
+## Apakah komputasinya dapat dipercaya?
+
+Semua hasil di atas berasal dari draw MCMC model. Biasanya, hal pertama yang Anda lakukan setelah menjalankan `runOccJSDM()` adalah memeriksa diagnostik model. Kali ini, kita meninggalkan langkah diagnostik untuk bagian akhir, karena kita ingin terlebih dahulu menunjukkan apa yang dapat dilakukan model.
+
+Apa itu diagnostik model? Pertama, sedikit penjelasan tentang cara kerja MCMC.
+
+- Model tidak menghitung jawabannya dalam satu langkah. Model mencarinya melalui ribuan langkah, mencoba banyak nilai berbeda untuk setiap parameter, sebagian besar dekat dengan nilai sebelumnya, kadang-kadang jauh darinya.
+- Pada awalnya pencarian mengembara, karena dimulai jauh dari nilai-nilai yang sesuai. Langkah-langkah awal ini adalah burn-in (`nburn`), dan dibuang.
+- Akhirnya, pencarian menemukan sekumpulan nilai yang sesuai dengan data, dan sejak saat itu pencarian terus berlangsung di sekitarnya. Model menyimpan `niter` langkah berikutnya sebagai hasilnya.
+- Kita dapat melihat pencarian ini dalam traceplot (satu per parameter), yang menunjukkan nilai yang dicoba pada setiap langkah pencarian. Pencarian yang sudah stabil melompat naik turun di sekitar nilai yang sama, itulah sebabnya traceplot yang baik terlihat seperti ulat berbulu. Lebar ulat itu adalah ketidakpastiannya. Ulat yang sempit berarti data mengarahkan pencarian ke rentang nilai yang sempit.
+- Model menjalankan pencarian dua kali secara independen (`nchain = 2`), dan kita bertanya apakah kedua rantai menemukan nilai yang sama. Jika keduanya stabil di tempat yang berbeda, atau salah satunya masih mengembara, setidaknya salah satu belum selesai mencari, dan hasilnya belum dapat dipercaya. Jika keduanya stabil di sekitar nilai yang sama, kemungkinan besar keduanya telah menemukan jawabannya. `rhat` mengukur seberapa baik kedua rantai sepakat, dan kita menginginkan nilainya mendekati 1, paling tinggi 1,01. (Nilai 1,01 berarti bahwa ketika kedua rantai digabungkan menjadi satu, draw gabungan hanya 1% lebih menyebar dibandingkan draw dari satu rantai.) Kadang-kadang kita menjalankan lebih dari 2 rantai.
+- Kita juga ingin setiap rantai telah mencari banyak nilai yang berbeda, tetapi karena MCMC mencari di dekat nilai sebelumnya, 5.000 langkah tidak setara dengan 5.000 nilai independen. Hanya setelah cukup banyak langkah perantara, nilai sebuah pencarian tidak lagi berkaitan dengan nilai sebelumnya. Secara teknis, nilai-nilai tersebut tidak lagi berautokorelasi. Ukuran sampel efektif, `ess`, menghitung berapa banyak nilai independen yang setara dengan kedua rantai bersama-sama. Semakin lambat pencarian bergerak, semakin rendah `ess`. Kita menginginkan paling sedikit 400.
+
+Kita sudah membuat `diag` dengan `returnConvergenceDiagnostics()` di atas, untuk membaca efek kovariat. Sekarang kita memeriksa `diag` untuk parameter yang melanggar salah satu aturan (`rhat` di atas 1,01, atau `ess` di bawah 400), dan menampilkan daftarnya.
+
+```{r diagnostics}
+# kita sudah menjalankan ini di atas, jadi baris ini hanya untuk menunjukkan bagaimana kita biasanya memulai diagnostik model
+# diag <- returnConvergenceDiagnostics(fit)
+
+diag |>
+  summarise(parameters = n(),
+            rhat_above_1.01 = sum(rhat > 1.01, na.rm = TRUE),
+            ess_below_400 = sum(ess < 400, na.rm = TRUE))
+
+flagged <- diag |>
+  filter(rhat > 1.01 | ess < 400) |>
+  select(param, label1, mean, rhat, ess)
+
+flagged
+```
+
+Klik `diag` di tab Environment untuk melihatnya. Tabel ini memiliki satu baris per parameter.
+
+- Pada hasil fitting yang digunakan untuk menulis halaman ini, 2 dari 16 parameter melanggar aturan `rhat` atau `ess`. Hasil yang dijalankan di komputer lain mungkin menunjukkan 3: lihat di bawah untuk penjelasannya.
+- `param` adalah jenis parameter:
+  - `beta0_psi` untuk okupansi dasar
+  - `beta_psi` untuk efek kovariat okupansi
+  - `beta_theta` untuk pengambilan sampel
+  - `theta0` untuk laju positif palsu lapangan
+  - `p` dan `q` untuk peluang deteksi dan laju positif palsu laboratorium
+- `label1` menunjukkan kovariat mana (atau, untuk `p` dan `q`, primer mana) yang terkait dengan parameter tersebut.
+- `mean`, `sd`, `q2.5` dan `q97.5` meringkas nilai-nilai yang dicoba (secara teknis, istilahnya adalah 'draw'): nilai rata-ratanya, sebarannya, dan kedua ujung interval 95%.
+- `rhat` dan `ess` adalah dua pemeriksaan yang dijelaskan di atas.
+
+> Temukan `beta_theta` untuk efek `PrevDayRain` serta `p` dan `q` untuk 12S di `diag`. Aturan mana dari keduanya, jika ada, yang dilanggar oleh masing-masing?
+
+Peluang deteksi dan laju positif palsu laboratorium, `p` dan `q`, melanggar aturan `ess`: rantai-rantainya sepakat, tetapi draw-nya sangat mirip dari satu draw ke draw berikutnya sehingga hanya setara dengan sekitar 200 draw independen. Efek hujan terhadap pengambilan sampel (`beta_theta` untuk efek `PrevDayRain`) berada tepat di batas aturan `rhat`. Pada hasil fitting yang digunakan untuk menulis halaman ini, `rhat`-nya adalah 1,002, sedikit di bawah 1,01, sehingga tidak ditandai. Dalam menjalankan model yang sama, dengan seed yang sama, di komputer lain nilainya menjadi 1,03, sedikit di atas, dan ditandai. Tidak ada yang berubah pada parameter tersebut. Aturan-aturan ini adalah konvensi, bukan garis pemisah antara rantai yang baik dan yang buruk. Sama seperti p = 0,049 dan p = 0,051 sebenarnya tidak berbeda, `rhat` yang sedikit di atas 1,01 dan yang sedikit di bawahnya memberi tahu Anda hal yang sama: lihatlah rantainya. Kita dapat melihat traceplot untuk menampilkan draw setiap rantai secara berurutan. Berikut adalah `p`, di samping okupansi dasar, yang tidak ditandai, lalu efek hujan.
+
+```{r traceplot, fig.height = 3}
+# plotTraceplot() memerlukan array: parameter x draw x rantai
+draws_p <- array(fit$results_output$p_output, dim = c(1, 5000, 2))
+
+# draw okupansi dasar sudah dalam bentuk tersebut
+draws_b0 <- fit$results_output$jsdm_output$B0_output
+
+# ditandai: ess di bawah 400
+plotTraceplot(draws_p,
+              param_name = "p (ditandai)",
+              dimnames1 = "ajag")
+
+# tidak ditandai
+plotTraceplot(draws_b0,
+              param_name = "okupansi dasar (tidak ditandai)",
+              dimnames1 = "ajag")
+
+# efek hujan adalah baris ketiga: intercept, Filter_vol, PrevDayRain
+draws_rain <- array(fit$results_output$beta_theta_output[3, 1, , ], dim = c(1, 5000, 2))
+
+# di batas: rhat mendekati 1.01
+plotTraceplot(draws_rain,
+              param_name = "efek hujan (di batas)",
+              dimnames1 = "ajag")
+```
+
+- Dua rantai yang baik terlihat seperti ulat berbulu yang saling tumpang tindih dan mengembara di sekitar nilai yang sama.
+- Untuk `p` kedua rantai saling tumpang tindih, tetapi masing-masing bergeser perlahan naik turun, sehingga draw yang berdekatan mirip satu sama lain. Itulah sebabnya ukuran sampel efektifnya rendah.
+- Draw efek hujan jauh lebih tidak mirip dari satu draw ke draw berikutnya (`ess` di atas 1.000). Periksa apakah kedua rantainya mengembara di sekitar nilai yang sama. Jika salah satu membuat lebih banyak penurunan tajam daripada yang lain, ketidaksepakatan kecil itulah yang sedikit menaikkan `rhat`.
+
+Apa yang harus dilakukan terhadap parameter yang ditandai:
+
+- **Tanyakan apakah hal itu penting untuk pertanyaan Anda.** Tanda-tanda di sini kecil.
+  - `rhat` mendekati 1,01 untuk efek `PrevDayRain`, bukan 1,3
+  - Kesimpulan bahwa satu PCR positif dari 18 merupakan bukti yang lemah tidak bergantung pada nilai tepat `p`.
+- **Jalankan rantai yang lebih panjang dan periksa lagi.** Tingkatkan `nburn` dan `niter`, yang memberi rantai lebih banyak waktu untuk stabil dan menyepakati sekumpulan nilai. Jika ini berhasil, `p` dan `q` akan dapat ditentukan dengan lebih presisi, tetapi intervalnya tidak akan jauh lebih sempit, karena lebar interval mencerminkan informasi dalam data.
+- **Laporkan.** Sebutkan parameter mana yang tidak memenuhi aturan dan seberapa jauh.
+
+`runOccJSDM()` juga memeriksa setiap blok parameter dengan sendirinya, dan memberi peringatan jika ada yang memiliki `rhat` di atas 1,1 atau ukuran sampel efektif di bawah 50. Anda hanya melihat peringatan ini ketika menjalankan fitting secara langsung.
+
+## Simpan hasilnya
+
+Setiap hasil di atas adalah tabel R biasa, sehingga `write.csv()` dapat menyimpannya untuk laporan atau lampiran. Sebagai contoh, satu baris per lokasi dengan deteksi mentah dan peluang dari model:
+
+```{r save, eval = FALSE}
+map_data |>
+  select(Site, Xs.1, Xs.2, pattern, raw, probability = model) |>
+  write.csv("dhole_by_site.csv", row.names = FALSE)
+```
+
+## Latihan praktik
+
+Setiap latihan melakukan fitting ulang model dengan satu perubahan dan membandingkan jawabannya dengan hasil fitting di atas. Satu fitting memerlukan kurang dari satu menit. Chunk-chunk di bawah tidak dijalankan ketika halaman ini dibuat, jadi jalankan sendiri, satu per satu.
+
+Pertama, simpan kovariat dalam dua vektor, agar setiap latihan dapat menggunakannya kembali.
+
+```{r exercise-setup}
+occ_covs <- c("annual_precipitation",
+              "mean_temperature",
+              "Human_modification_1km",
+              "Percent_of_forest_cover_1km",
+              "Patch_density_1km",
+              "Edge_density_1km",
+              "streamOrigin",
+              "Regional_Division")
+coll_covs <- c("Filter_vol",
+               "PrevDayRain")
+```
+
+### Latihan 1: spesies yang sebarannya kita ketahui
+
+Takin (*Budorcas taxicolor*) hanya hidup di bagian utara wilayah studi. Ji et al. (2025, [doi:10.1111/ele.70302](https://doi.org/10.1111/ele.70302){.uri}) menemukan beberapa deteksi takin yang lemah di selatan, tempat takin diketahui tidak hidup. Lakukan fitting model yang sama pada takin.
+
+```{r exercise-takin, eval = FALSE}
+takin_col <- str_subset(colnames(OTU), "Budorcas_taxicolor")
+
+d_takin <- list(info = info,
+                OTU = OTU[, takin_col, drop = FALSE])
+
+set.seed(2026)
+fit_takin <- runOccJSDM(data = d_takin,
+                        listParams = list(n_factors = 0),
+                        threshold = 1,
+                        occCovariates = occ_covs,
+                        collCovariates = coll_covs,
+                        spatCovariates = character(),
+                        MCMCparams = list(nchain = 2,
+                                          nburn = 5000,
+                                          niter = 5000,
+                                          nthin = 1,
+                                          ncores = 2),
+                        summarisedLatentPresences = TRUE)
+
+# PCR positif per lokasi, dari 18
+takin_positive <- info |>
+  mutate(positive = d_takin$OTU[, 1]) |>
+  count(Site, wt = positive, name = "positive_pcrs")
+
+takin_probability <- computeConditionalOccupancyProbs(fit_takin)
+takin_probability <- tibble(Site = rownames(takin_probability),
+                            probability = round(takin_probability[, 1], 3))
+
+takin <- sites |>
+  left_join(takin_positive, by = "Site") |>
+  left_join(takin_probability, by = "Site")
+
+takin |>
+  filter(positive_pcrs > 0) |>
+  arrange(Xs.2) |>                                  # dari selatan ke utara
+  select(Site, latitude = Xs.2, positive_pcrs, probability)
+```
+
+- Di mana deteksi takin yang lemah, dan berapa peluang yang diberikan model untuk deteksi tersebut?
+- Apakah model sesuai dengan apa yang diketahui tentang sebaran takin?
+- Periksa hasil fitting dengan `returnConvergenceDiagnostics(fit_takin)`. Apakah ada parameter yang ditandai?
+- Ji et al. (2025) memetakan dua peluang kehadiran takin dalam Gambar Tambahan 12 mereka. Sesi 3 menggambar dua peta yang sama dari model untuk seluruh 108 mamalia.
+
+### Latihan 2: lebih sedikit sampel lapangan
+
+Bagaimana jika survei hanya mengambil dua sampel lapangan di setiap lokasi, bukan tiga? Pertahankan dua sampel pertama dari setiap lokasi dan lakukan fitting ulang.
+
+```{r exercise-two-samples, eval = FALSE}
+first_two <- info |>
+  group_by(Site) |>
+  mutate(keep = Sample %in% unique(Sample)[1:2]) |>   # dua sampel pertama dari setiap lokasi
+  pull(keep)
+
+d_two <- list(info = filter(info, first_two),
+              OTU = d$OTU[first_two, , drop = FALSE])
+
+set.seed(2026)
+fit_two <- runOccJSDM(data = d_two,
+                      listParams = list(n_factors = 0),
+                      threshold = 1,
+                      occCovariates = occ_covs,
+                      collCovariates = coll_covs,
+                      spatCovariates = character(),
+                      MCMCparams = list(nchain = 2,
+                                        nburn = 5000,
+                                        niter = 5000,
+                                        nthin = 1,
+                                        ncores = 2),
+                      summarisedLatentPresences = TRUE)
+
+two_probability <- computeConditionalOccupancyProbs(fit_two)
+
+compare_two <- map_data |>
+  select(Site, pattern, three_samples = model) |>
+  left_join(tibble(Site = rownames(two_probability),
+                   two_samples = two_probability[, 1]),
+            by = "Site")
+
+ggplot(compare_two, aes(three_samples, two_samples)) +
+  geom_abline(colour = "grey60") +
+  geom_point() +
+  labs(x = "Peluang hadir, tiga sampel",
+       y = "Peluang hadir, dua sampel") +
+  theme_minimal()
+
+compare_two |>
+  filter(abs(three_samples - two_samples) > 0.2) |>   # lokasi yang paling banyak berubah
+  mutate(across(c(three_samples, two_samples), \(x) round(x, 2)))
+```
+
+- Lokasi mana yang paling banyak berubah? Lihat `pattern`-nya: sampel mana yang dibuang, dan apa isinya?
+- Dengan data yang lebih sedikit, apakah peluang bergeser ke arah 0 dan 1, atau ke arah tengah?
+- Apa yang disampaikan hal ini kepada Anda tentang berapa banyak sampel lapangan yang perlu diambil dalam survei Anda berikutnya?
+
+### Latihan 3: hilangkan satu kovariat pengambilan sampel
+
+Hujan pada hari sebelumnya menurunkan peluang bahwa sampel menangkap DNA ajag. Lakukan fitting ulang tanpa kovariat tersebut.
+
+```{r exercise-no-rain, eval = FALSE}
+set.seed(2026)
+fit_no_rain <- runOccJSDM(data = d,
+                          listParams = list(n_factors = 0),
+                          threshold = 1,
+                          occCovariates = occ_covs,
+                          collCovariates = "Filter_vol",   # tanpa PrevDayRain
+                          spatCovariates = character(),
+                          MCMCparams = list(nchain = 2,
+                                            nburn = 5000,
+                                            niter = 5000,
+                                            nthin = 1,
+                                            ncores = 2),
+                          summarisedLatentPresences = TRUE)
+
+no_rain_probability <- computeConditionalOccupancyProbs(fit_no_rain)
+
+rain <- info |>
+  group_by(Site) |>
+  summarise(rain_mm = mean(PrevDayRain))                 # hujan pada hari sebelum pengambilan sampel, per lokasi
+
+compare_rain <- map_data |>
+  select(Site, pattern, with_rain = model) |>
+  left_join(tibble(Site = rownames(no_rain_probability),
+                   without_rain = no_rain_probability[, 1]),
+            by = "Site") |>
+  left_join(rain, by = "Site")
+
+compare_rain |>
+  filter(abs(with_rain - without_rain) > 0.1) |>   # lokasi yang paling banyak berubah
+  mutate(across(c(with_rain, without_rain), \(x) round(x, 2)))
+```
+
+- Lokasi mana yang paling banyak berubah? Berapa banyak hujan yang turun sebelum lokasi tersebut disampel, dan berapa PCR yang positif di sana?
+- Mengapa menghilangkan hujan akan mengubah peluang di lokasi yang ajag-nya tidak pernah terdeteksi?
+- Kovariat pengambilan sampel tidak berkaitan dengan di mana ajag hidup. Mengapa kovariat ini tetap penting bagi peta?
+
+## Lakukan dengan asisten (menggunakan perangkat occJSDM)
+
+Instruktur Anda telah menghubungkan Posit Assistant ke empat perangkat occJSDM: `validate_data`, `fit_model`, `diagnostics` dan `summarise_fit`. Perangkat-perangkat ini melakukan langkah-langkah yang sama dengan yang baru saja Anda jalankan. Ketik setiap permintaan ke panel Posit Assistant, dengan kata-kata Anda sendiri.
+
+1.  Minta asisten untuk memeriksa file data `data-derived/dhole_input.rds` dengan `validate_data`. Berikan kovariat okupansi `annual_precipitation`, `mean_temperature`, `Human_modification_1km`, `Percent_of_forest_cover_1km`, `Patch_density_1km`, `Edge_density_1km`, `streamOrigin` dan `Regional_Division`, serta kovariat pengambilan sampel `Filter_vol` dan `PrevDayRain`. Minta asisten menjelaskan setiap masalah sebelum fitting.
+2.  Minta asisten melakukan fitting model dengan threshold deteksi 1, dua rantai dengan 5000 iterasi burn-in dan 5000 iterasi yang disimpan, tanpa kovariat lingkungan tersembunyi (`n_factors = 0`), dan seed 2026, seed yang Anda gunakan di atas.
+3.  Minta asisten memberikan diagnostik konvergensi. Bandingkan jumlah parameter yang ditandai menurut asisten dengan jumlah di tabel `diag` Anda sendiri. Dengan seed yang sama, keduanya seharusnya cocok.
+
+Jika asisten melaporkan error, beri tahu instruktur Anda dan lanjutkan dengan kode di atas. Kode tersebut melakukan hal yang sama.
+
+## Hal yang dapat Anda bawa pulang
+
+- Model okupansi memisahkan di mana ajag hidup dari di mana DNA-nya terdeteksi. Sebagian besar deteksi lemah ternyata merupakan positif palsu, dan beberapa lokasi tanpa deteksi kemungkinan dihuni ajag.
+- Model juga memberi tahu Anda seberapa baik survei tersebut: seberapa sering sampel menangkap DNA, seberapa sering PCR mendeteksinya, dan seberapa sering setiap tahap menghasilkan positif palsu. Ini dapat menjadi panduan dalam merancang survei berikutnya.
+- Peluang bahwa ajag hadir di setiap lokasi cukup kuat untuk sebagian besar lokasi. Alasan di baliknya jauh kurang kuat. Sampaikan keduanya dengan jujur.
+- Periksa rantai sebelum Anda melaporkan angka apa pun. Di sini rantai hanya menunjukkan tanda-tanda kecil.
+- Sesi 3 melakukan hal ini untuk seluruh 108 mamalia sekaligus, dan Sesi 4 mengubah jawaban-jawaban tersebut menjadi rencana konservasi.

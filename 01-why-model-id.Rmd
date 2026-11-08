@@ -1,0 +1,643 @@
+---
+title: "Sesi 1: Mengapa membuat model? Apa yang tidak dapat diungkapkan oleh ringkasan eDNA"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    df_print: paged
+editor: visual
+editor_options:
+  chunk_output_type: console
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE, fig.width = 8, fig.height = 5.5)
+```
+
+Chunk kode pertama hanya diperlukan untuk lokakarya ini. Chunk ini mengarahkan R ke pustaka paket lokakarya dan memuat dua fungsi yang menggambar skema di bawah. Anda tidak memerlukannya dalam proyek Anda sendiri.
+
+```{r workshop-setup}
+source("setup/pins.R")
+use_workshop_lib()              # gunakan paket yang dipasang untuk lokakarya
+source("R/schematic.R")         # data_schematic() dan traits_schematic(): gambar tabel-tabel
+```
+
+Chunk kedua memuat beberapa paket R, seperti yang akan Anda lakukan dalam analisis Anda sendiri.
+
+```{r packages}
+library(tidyverse)
+library(ecoCopula)    # ordinasi berbasis model
+library(treemapify)   # treemap yang digambar dengan ggplot2
+library(ggrepel)      # label yang tidak saling tumpang tindih, di ggplot2
+library(patchwork)    # untuk membuat gambar gabungan
+```
+
+## Survei dan pertanyaannya
+
+Pada tahun 2023, sebuah tim mengambil sampel air di 101 lokasi sungai di seluruh kompleks kawasan lindung Gaoligongshan di Yunnan dan melakukan sekuensing eDNA untuk vertebrata (Ji et al. 2025, *Ecology Letters*, [doi:10.1111/ele.70302](https://doi.org/10.1111/ele.70302){.uri}). Dalam lokakarya ini, kita menggunakan mamalia dari survei tersebut: 108 spesies.
+
+Ada tiga pertanyaan yang penting bagi seorang pengelola kawasan.
+
+- **Di mana spesies-spesies itu berada?** Hal ini penting untuk spesies liar yang ingin kita lindungi dan untuk spesies invasif yang ingin kita kendalikan.
+
+- **Mengapa spesies itu ada di sana (atau tidak ada)?** Misalnya, apakah modifikasi manusia terhadap lahan membuat suatu spesies menjauh? Sesi 2 menanyakan hal ini untuk ajag.
+
+- **Di mana kita sebaiknya melindungi?** Lokasi mana yang memiliki nilai konservasi paling tinggi dibandingkan biayanya?
+
+Sebagian besar makalah eDNA berhenti pada ringkasan tentang apa yang terdeteksi. Sesi ini terlebih dahulu membuat ringkasan tersebut, karena Anda akan diminta untuk membuatnya. Kemudian sesi ini menunjukkan mengapa ringkasan itu tidak dapat menjawab pertanyaan-pertanyaan di atas.
+
+## Data
+
+Setiap lokasi diambil sampelnya tiga kali (sampel lapangan), dan setiap sampel diamplifikasi dalam enam ulangan PCR. Jadi setiap lokasi memiliki 18 hasil PCR per spesies.
+
+Ini adalah data survei nyata, yang diarsipkan di Zenodo ([doi:10.5281/zenodo.17113196](https://doi.org/10.5281/zenodo.17113196){.uri}). Arsip tersebut mencatat, untuk setiap sampel lapangan, berapa banyak dari enam PCR-nya yang positif untuk setiap spesies. occJSDM memerlukan satu baris per PCR, sehingga kami mengubah setiap hitungan menjadi angka 1 sebanyak hitungan tersebut, diikuti angka 0. Karena itu, urutan PCR di dalam satu sampel tidak bermakna; yang bermakna hanya hitungannya. `analysis/build-derived.R` menunjukkan cara melakukannya.
+
+occJSDM memerlukan dua tabel dari Anda, dan secara opsional tabel ketiga.
+
+- `info`: satu baris per ulangan PCR. `Site` dan `Sample` menyatakan di mana ulangan tersebut berada, dan kolom-kolom lainnya adalah kovariat.
+- `OTU`: deteksi. Tabel ini memiliki baris yang sama dengan `info` dan satu kolom per spesies, berisi jumlah read (atau angka 1 untuk PCR yang positif).
+- `traits` (opsional): satu baris per spesies, berisi karakteristik seperti massa tubuh yang mungkin menjelaskan mengapa spesies merespons secara berbeda. Lokakarya ini tidak menggunakan sifat (traits).
+
+Skema ini menunjukkan bagaimana tabel `info` dan `OTU` saling terkait, dengan nilai-nilai rekaan. Setiap baris adalah satu ulangan PCR.
+
+```{r schematic}
+data_schematic()   # gambar kedua tabel, dibuat di R/schematic.R
+```
+
+- **Ulangan sampel.** Setiap lokasi memiliki beberapa sampel lapangan, masing-masing dengan namanya sendiri di `Sample` (di sini `GLG01-1` dan `GLG01-2`, diberi warna latar berbeda).
+- **Ulangan primer.** Setiap sampel dapat diamplifikasi dengan lebih dari satu primer, yang namanya tercantum di `Primer`. occJSDM memerlukan kolom ini meskipun hanya satu primer yang digunakan, seperti pada data lokakarya kita, di mana setiap baris bertuliskan 12S.
+- **Ulangan PCR tidak memiliki kolom.** Baris-baris dengan `Site`, `Sample` dan `Primer` yang sama adalah ulangan PCR satu sama lain, dan occJSDM menghitungnya dari baris-baris tersebut. Kolom PCR hanya ada untuk membantu Anda membaca tabel.
+- **Kovariat okupansi** berulang pada setiap baris dari suatu *lokasi*, dan **kovariat pengambilan sampel** berulang pada setiap baris dari suatu *sampel*.
+- `OTU` memiliki baris yang sama, dalam urutan yang sama, dengan satu kolom per spesies. Setiap sel adalah jumlah read spesies tersebut dalam PCR itu, langsung dari tabel OTU yang dihasilkan oleh pipeline bioinformatika Anda. occJSDM mengubah hitungan tersebut menjadi deteksi (misalnya 0/1), menggunakan argumen `threshold` (Sesi 2), jadi **jangan menghapus hitungan rendah dari tabel OTU Anda**. Selain itu, agar sederhana, tabel `OTU` lokakarya kita sudah hanya berisi angka 1 dan 0.
+
+Tabel `traits` yang opsional memiliki satu baris per spesies.
+
+```{r traits-schematic}
+traits_schematic()   # gambar tabel traits, dibuat di R/schematic.R
+```
+
+- **Nama baris adalah nama spesies**, **ditulis persis sama dengan nama kolom `OTU`**. occJSDM mencocokkan setiap spesies dengan sifatnya berdasarkan nama, sehingga baris-baris dapat berada dalam urutan apa pun, tetapi setiap kolom `OTU` harus memiliki baris. Nama-nama tersebut tidak boleh berupa kolom biasa, karena occJSDM memperlakukan setiap kolom sebagai sifat. Biasanya Anda membuat tabel traits dengan kolom `species`. Untuk menyiapkannya bagi occJSDM, pindahkan kolom spesies Anda ke nama baris sebagai langkah terakhir: `column_to_rownames(traits, "species")`.
+- **Sifat dapat berupa numerik** (massa tubuh) **atau kategorikal** (pakan, nokturnal/diurnal).
+- Sifat menggambarkan spesies, bukan lokasi atau sampel, sehingga sifat tidak berulang antarbaris seperti halnya kovariat di `info`.
+
+Dalam lokakarya ini, kita membaca `info` dan `OTU` dari file CSV, sebagaimana Anda akan membaca data Anda sendiri. Kita juga membaca tabel spesies yang berisi taksonomi dan status Daftar Merah setiap spesies. Tabel ini bukan masukan model. Kita menggunakannya hanya untuk memberi label dan meringkas hasil.
+
+```{r data}
+info <- read.csv("data-derived/info.csv")         # satu baris per ulangan PCR
+OTU <- as.matrix(read.csv("data-derived/OTU.csv")) # baris sama dengan info, satu kolom per spesies
+species <- read.csv("data-derived/species.csv")   # satu baris per spesies: taksonomi dan status Daftar Merah
+
+dim(info) # 1818 baris = 101 lokasi X 3 sampel/lokasi X 6 PCR/sampel
+dim(OTU) # 1818 baris X 108 spesies, urutan baris sama dengan info
+dim(species) # 108 spesies X 9 kolom: ID, nama, taksonomi, status Daftar Merah dan massa tubuh
+```
+
+Klik data frame `OTU`, `info`, dan `species` di tab Environment untuk melihatnya.
+
+- Di `info`, Site berisi nama-nama lokasi yang unik, dan Sample memiliki 3 nama sampel unik per lokasi.
+
+  - Ada 6 baris per kombinasi Sample/Site, yang mewakili 6 PCR. Dalam dataset ini, hanya satu primer yang digunakan, yaitu 12S, tetapi occJSDM dapat menganalisis dataset yang menggunakan beberapa primer.
+
+  - `annual_precipitation` sampai `Regional_Division` adalah kovariat okupansi, yang menggambarkan kondisi lokasi. Karena itu, nilai-nilai ini berulang pada 18 baris setiap lokasi. Misalnya, `Human_modification_1km` menggambarkan seberapa besar manusia telah mengubah lahan dalam radius 1 km dari setiap lokasi.
+
+  - `Filter_vol` adalah kovariat pengambilan sampel dan menggambarkan berapa banyak air yang disaring untuk setiap sampel, yang dapat mengubah berapa banyak DNA yang tertangkap. `PrevDayRain`, yaitu hujan pada hari sebelumnya, juga merupakan kovariat pengambilan sampel. Nilai-nilai ini berubah dari sampel ke sampel sehingga hanya berulang pada 6 baris setiap sampel.
+
+  - `Xs.1` dan `Xs.2` adalah bujur dan lintang lokasi.
+
+- `OTU` memiliki 1.818 baris, satu per ulangan PCR, dan 108 kolom, satu per spesies. Angka 1 berarti PCR tersebut positif untuk spesies itu.
+
+- `species` berisi deskriptor taksonomi *dan* sifat untuk masing-masing dari 108 spesies, dan bila diperlukan, kita dapat mengambil informasi yang dibutuhkan untuk membuat tabel `traits`.
+
+Terakhir, agar lebih mudah membuat peta dan plot di R, kita memerlukan tabel yang menggambarkan setiap lokasi satu kali per baris. Tabel `info` mengulang informasi lokasi satu kali per PCR (18 kali dalam studi ini), sehingga kita menggunakan `distinct()` untuk mengubah `info` menjadi `sites`, dan kita membuang kolom-kolom yang menggambarkan sampel, bukan lokasi.
+
+```{r sites}
+sites <- info |>
+  distinct(Site, .keep_all = TRUE) |>
+  select(-Sample, -Primer, -Filter_vol, -PrevDayRain) |>
+  arrange(Site)
+```
+
+## Ringkasan 1: desain studi
+
+Berikut adalah desain studi dalam satu tabel: lokasi, jumlah sampel lapangan per lokasi (M), primer yang digunakan pada setiap sampel, dan jumlah ulangan PCR per sampel dan primer (K). Setiap lokasi memiliki M = 3 dan K = 6, sehingga desain ini seimbang. Lokasi-lokasi tersebar di tiga wilayah, sebagian besar di Barat Daya.
+
+Klik data frame `design` di tab Environment untuk melihatnya. Perhatikan bahwa kita hanya menggunakan satu primer, yaitu 12S.
+
+```{r design}
+design <- info |>
+  count(Site, Sample, Primer, name = "K") |>    # ulangan PCR untuk setiap sampel lapangan dan primer
+  group_by(Site) |>
+  summarise(M = n_distinct(Sample),             # sampel lapangan di lokasi tersebut
+            Primer = paste(unique(Primer), collapse = ", "),   # primer yang digunakan
+            K = first(K)) |>                    # di sini K sama untuk setiap sampel
+  left_join(sites |> select(Site, Regional_Division), by = "Site")
+
+design |> count(Regional_Division, M, Primer, K, name = "sites")
+```
+
+## Ringkasan 2: apa yang terdeteksi, menurut ordo taksonomi
+
+```{r composition}
+composition <- species |>
+  count(order, family, name = "species")
+
+ggplot(composition, aes(area = species, fill = order, subgroup = order,
+                        label = family)) +
+  geom_treemap(colour = "white") +
+  geom_treemap_subgroup_border(colour = "white", size = 4) +
+  geom_treemap_text(place = "topleft",
+    # nama famili, di kotak-kotak kecil
+                    colour = "white",
+                    size = 9,
+                    min.size = 4,         # kotak yang lebih kecil mendapat teks yang lebih kecil
+                    reflow = TRUE,        # pecah nama panjang menjadi dua baris
+                    padding.x = grid::unit(1.5, "mm"),
+                    padding.y = grid::unit(1.5, "mm")) +
+  geom_treemap_subgroup_text(place = "centre",
+    # nama ordo, besar dan samar, di atasnya
+                             colour = "white",
+                             grow = TRUE,
+                             alpha = 0.5) +
+  guides(fill = "none") +
+  labs(title = "Hewan pengerat mendominasi daftar mamalia")
+
+count(species, order, sort = TRUE)
+```
+
+Setiap kotak adalah satu ordo taksonomi, dengan luas sesuai jumlah spesies yang terdeteksi. Kotak-kotak kecil di dalamnya adalah famili. Kita mendeteksi beragam mamalia, dan banyak spesies merupakan hewan pengerat.
+
+## Ringkasan 3: analisis ordinasi
+
+Ordinasi menempatkan lokasi dan spesies pada sebuah peta di mana yang serupa berada berdekatan. Kita menggunakan `ecoCopula`, sebuah paket ordinasi berbasis model, pada data kehadiran dan ketidakhadiran lokasi-per-spesies. Kita tidak menggunakan NMDS, yang biasanya dipilih, karena metode itu tidak dapat diandalkan (Warton et al. 2012, *Meth Ecol Evol*, [doi:10.1111/j.2041-210X.2011.00127.x](https://doi.org/10.1111/j.2041-210X.2011.00127.x){.uri}). Dalam ordinasi, suatu spesies dianggap hadir di suatu lokasi **jika** **salah satu dari 18 PCR-nya positif**. Mengikuti praktik standar, kita mengeluarkan spesies yang terdeteksi di kurang dari 5 lokasi, karena informasinya terlalu sedikit untuk menempatkannya dengan benar dalam ordinasi.
+
+Pertama, ubah beberapa baris per lokasi di `info` menjadi satu baris per lokasi.
+
+```{r presence}
+presence <- info |>
+  select(Site) |>
+  bind_cols(as_tibble(OTU)) |>   # tambahkan kolom spesies ke setiap baris PCR
+  group_by(Site) |>
+  summarise(across(everything(), \(x) as.numeric(any(x > 0))))   # 1 jika salah satu dari 18 PCR suatu lokasi positif, selain itu 0
+
+y <- presence |>
+  column_to_rownames("Site") |>                            # ecoCopula menginginkan lokasi sebagai nama baris
+  select(where(\(x) sum(x) >= 5))   # pertahankan hanya spesies yang terdeteksi di 5 lokasi atau lebih karena ordinasi lebih andal bila spesies langka dikeluarkan
+
+c(kept = ncol(y), dropped = ncol(presence) - 1 - ncol(y)) # kita mempertahankan 80 spesies dan membuang 28
+```
+
+Klik data frame `presence` di tab Environment untuk melihatnya. Apakah Anda memahami mengapa kita berubah dari 1818 baris di tabel `info` menjadi 101 baris di tabel `presence`?
+
+`ecoCopula::stackedsdm()` mencocokkan model sederhana untuk setiap spesies secara terpisah, di sini tanpa kovariat (`~ 1`). `ecoCopula::cord()` kemudian menemukan dua variabel laten, yang dipilih untuk paling baik menjelaskan spesies mana yang muncul bersama di lokasi yang sama. ecoCopula memerlukan sedikit kode R untuk merapikan keluarannya agar dapat diplot dengan `ggplot2`.
+
+```{r ordination}
+set.seed(2026)   # ordinasi biasanya dimulai dari nilai acak. Di kelas ini, kita menggunakan set.seed() agar semua peserta mendapat keluaran yang sama
+sdm <- stackedsdm(y,
+                  formula_X = ~ 1,
+                  data = tibble(site = rownames(y)),
+                  family = "binomial",
+                  ncores = 1
+                  )
+ord <- cord(sdm, nlv = 2) # beginilah cara ecoCopula membuat ordinasi. kadang memerlukan beberapa menit. ord adalah keluaran ecoCopula.
+
+# ambil skor lokasi dari ord
+site_scores <- tibble(Site = rownames(y),
+                      LV1 = ord$scores[, 1],
+                      LV2 = ord$scores[, 2]) |>
+  left_join(sites, by = "Site")
+
+# ambil skor spesies dari ord
+species_scores <- tibble(otu_id = colnames(y),
+                         LV1 = ord$loadings[, 1],
+                         LV2 = ord$loadings[, 2]) |>
+  left_join(species, by = "otu_id")
+
+# Regangkan panah spesies ke skala lokasi, agar keduanya tampil dalam satu plot.
+k <- 0.9 * max(abs(select(site_scores, LV1, LV2))) / max(abs(select(species_scores, LV1, LV2)))
+```
+
+Sekarang kita menggunakan ggplot2 untuk menggambar biplot. Lokasi berupa titik, dan spesies berupa panah dari pusat. Kita mulai dengan versi yang paling sederhana.
+
+```{r biplot-plain, fig.height = 7}
+ggplot() +
+  geom_point(data = site_scores,
+             aes(LV1, LV2),
+             colour = "grey40", size = 2) +
+  geom_segment(data = species_scores,
+               aes(x = 0, y = 0, xend = LV1 * k, yend = LV2 * k),
+               colour = "steelblue", alpha = 0.6,
+               arrow = arrow(length = unit(0.12, "cm"))) +
+  coord_equal() +
+  labs(x = "Variabel laten 1",
+       y = "Variabel laten 2",
+       title = "Lokasi (titik) dan spesies (panah)") +
+  theme_minimal()
+```
+
+Cara membaca biplot:
+
+- **Panah** suatu spesies menunjuk ke arah lokasi tempat spesies itu lebih sering terdeteksi. Lokasi yang jauh searah dengan panah adalah tempat spesies itu biasanya muncul; lokasi di sisi berlawanan adalah tempat spesies itu jarang muncul.
+- Dua spesies yang panahnya menunjuk ke arah yang sama cenderung terdeteksi di lokasi yang sama. Panah yang menunjuk ke arah berlawanan dimiliki oleh spesies yang jarang muncul bersama.
+- Panah yang panjang berarti deteksi spesies tersebut mengikuti pola dalam plot dengan erat. Panah yang pendek, dekat pusat, berarti ordinasi hanya sedikit memberi informasi tentang spesies itu.
+- Sumbu-sumbunya tidak memiliki satuan dan tidak memiliki makna sendiri. Kita memberinya makna dengan mewarnai lokasi berdasarkan suatu kovariat dan melihat di mana warna-warna itu berada. Tidak seperti PCA, sumbu pertama tidak lebih penting daripada sumbu kedua, dan pola yang melintang diagonal pada plot sama nyatanya dengan pola yang sejajar sumbu.
+
+Apa yang dapat kita baca dari versi sederhana ini?
+
+- Panah-panah terbagi menjadi dua berkas: satu menunjuk ke atas, dan yang lain menunjuk ke kanan dan ke kanan bawah. Spesies dalam berkas yang sama cenderung muncul di lokasi yang sama, sehingga tampaknya ada setidaknya dua kelompok spesies.
+- Hampir tidak ada panah yang menunjuk ke kiri bawah. Banyak spesies terdeteksi di lokasi-lokasi sebelah kanan, tempat sebagian besar panah menunjuk, dan jauh lebih sedikit di lokasi-lokasi kiri bawah. Jadi sebagian dari yang ditunjukkan plot ini hanyalah berapa banyak spesies yang terdeteksi di setiap lokasi.
+- Lokasi-lokasi di kiri atas membentuk kelompok kecil tersendiri.
+
+Yang tidak dapat kita baca adalah spesies mana yang membentuk setiap berkas, atau apa kesamaan lokasi-lokasi dalam setiap kelompok. Untuk mengetahuinya, kita menghias plot. Kita mewarnai lokasi berdasarkan kovariat okupansi, mewarnai panah berdasarkan karakteristik spesies, memberi label pada beberapa spesies, dan menambahkan panah putus-putus untuk arah kenaikan kovariat.
+
+### Spesies mana yang berasosiasi dengan modifikasi manusia?
+
+Kita mulai dengan modifikasi manusia. Kita mewarnai lokasi berdasarkan kovariat ini, dan menggambar panah putus-putus yang menunjuk ke arah kenaikan modifikasi manusia di sepanjang plot. Panah berakhir pada korelasi `Human_modification_1km` dengan kedua variabel laten.
+
+```{r modification-direction}
+modification <- site_scores |>
+  summarise(LV1 = cor(Human_modification_1km, LV1),
+            LV2 = cor(Human_modification_1km, LV2))
+modification
+```
+
+Panah berakhir di (`r round(modification$LV1, 2)`, `r round(modification$LV2, 2)`): ke bawah, dan sedikit ke kanan. Jadi lokasi yang lebih termodifikasi sebagian besar berada di bagian bawah plot.
+
+Selanjutnya kita mencari spesies yang paling berasosiasi dengan (dan paling *tidak* berasosiasi dengan) modifikasi manusia. Chunk di bawah melakukan tiga hal.
+
+- Chunk ini memberi skor pada setiap spesies berdasarkan seberapa jauh panahnya menjangkau ke arah panah putus-putus (`toward_modification`). Skornya positif untuk spesies dari lokasi yang termodifikasi dan negatif untuk spesies dari lokasi yang kurang termodifikasi.
+- Chunk ini memilih delapan spesies di setiap ujung, ditambah yak, kuda dan kucing, yang kita bahas di bawah (`ends`). Inilah spesies-spesies yang kita beri label.
+- Chunk ini menetapkan warna untuk spesies liar dan domestik, serta `r`, yang meregangkan panah putus-putus sampai ke tepi sebaran lokasi.
+
+```{r toward-modification}
+species_scores <- species_scores |>
+  mutate(toward_modification =     # seberapa jauh setiap panah menjangkau sepanjang panah putus-putus
+           (LV1 * modification$LV1 +
+              LV2 * modification$LV2) / sqrt(modification$LV1^2 + modification$LV2^2))
+
+ends <- species_scores |>
+  filter(rank(toward_modification) <= 8 | rank(-toward_modification) <= 8 |
+           species %in% c("Bos grunniens", "Equus caballus", "Felis catus"))   # yak, kuda, kucing
+
+status_colours <- c(wild = "grey35",
+                    dom = "purple3",    # bukan merah: merah berarti terancam di biplot berikutnya
+                    wild_or_dom = "darkorange")
+
+status_labels <- c(wild = "liar",
+                   dom = "domestik",
+                   wild_or_dom = "liar atau domestik")
+
+r <- max(abs(select(site_scores, LV1, LV2)))   # regangkan panah putus-putus sampai ke tepi sebaran lokasi
+```
+
+Sekarang kita membuat biplot yang dihias!
+
+```{r biplot-modification, fig.height = 7}
+p1 <- ggplot() +
+  geom_point(data = site_scores,
+             aes(LV1, LV2, fill = Human_modification_1km),
+             shape = 21, colour = "white", size = 3) +
+  geom_segment(data = species_scores,
+               aes(x = 0, y = 0, xend = LV1 * k,
+                   yend = LV2 * k, colour = local_status),
+               alpha = 0.7, arrow = arrow(length = unit(0.12, "cm"))) +
+  annotate("segment", x = 0, y = 0,
+           xend = modification$LV1 * r,
+           yend = modification$LV2 * r,
+           linetype = 2, linewidth = 0.8,
+           arrow = arrow(length = unit(0.25, "cm"))) +
+  annotate("label", x = modification$LV1 * r,
+           y = modification$LV2 * r,
+           label = "modifikasi manusia\nlebih tinggi",
+           hjust = -0.1, size = 3.2, border.colour = NA) +   # NA: tanpa kotak di sekitar label
+  geom_text_repel(data = ends,
+                  aes(LV1 * k, LV2 * k, label = species,
+                      colour = local_status),
+                  size = 2.8,
+                  fontface = "italic",
+                  max.overlaps = Inf,
+                  min.segment.length = 0,
+                  show.legend = FALSE,
+                  seed = 1) +
+  scale_fill_viridis_c(option = "C") +
+  scale_colour_manual(values = status_colours, labels = status_labels) +
+  coord_equal() +
+  labs(x = "Variabel laten 1",
+       y = "Variabel laten 2",
+       fill = "Modifikasi\nmanusia",
+       colour = "Spesies",
+       title = "Lokasi diwarnai menurut modifikasi manusia, panah spesies menurut liar atau domestik") +
+  theme_minimal(); p1
+```
+
+Kerbau domestik (*Bubalus bubalis*), kambing (*Capra hircus*) dan domba (*Ovis aries*) menunjuk ke arah lokasi yang termodifikasi (ke bawah), bersama dua tikus yang hidup berdampingan dengan manusia (*Rattus tanezumi* dan *Rattus nitidus*) serta musang luwak (*Paradoxurus hermaphroditus*).
+
+Di ujung lainnya (ke atas) terdapat spesies hutan yang sedikit terganggu: tiga cecurut (*Episoriculus leucops*, *E. caudatus* dan *E. macrurus*), kijang Gongshan (*Muntiacus gongshanensis*), takin (*Budorcas taxicolor*) dan pika Gaoligong (*Ochotona gaoligongensis*). Kita juga melihat bahwa tiga spesies domestik lebih berasosiasi dengan lokasi yang kurang termodifikasi: yak (*Bos grunniens*), kuda (*Equus caballus*) dan kucing (*Felis catus*).
+
+### Apakah spesies terancam ditemukan di cagar alam?
+
+Mari kita coba biplot lain.
+
+Kali ini, kita bertanya apakah spesies yang masuk Daftar Merah lebih mungkin ditemukan di cagar alam.
+
+- Tabel `species` kita mengategorikan spesies dengan dua cara: `iucn` adalah kategori Daftar Merah IUCN. `china_red_list` adalah kategori pada China Biodiversity Red List. Kita mewarnai panah spesies dengan merah jika spesies itu berstatus Rentan (Vulnerable), Genting (Endangered) atau Kritis (Critically Endangered) menurut kategori IUCN (ditambah Daftar Merah China bila IUCN tidak memiliki kategori).
+
+- Tabel `info` kita memiliki kovariat okupansi yang mengategorikan sungai berdasarkan apakah sungai tersebut berhulu di dalam cagar alam di Gaoligongshan (`streamOrigin = insideGLGS`). Kita mewarnai lokasi berdasarkan `streamOrigin`.
+
+- Kita juga membuat panah putus-putus untuk arah lokasi cagar alam, dengan cara yang sama seperti sebelumnya.
+
+Chunk berikutnya menyiapkan biplot kedua, dengan cara yang sama seperti yang pertama.
+
+- Chunk ini memasukkan setiap spesies ke dalam salah satu dari tiga kelompok Daftar Merah (`red_list`), seperti dijelaskan di atas.
+- Chunk ini membuat panah putus-putus untuk lokasi cagar alam. `inside` bernilai `TRUE` untuk lokasi yang sungainya berhulu di dalam cagar alam, dan koordinat panah adalah korelasi `inside` dengan setiap variabel laten. R memperlakukan `TRUE` sebagai 1 dan `FALSE` sebagai 0, sehingga cara ini berfungsi sama seperti untuk modifikasi manusia.
+- Chunk ini menyimpan spesies terancam dalam tabelnya sendiri (`threatened`), agar kita dapat memberinya label.
+
+```{r reserve-direction}
+species_scores <- species_scores |>
+  mutate(red_list = coalesce(iucn, china_red_list),        # IUCN terlebih dahulu, lalu Daftar Merah China
+         red_list = case_when(red_list %in% c("VU", "EN", "CR") ~ "threatened (VU, EN, CR)",
+                              red_list %in% c("LC", "NT") ~ "not threatened (LC, NT)",
+                              .default = "not assessed, or data deficient"))
+
+reserve <- site_scores |>
+  mutate(inside = streamOrigin == "insideGLGS") |>
+  summarise(LV1 = cor(inside, LV1),
+            LV2 = cor(inside, LV2))
+
+threatened <- species_scores |> filter(red_list == "threatened (VU, EN, CR)")
+```
+
+Sekarang kita membuat biplot kedua yang dihias.
+
+```{r biplot-reserve, fig.height = 7}
+p2 <- ggplot() +
+  geom_point(data = site_scores,
+             aes(LV1, LV2, fill = streamOrigin),
+             shape = 21, colour = "white", size = 3) +
+  geom_segment(data = species_scores,
+               aes(x = 0, y = 0, xend = LV1 * k,
+                   yend = LV2 * k, colour = red_list),
+               alpha = 0.8, arrow = arrow(length = unit(0.12, "cm"))) +
+  annotate("segment", x = 0, y = 0,
+           xend = reserve$LV1 * r, yend = reserve$LV2 * r,
+           linetype = 2, linewidth = 0.8,
+           arrow = arrow(length = unit(0.25, "cm"))) +
+  annotate("label",
+           x = reserve$LV1 * r,
+           y = reserve$LV2 * r,
+           label = "lokasi\ncagar alam",
+           hjust = -0.1,
+           size = 3.2,
+           border.colour = NA) +   # NA: tanpa kotak di sekitar label
+  geom_text_repel(data = threatened,
+                  aes(LV1 * k, LV2 * k, label = species),
+                  colour = "firebrick", size = 2.8,
+                  fontface = "italic", max.overlaps = Inf,
+                  min.segment.length = 0, seed = 1) +
+  scale_fill_manual(values = c(insideGLGS = "forestgreen",
+                               outsideGLGS = "tan"),
+                    labels = c(insideGLGS = "di dalam",
+                               outsideGLGS = "di luar")) +
+  scale_colour_manual(values = c("threatened (VU, EN, CR)" = "firebrick",
+                              "not threatened (LC, NT)" = "grey60",
+                              "not assessed, or data deficient" = "steelblue")) +
+  coord_equal() +
+  labs(x = "Variabel laten 1",
+       y = "Variabel laten 2",
+       fill = "Sungai berhulu di\ncagar alam",
+       colour = "Daftar Merah",
+       title = "Lokasi diwarnai menurut perlindungan, panah spesies menurut status Daftar Merah") +
+  theme_minimal(); p2
+```
+
+Sebagian besar spesies terancam, termasuk ajag (*Cuon alpinus*), menunjuk ke atas, ke arah lokasi cagar alam. **Tetapi banyak spesies umum juga demikian.**
+
+```{r biplots-together, fig.height = 13}
+p1 / p2   # patchwork: satu plot di atas plot lainnya
+```
+
+**Diskusi.** Perhatikan kedua biplot. Tuliskan satu hal yang dapat Anda sampaikan kepada pengelola kawasan dari gambar-gambar ini, dan satu hal yang tidak dapat Anda sampaikan.
+
+### Apa yang ditunjukkan ordinasi, dan mengapa kita tidak dapat memercayainya
+
+Pola yang dapat kita lihat:
+
+- Pola yang paling jelas membentang dari atas ke bawah plot. Di atas terdapat lokasi yang kurang dimodifikasi manusia, sebagian besar di cagar alam. Di bawah terdapat lokasi yang lebih dimodifikasi manusia, sebagian besar di luar cagar alam.
+- Spesies tersusun di sepanjang pola itu. Cecurut, takin, kijang dan pika dari hutan yang sedikit terganggu memiliki panah yang menunjuk ke atas. Ternak, tikus yang hidup bersama manusia dan musang luwak memiliki panah yang menunjuk ke bawah.
+
+Namun, kita tidak tahu seberapa andal pola-pola ini:
+
+- Plot ini dibangun dari deteksi mentah: suatu spesies dianggap hadir di suatu lokasi jika satu saja dari 18 PCR-nya positif. Karena itu, ordinasi ini mengandung positif palsu (deteksi akibat kontaminasi) dan negatif palsu (deteksi yang terlewat padahal spesies itu hadir).
+- Modifikasi manusia dan status cagar alam hanyalah dua kovariat yang berubah dari atas ke bawah. Jika Anda membuat ordinasi lain (atau memetakan lokasi), Anda akan menemukan bahwa lintang, suhu, tutupan hutan, dan wilayah juga berubah dari atas ke bawah.
+
+Jadi ordinasi memberi kita gagasan, tetapi bukan uji yang sesungguhnya. Di Sesi 3, kita menguji hipotesis dengan model yang memperhitungkan positif palsu maupun negatif palsu.
+
+## Satu spesies: Di mana ajag berada?
+
+Ajag (*Cuon alpinus*) adalah anjing liar yang terancam punah. Baik grafik komposisi maupun ordinasi tidak dapat mengatakan di mana ajag berada. Deteksi mentahnya tampak seolah-olah dapat mengatakannya.
+
+Untuk melihat apa yang ada di balik setiap deteksi, kita menata data sesuai cara data itu dikumpulkan, seperti pada Gambar 1 dalam Ji et al. (2025, [doi:10.1111/ele.70302](https://doi.org/10.1111/ele.70302){.uri}). Pertama kita menghitung PCR yang positif di setiap sampel lapangan (dari 6), lalu di setiap lokasi (dari 18).
+
+```{r dhole-samples}
+dhole <- species |>
+  filter(species == "Cuon alpinus") |>
+  pull(otu_id)      # nama kolom ajag di OTU
+
+dhole_samples <- info |>
+  mutate(positive = OTU[, dhole]) |>
+  group_by(Site, Sample) |>
+  summarise(positive = sum(positive), .groups = "drop") |>   # PCR positif, dari 6, per sampel lapangan
+  group_by(Site) |>
+  mutate(sample = row_number(),     # 1 sampai 3 di dalam setiap lokasi
+         site_total = sum(positive)) |>   # PCR positif, dari 18, per lokasi
+  ungroup()
+
+dhole_sites <- dhole_samples |>
+  distinct(Site, site_total) |>   # satu baris per lokasi
+  left_join(sites |> select(Site, Xs.1, Xs.2), by = "Site")
+```
+
+Kemudian kita membuat gambar yang memuat peta sekaligus tabel.
+
+```{r dhole-figure, fig.width = 8, fig.height = 10}
+# Trik teknis: untuk menggambar tabel pada plot yang sama dengan peta, kita memberi setiap sel posisi dalam satuan peta: tiga kolom sampel berada tepat di sebelah timur peta, dan baris-baris disebar merata dari lokasi paling utara ke lokasi paling selatan.
+
+# Baris tabel: lokasi yang terdeteksi dari utara ke selatan, disebar di sepanjang rentang lintang peta
+rows <- dhole_sites |>
+  filter(site_total > 0) |>
+  arrange(desc(Xs.2)) |>
+  mutate(row_y = seq(max(dhole_sites$Xs.2),
+                     min(dhole_sites$Xs.2), length.out = n()))
+
+row_gap <- abs(rows$row_y[2] - rows$row_y[1])     # jarak antarbaris
+
+col_x <- c(99.4, 99.65, 99.9)     # posisi ketiga kolom sampel
+
+cells <- dhole_samples |>
+  inner_join(rows |> select(Site, row_y), by = "Site") |>
+  mutate(cell_x = col_x[sample],
+         share = if_else(positive == 0, NA, positive / 6))   # 0 positif: sel putih
+
+# Empat kemungkinan positif palsu: lokasi paling selatan dengan 1 PCR positif dari 18
+flagged <- rows |>
+  filter(site_total == 1) |>
+  slice_min(Xs.2, n = 4)
+
+ggplot() +
+  # peta
+  geom_point(data = filter(dhole_sites, site_total == 0), # tidak ada deteksi: lingkaran kosong
+             aes(Xs.1, Xs.2),
+             shape = 21, size = 2.5, colour = "grey55", fill = NA) +
+  geom_point(data = filter(dhole_sites, site_total > 0),              # ada deteksi: diwarnai menurut kekuatannya
+             aes(Xs.1, Xs.2, fill = site_total / 18),
+             shape = 21, size = 3.5, colour = "grey25", stroke = 0.3) +
+  # tabel
+  geom_tile(data = cells,
+            aes(cell_x, row_y, fill = share),
+            width = 0.24, height = row_gap * 0.92, colour = "grey80", linewidth = 0.3) +
+  geom_text(data = cells,
+            aes(cell_x, row_y, label = positive, colour = !is.na(share) & share > 0.5),
+            size = 2.4) +
+  annotate("text", x = col_x, y = max(rows$row_y) + row_gap * 1.3,
+           label = 1:3, size = 2.6) +                                 # judul kolom
+  annotate("text", x = col_x[2], y = max(rows$row_y) + row_gap * 2.5,
+           label = "Sampel lapangan", size = 2.8) +
+  geom_text(data = rows,
+            aes(max(col_x) + 0.16, row_y, label = Site),
+            hjust = 0, size = 2.3) +
+  # panah dari tabel ke peta
+  geom_curve(data = flagged,
+             aes(x = min(col_x) - 0.13, y = row_y, xend = Xs.1 + 0.03, yend = Xs.2),
+             colour = "steelblue", linewidth = 0.5, curvature = 0.2,
+             arrow = arrow(length = unit(0.15, "cm"))) +
+  scale_fill_gradient(low = "#fee0d2", high = "#67000d",           # merah pucat sampai merah tua
+                      limits = c(0, 1), na.value = "white",
+                      name = "Proporsi PCR positif") +
+  scale_colour_manual(values = c(`TRUE` = "white", `FALSE` = "grey20"), guide = "none") +
+  scale_x_continuous(breaks = c(97.5, 98, 98.5)) +                 # tanda bujur hanya di bawah peta
+  coord_quickmap(clip = "off") +
+  labs(x = "Bujur", y = "Lintang",
+       title = "Deteksi ajag, dan PCR positif di setiap sampel lapangan (dari 6)") +
+  theme_minimal() +
+  theme(panel.grid.minor = element_blank(), legend.position = "bottom")
+```
+
+- Peta di sebelah kiri menunjukkan setiap lokasi. Lingkaran kosong adalah lokasi tanpa PCR positif. Lingkaran berisi adalah lokasi dengan setidaknya satu PCR positif, diwarnai dari merah pucat (1 dari 18) sampai merah tua (18 dari 18).
+- Tabel di sebelah kanan memiliki satu baris untuk setiap lokasi tempat ajag terdeteksi, diurutkan dari utara ke selatan, dan satu kolom untuk masing-masing dari tiga sampel lapangannya. Setiap sel adalah jumlah dari enam PCR sampel tersebut yang positif, diwarnai menurut proporsi yang positif, dengan skala yang sama seperti peta.
+- Panah biru menunjukkan **empat kemungkinan positif palsu**. Masing-masing lokasi ini memiliki satu PCR positif dari 18.
+- Beberapa lokasi berwarna gelap di seluruh barisnya: DNA ajag terdeteksi di hampir setiap PCR dari setiap sampel (misalnya GLG28). Jauh lebih banyak yang berwarna pucat, hanya bertumpu pada satu atau dua PCR positif dari 18.
+
+Gambar ini menunjukkan dua jenis kesalahan.
+
+**Kemungkinan besar ada negatif palsu.** Lihat GLG39 di tabel. Sampel lapangan 2 dan 3 memiliki 2 dan 3 PCR positif dari 6, sehingga DNA ajag hampir pasti ada di air di sana. Tetapi sampel 1, yang diambil di tempat yang sama, tidak memiliki satu pun. ***Jika satu sampel dapat melewatkan ajag, maka kadang-kadang ketiga sampel akan melewatkannya.***
+
+> Hal ini sangat penting karena memberi tahu kita bahwa sebagian lingkaran kosong di peta adalah **negatif palsu**: lokasi tempat ajag hadir tetapi kita melewatkannya di ketiga sampel: (0, 0, 0).
+>
+> Ada 60 lingkaran kosong di peta. Berapa banyak di antaranya yang merupakan negatif palsu?
+
+**Kemungkinan besar juga ada positif palsu.** Keempat panah menunjuk ke lokasi dengan hanya 1 PCR positif dari 18. Itu mungkin jejak DNA ajag yang sebenarnya, atau bisa jadi kontaminasi di lapangan atau di laboratorium. Dari satu lokasi saja, kita tidak dapat mengetahuinya.
+
+> Karena itu, kita menduga bahwa sebagian dari 41 lingkaran merah di peta adalah **positif palsu**: beberapa lokasi dengan pola lemah seperti (0, 0, 1) mungkin merupakan lokasi tempat ajag tidak hadir dan DNA-nya berasal dari kontaminasi.
+>
+> Ji et al. (2025) menemukan pola yang sama untuk takin (*Budorcas taxicolor*): beberapa deteksi lemah di selatan, tempat takin diketahui tidak hidup.
+
+Jadi, peta mentah dapat salah ke dua arah. **Deteksi tidak sama dengan kehadiran, dan ketiadaan deteksi (0, 0, 0) tidak sama dengan ketidakhadiran.**
+
+## Survei simulasi untuk menunjukkan kesalahan negatif palsu
+
+Untuk contoh ajag di atas, kita hanya dapat berargumen bahwa negatif palsu ada, karena kita tidak pernah mengetahui di mana ajag sebenarnya hidup.
+
+Untuk melihat kesalahan negatif palsu,
+
+- Kita menyimulasikan sebuah survei. Kita menggunakan 101 lokasi yang sama dan desain studi yang sama: 3 sampel lapangan per lokasi dan 6 PCR per sampel.
+
+- Kita menyimulasikan sebuah spesies. Spesies rekaan kita lebih mungkin hidup di lokasi dengan tutupan hutan yang lebih tinggi. Di lokasi tempat spesies itu hidup, setiap sampel berhasil menangkap DNA-nya 40% dari waktu, dan setiap PCR berhasil mendeteksi DNA yang ada di dalam sampel 60% dari waktu. Ini berarti simulasi tersebut **memungkinkan** **negatif palsu**. Beberapa lokasi akan memiliki spesies itu tetapi semua deteksinya gagal.
+
+- Agar sederhana, kita mengasumsikan **tidak ada positif palsu**. Artinya, dalam simulasi kita, setiap deteksi adalah kehadiran yang sebenarnya.
+
+```{r simulate-survey}
+set.seed(2026)   # agar setiap peserta mendapat survei "acak" yang sama
+
+# 1. Spesies lebih mungkin hadir di tempat dengan tutupan hutan tinggi.
+truth <- info |>
+  distinct(Site, forest = Percent_of_forest_cover_1km) |>
+  mutate(prob_present = plogis(-0.5 + 2 * as.vector(scale(forest))),
+         # plogis() mengubah skor menjadi peluang
+         present = rbinom(n(), 1, prob_present))  # 1 = hadir, 0 = tidak hadir
+
+# 2. Sampel lapangan menangkap DNA spesies hanya 40% dari waktu ketika spesies ada di lokasi
+sim_samples <- info |>
+  distinct(Site, Sample) |>
+  left_join(truth, by = "Site") |>
+  mutate(dna = present * rbinom(n(), 1, 0.4))
+
+# 3. PCR mendeteksi DNA hanya 60% dari waktu ketika DNA ada di dalam sampel.
+sim_pcrs <- info |>
+  select(Site, Sample) |>
+  left_join(sim_samples, by = c("Site", "Sample")) |>
+  mutate(positive = dna * rbinom(n(), 1, 0.6))
+```
+
+Sekarang kita membandingkan apa yang dideteksi survei dengan kebenaran (hasil simulasi).
+
+```{r simulated-sites}
+sim_sites <- sim_pcrs |>
+  group_by(Site) |>
+  summarise(present = first(present), positive = sum(positive)) |>
+       # PCR positif, dari 18
+  mutate(status = case_when(present == 0 ~ "absent",
+                            positive > 0 ~ "present, detected",
+                            TRUE         ~ "present, missed")) |>
+  left_join(sites |> select(Site, Xs.1, Xs.2), by = "Site")
+
+count(sim_sites, status)
+```
+
+Klik `sim_sites` di tab Environment untuk melihatnya.
+
+```{r simulated-map, fig.width = 6, fig.height = 7}
+ggplot(sim_sites, aes(Xs.1, Xs.2, fill = status)) +
+  geom_point(shape = 21, size = 3, colour = "grey25", stroke = 0.3) +
+  scale_fill_manual(values = c("absent" = NA, "present, detected" = "#cb181d",
+                               "present, missed" = "orange"),
+                    breaks = c("present, detected", "present, missed",
+                               "absent"), name = NULL) +
+  coord_quickmap() +
+  labs(x = "Bujur",
+       y = "Lintang",
+       title = "Spesies rekaan: kebenaran dan deteksi") +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+```
+
+Spesies tersebut hadir di 46 lokasi, tetapi survei hanya mendeteksinya di 37 lokasi. Karena itu, kita memiliki 9 lokasi negatif palsu, tempat spesies itu hadir tetapi ketiga sampel gagal, baik dalam pengambilan sampel maupun dalam PCR.
+
+### Apa yang baru saja kita lakukan?
+
+- Kita menyimulasikan sebuah spesies, dan simulasi itu menempatkan spesies tersebut di 46 lokasi.
+
+- Kita kemudian menyimulasikan survei yang hanya memiliki peluang 40% untuk menangkap DNA spesies ke dalam sampel dan hanya peluang 60% bagi sebuah PCR untuk mendeteksi DNA di dalam sampel.
+
+- Pengalaman kami menunjukkan bahwa angka-angka ini realistis untuk sebagian spesies (Ji et al. 2025).
+
+- Dengan angka-angka realistis ini, sebuah survei menghasilkan 9 kesalahan negatif palsu. Karena itu, kita dapat sangat yakin bahwa kesalahan negatif palsu serupa ada dalam survei nyata.
+
+## Sesi berikutnya: model okupansi
+
+Sesi 2 dimulai dengan mencocokkan model okupansi pada spesies rekaan ini, sehingga kita dapat memeriksa jawabannya terhadap kebenaran: **Dapatkah model menemukan lokasi-lokasi oranye?**
+
+Kemudian kita mencocokkan model yang sama pada data ajag yang nyata dan mencoba menemukan lokasi-lokasi negatif palsu. Kita juga akan mencoba menemukan lokasi-lokasi positif palsu.
+
+## Yang Anda bawa pulang
+
+- Grafik komposisi dan ordinasi meringkas apa yang terdeteksi, dan dapat menunjukkan pola yang menarik. Tetapi keduanya tidak dapat memberi tahu Anda di mana suatu spesies berada, tidak dapat memisahkan kehadiran dari deteksi, sehingga kita tidak tahu seberapa andal pola-polanya.
+- Deteksi eDNA mentah mengandung kesalahan ke dua arah: positif palsu dan negatif palsu. Model okupansi mengoreksi keduanya.
+- Dalam survei yang kebenarannya kita ketahui, negatif palsu terlihat jelas, dan di dalam data negatif palsu tampak persis seperti ketidakhadiran.
+- Sesi 2 membangun model tersebut untuk ajag dan memetakannya. Sesi 4 mengubah jawaban untuk semua spesies menjadi rencana konservasi.
+
+## Bertanya kepada asisten (opsional)
+
+Di panel Posit Assistant, cobalah:
+
+- *Dengan menggunakan objek-objek di sesi saya, buatlah peta dan tabel yang sama untuk takin, Budorcas taxicolor.*
+
+Bacalah kode yang ditulisnya sebelum Anda menjalankannya. Di sini asisten hanya membantu Anda menulis R. Asisten belum menggunakan alat-alat occJSDM: alat-alat itu baru hadir di Sesi 2.
