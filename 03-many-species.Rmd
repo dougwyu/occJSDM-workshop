@@ -97,7 +97,7 @@ Click on `presence` and `sites_detected` in the Environment tab to view them.
 
 Now we use the occJSDM output functions to convert the fit into five tables. You are already familiar with the output functions from 02-dhole.Rmd, but now the files are 108 times larger because they store the outputs for 108 species.
 
-The chunk takes about 15 seconds. Its last step, the species associations, is the one that needs the memory.
+The chunk takes about 5 minutes total. Its last step, the species associations, needs a lot of memory.
 
 ```{r fit-tables}
 species_ids <- fit_full$infos$speciesNames   # the otu_id of each species, in the model's order
