@@ -47,8 +47,19 @@ test_that("Plan 2: 13 species without status, 12 threatened, 17 of 20 shared, 3 
   expect_equal(met(s4$plan_redlist, s4$threatened), 4)
 })
 
-test_that("Plan 3 affords 32 sites instead of 20", {
-  expect_equal(sum(s4$plan_cost$selected), 32)
+test_that("Plan 3: same budget of 20.2, 32 sites, all 20 of Plan 2's kept", {
+  ch <- function(plan) sum(s4$cost_human$cost[match(plan$Site[plan$selected], s4$cost_human$Site)])
+  expect_equal(sum(s4$cost_human$cost), 101)                   # "all 101 sites together still cost 101"
+  expect_equal(mean(s4$cost_human$cost), 1)                    # "the average site still costs 1"
+  expect_equal(round(range(s4$cost_human$cost), 2), c(0.22, 2.26))   # "from 0.22 to 2.26"
+  expect_equal(s4$budget_human, 20.2)                          # "the same budget of 20.2"
+  expect_equal(s4$budget_human, s4$budget_frac * nrow(s4$cost_equal))
+  expect_equal(sum(s4$plan_cost$selected), 32)                 # "32 instead of 20"
+  expect_equal(round(ch(s4$plan_cost), 1), 20.2)               # "`spent` ... 20.2 for Plan 3"
+  keep <- s4$plan_redlist$Site[s4$plan_redlist$selected]
+  expect_true(all(keep %in% s4$plan_cost$Site[s4$plan_cost$selected]))  # "keeps all 20 of Plan 2's sites"
+  expect_equal(round(ch(s4$plan_redlist), 1), 13.8)            # "Plan 2's 20 sites cost only 13.8"
+  expect_equal(met(s4$plan_cost, s4$threatened), 11)           # "11 threatened species meet their target"
 })
 
 test_that("Plan 4: 9 domestic species out, 99 left in, 7 sites change", {

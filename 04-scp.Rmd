@@ -445,46 +445,86 @@ Weighting the endangered species increases the number of endangered species that
 
 Protecting a human-modified site is usually more expensive because the land is being used for something. We use the human modification of each site as a stand-in for cost. The budget is still 20% of the total cost of all sites, but now some sites cost more, some less.
 
-Create a third plan. Continue weighting endangered species more.
+## 3. Let the sites cost different amounts
 
-```{r cost-plan}
-budget_human <- budget_frac * sum(cost_human$cost)
+Protecting a human-modified site is usually more expensive because the land is being used for something (agriculture, infrastructure, housing). We use the human modification level of each site as a stand-in for cost, so now some sites cost more, some less. To compare fairly, we rescale the costs so that all 101 sites together still cost 101, as in Plans 1 and 2, and Plan 3 gets the same budget of 20.2.
 
-plan_cost <- make_plan(w_redlist,
-                       cost_human,
-                       budget = budget_human)
+First, we create a new table `cost_human` where the cost of conservation is higher in sites with more human modification (farming, housing, roads).
 
-plot_plan(plan_cost, "Plan 3: Red List weights, cost = human modification")
+```{r cost_human}
+cost_human <- sites |>
+  select(Site, cost = Human_modification_1km) |>
+  # rescale so the average site costs 1, as in cost_equal
+  mutate(cost = cost / mean(cost))
+
+# all 101 sites still cost 101 in total
+sum(cost_human$cost)
 ```
 
-Next we compare the sites that Plans 2 and 3 pick: how many, how modified, and their total cost. The first row is all 101 sites, for reference.
+Click on `cost_human` in the Environment tab to view it. In the viewer, sort `cost_human$cost` up and down.
+
+Now costs run from 0.22 to 2.26, but they still average 1. **The land is not cheaper overall! The sites just cost different amounts from each other.**
+
+In `cost_equal`, all sites cost = 1. Now many sites cost \< 1! This is an opportunity to buy more than 20 sites for the same budget, as long as the cheap sites have lots of species.
+
+```{r budget_human}
+# the same rule as for Plans 1 and 2: 20% of the cost of all sites
+budget_human <- budget_frac * sum(cost_human$cost)
+
+budget_human
+```
+
+`budget_human` is 20.2, the same budget as Plans 1 and 2.
+
+Use `prioritizr` to solve a third plan: `plan_cost` and map the new plan.
+
+```{r cost-plan}
+plan_cost <- make_plan(w_redlist, # we continue to weight Red List species
+                       cost_human, # we use the new site costs
+                       budget = budget_human) # 
+
+p3 <- plot_plan(plan_cost, "Plan 3: Red List weights,\ncost = human modification")
+
+p1 + p2 + p3 + plot_layout(guides = "collect")
+```
+
+It looks like there are more sites in plan 3. Let's count the sites in each plan.
 
 ```{r cost-compare}
 site_costs <- sites |> select(Site, Human_modification_1km)
 
 bind_rows(
-  sites |> select(Site) |> mutate(selected = TRUE, plan = "All 101 sites"),
-  plan_redlist |> mutate(plan = "Plan 2: equal costs"),
-  plan_cost |> mutate(plan = "Plan 3: cost = human modification")
+  plan_equal |>
+    left_join(cost_equal, by = "Site") |>
+    mutate(plan = "Plan 1: baseline - equal costs and weights"),
+  plan_redlist |>
+    left_join(cost_equal, by = "Site") |>
+    mutate(plan = "Plan 2: equal costs and Red List weighting"),
+  plan_cost |>
+    left_join(cost_human, by = "Site") |>
+    mutate(plan = "Plan 3: cost = human mod costs and Red List weighting")
 ) |>
   filter(selected) |>
   left_join(site_costs, by = "Site") |>
   group_by(plan) |>
   summarise(sites = n(),
             mean_human_modification = round(mean(Human_modification_1km), 2),
-            total_cost = round(sum(Human_modification_1km), 1),
+            spent = round(sum(cost), 1),
             .groups = "drop")
 ```
 
-The budget is 20% of the total cost of all 101 sites, which buys 20 sites of average modification (0.35). Plan 3's sites average 0.22, so the same budget buys 32. Plan 2's sites were almost as unmodified (0.24), but with equal costs that saved nothing: every site cost the same.
+Yes, Plan 3 conserves more sites, 32 instead of 20, with the same budget (`spent` is 20 for Plans 1 and 2, and 20.2 for Plan 3). Some sites are very cheap (few people live there, so there is little human modification), and Plan 3 can see this. It keeps all 20 of Plan 2's sites and adds 12 more, because the budget stretches further when you can pick the cheap sites.
 
-> Look at the map of Plan 3. Where are the extra sites? Do you think the threatened species still do as well?
+> Conservation planning can take advantage of low costs to achieve more conservation.
+
+> Look again at the map of Plan 3. Where are the extra sites? Do you think the threatened species still do as well?
 
 Run the next chunk to check your answer.
 
 ```{r cost-coverage}
 bind_rows(
   coverage(plan_redlist) |> mutate(plan = "Plan 2"),
+# each plan with the cost table it was planned with
   coverage(plan_cost) |> mutate(plan = "Plan 3")
 ) |>
   filter(species %in% threatened) |>
@@ -494,9 +534,18 @@ bind_rows(
             .groups = "drop")
 ```
 
-## Do not count domesticated animals
+Yes. Now 11 threatened species meet their target. This is because `prioritizr` has been given site cost information, and it buys more sites, which increases coverage of more species.
 
-Nine species in the data are domestic, such as cattle, buffalo and goats, and they are not conservation targets. We leave them out of the plan by giving them weight = 0.
+This works because, **in this landscape**, the sites that the species need are cheaper than average. At Plan 3's costs, Plan 2's 20 sites cost only 13.8, not 20, which leaves room for 12 more sites. In a landscape where the species live in expensive, modified places, costs would work against the plan instead.
+
+> **Discuss.** Is the most efficient plan always the best one? Think about three things. What if the real limit is not money but the number of sites, for example rangers or monitoring visits? Human modification is only a stand-in for cost: what else makes a site expensive to protect? And cheap, unmodified sites may be cheap because nobody threatens them: does protecting them make as much difference as protecting a site under pressure?
+
+## 4. Do not count domesticated animals
+
+Nine species in the data are domestic, such as cattle, buffalo and goats, and they are not conservation targets. We leave them out of the plan by giving them `weight = 0`.
+
+# how many of Plan 2's sites does Plan 3 keep?
+sum(plan_cost$selected & plan_redlist$selected)
 
 ```{r wild-plan}
 w_wild <- w_redlist |>
@@ -508,15 +557,15 @@ plan_wild <- make_plan(w_wild,
                        cost_human,
                        budget = budget_human)
 
-# how many species are left, and how many sites change
-w_wild |> summarise(species_in_plan = sum(weight > 0))
-
+# how many sites change?
 plan_wild |>
   left_join(plan_cost, by = "Site", suffix = c("_4", "_3")) |>
   summarise(sites_changed_from_plan_3 = sum(selected_4 != selected_3))
 
-plot_plan(plan_wild,
-          "Plan 4: wild species only, Red List weights, cost = human modification")
+p4 <- plot_plan(plan_wild,
+                "Plan 4: wild species only,\nRed List weights, cost = human modification")
+
+p1 + p2 + p3 + p4 + plot_layout(nrow = 1, guides = "collect")
 ```
 
 Leaving out the 9 domestic species keeps 99 species in the plan and changes 7 sites from Plan 3.
@@ -527,6 +576,10 @@ Leaving out the 9 domestic species keeps 99 species in the plan and changes 7 si
 
 Session 3 found that nine wild species are credibly more likely to be present where the stream rises inside a reserve, and that for most species the data cannot tell. Do the plans pick reserve sites? We count, for each plan, how many of its sites are inside a reserve.
 
+# how many species are now in the dataset?
+w_wild |> summarise(species_in_plan = sum(weight > 0))
+
+# set up and solve the plan
 ```{r reserve-overlap}
 inside_reserve <- sites |>
   filter(streamOrigin == "insideGLGS") |>
