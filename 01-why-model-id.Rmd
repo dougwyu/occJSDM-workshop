@@ -20,6 +20,7 @@ Chunk kode pertama hanya diperlukan untuk lokakarya ini. Chunk ini mengarahkan R
 source("setup/pins.R")
 use_workshop_lib()              # gunakan paket yang dipasang untuk lokakarya
 source("R/schematic.R")         # data_schematic() dan traits_schematic(): gambar tabel-tabel
+source("R/angka.R")           # format angka Indonesia untuk tampilan: angka(), tampil() dan sumbu grafik
 ```
 
 Chunk kedua memuat beberapa paket R, seperti yang akan Anda lakukan dalam analisis Anda sendiri.
@@ -61,7 +62,7 @@ occJSDM memerlukan dua tabel dari Anda, dan secara opsional tabel ketiga.
 Skema ini menunjukkan bagaimana tabel `info` dan `OTU` saling terkait, dengan nilai-nilai rekaan. Setiap baris adalah satu ulangan PCR.
 
 ```{r schematic}
-data_schematic()   # gambar kedua tabel, dibuat di R/schematic.R
+data_schematic(decimal.mark = ",")   # gambar kedua tabel, dibuat di R/schematic.R
 ```
 
 - **Ulangan sampel.** Setiap lokasi memiliki beberapa sampel lapangan, masing-masing dengan namanya sendiri di `Sample` (di sini `GLG01-1` dan `GLG01-2`, diberi warna latar berbeda).
@@ -73,7 +74,7 @@ data_schematic()   # gambar kedua tabel, dibuat di R/schematic.R
 Tabel `traits` yang opsional memiliki satu baris per spesies.
 
 ```{r traits-schematic}
-traits_schematic()   # gambar tabel traits, dibuat di R/schematic.R
+traits_schematic(decimal.mark = ",")   # gambar tabel traits, dibuat di R/schematic.R
 ```
 
 - **Nama baris adalah nama spesies**, **ditulis persis sama dengan nama kolom `OTU`**. occJSDM mencocokkan setiap spesies dengan sifatnya berdasarkan nama, sehingga baris-baris dapat berada dalam urutan apa pun, tetapi setiap kolom `OTU` harus memiliki baris. Nama-nama tersebut tidak boleh berupa kolom biasa, karena occJSDM memperlakukan setiap kolom sebagai sifat. Biasanya Anda membuat tabel traits dengan kolom `species`. Untuk menyiapkannya bagi occJSDM, pindahkan kolom spesies Anda ke nama baris sebagai langkah terakhir: `column_to_rownames(traits, "species")`.
@@ -87,9 +88,9 @@ info <- read.csv("data-derived/info.csv")         # satu baris per ulangan PCR
 OTU <- as.matrix(read.csv("data-derived/OTU.csv")) # baris sama dengan info, satu kolom per spesies
 species <- read.csv("data-derived/species.csv")   # satu baris per spesies: taksonomi dan status Daftar Merah
 
-dim(info) # 1818 baris = 101 lokasi X 3 sampel/lokasi X 6 PCR/sampel
-dim(OTU) # 1818 baris X 108 spesies, urutan baris sama dengan info
-dim(species) # 108 spesies X 9 kolom: ID, nama, taksonomi, status Daftar Merah dan massa tubuh
+dim(info) |> tampil() # 1818 baris = 101 lokasi X 3 sampel/lokasi X 6 PCR/sampel
+dim(OTU) |> tampil() # 1818 baris X 108 spesies, urutan baris sama dengan info
+dim(species) |> tampil() # 108 spesies X 9 kolom: ID, nama, taksonomi, status Daftar Merah dan massa tubuh
 ```
 
 Klik data frame `OTU`, `info`, dan `species` di tab Environment untuk melihatnya.
@@ -132,7 +133,7 @@ design <- info |>
             K = first(K)) |>                    # di sini K sama untuk setiap sampel
   left_join(sites |> select(Site, Regional_Division), by = "Site")
 
-design |> count(Regional_Division, M, Primer, K, name = "sites")
+design |> count(Regional_Division, M, Primer, K, name = "sites") |> tampil()
 ```
 
 ## Ringkasan 2: apa yang terdeteksi, menurut ordo taksonomi
@@ -161,7 +162,7 @@ ggplot(composition, aes(area = species, fill = order, subgroup = order,
   guides(fill = "none") +
   labs(title = "Hewan pengerat mendominasi daftar mamalia")
 
-count(species, order, sort = TRUE)
+count(species, order, sort = TRUE) |> tampil()
 ```
 
 Setiap kotak adalah satu ordo taksonomi, dengan luas sesuai jumlah spesies yang terdeteksi. Kotak-kotak kecil di dalamnya adalah famili. Kita mendeteksi beragam mamalia, dan banyak spesies merupakan hewan pengerat.
@@ -183,7 +184,7 @@ y <- presence |>
   column_to_rownames("Site") |>                            # ecoCopula menginginkan lokasi sebagai nama baris
   select(where(\(x) sum(x) >= 5))   # pertahankan hanya spesies yang terdeteksi di 5 lokasi atau lebih karena ordinasi lebih andal bila spesies langka dikeluarkan
 
-c(kept = ncol(y), dropped = ncol(presence) - 1 - ncol(y)) # kita mempertahankan 80 spesies dan membuang 28
+c(kept = ncol(y), dropped = ncol(presence) - 1 - ncol(y)) |> tampil() # kita mempertahankan 80 spesies dan membuang 28
 ```
 
 Klik data frame `presence` di tab Environment untuk melihatnya. Apakah Anda memahami mengapa kita berubah dari 1818 baris di tabel `info` menjadi 101 baris di tabel `presence`?
@@ -257,10 +258,10 @@ Kita mulai dengan modifikasi manusia. Kita mewarnai lokasi berdasarkan kovariat 
 modification <- site_scores |>
   summarise(LV1 = cor(Human_modification_1km, LV1),
             LV2 = cor(Human_modification_1km, LV2))
-modification
+modification |> tampil()
 ```
 
-Panah berakhir di (`r round(modification$LV1, 2)`, `r round(modification$LV2, 2)`): ke bawah, dan sedikit ke kanan. Jadi lokasi yang lebih termodifikasi sebagian besar berada di bagian bawah plot.
+Panah berakhir di (`r angka(round(modification$LV1, 2))`, `r angka(round(modification$LV2, 2))`): ke bawah, dan sedikit ke kanan. Jadi lokasi yang lebih termodifikasi sebagian besar berada di bagian bawah plot.
 
 Selanjutnya kita mencari spesies yang paling berasosiasi dengan (dan paling *tidak* berasosiasi dengan) modifikasi manusia. Chunk di bawah melakukan tiga hal.
 
@@ -589,7 +590,7 @@ sim_sites <- sim_pcrs |>
                             TRUE         ~ "present, missed")) |>
   left_join(sites |> select(Site, Xs.1, Xs.2), by = "Site")
 
-count(sim_sites, status)
+count(sim_sites, status) |> tampil()
 ```
 
 Klik `sim_sites` di tab Environment untuk melihatnya.

@@ -1,7 +1,14 @@
 # Teaching prep for Session 1: a drawing of how occJSDM's info and OTU tables fit together.
 # Made-up values: one site, 2 field samples, 2 primers per sample, 2 PCRs per primer.
+# decimal.mark = "," shows the numbers in Indonesian format (1.775, 0,33) for the *-id sessions.
 
-data_schematic <- function() {
+# A number as text: unchanged for ".", Indonesian format (thousands ".", decimals ",") for ",".
+schematic_number <- function(v, decimal.mark) {
+  if (decimal.mark == ".") return(as.character(v))
+  vapply(v, function(z) format(z, big.mark = ".", decimal.mark = ",", trim = TRUE), "")
+}
+
+data_schematic <- function(decimal.mark = ".") {
   schematic <- data.frame(
     PCR = c(1, 2, 1, 2, 1, 2, 1, 2),
     Site = "GLG01",
@@ -15,7 +22,7 @@ data_schematic <- function() {
     OTU_3 = 0,
     more = ""
   )
-  schematic[] <- lapply(schematic, as.character)
+  schematic[] <- lapply(schematic, function(v) if (is.numeric(v)) schematic_number(v, decimal.mark) else as.character(v))
   schematic <- rbind(schematic, c("", rep("⋮", 9), ""))   # the table goes on
 
   knitr::kable(schematic, align = "c", col.names = c(names(schematic)[-11], "…")) |>
@@ -30,10 +37,10 @@ data_schematic <- function() {
 }
 
 # The optional traits table: one row per species, named like the OTU columns.
-traits_schematic <- function() {
+traits_schematic <- function(decimal.mark = ".") {
   traits <- data.frame(
     species = c("OTU_1", "OTU_2", "OTU_3"),
-    body_mass_kg = c(15.2, 0.4, 230),
+    body_mass_kg = schematic_number(c(15.2, 0.4, 230), decimal.mark),
     diet = c("carnivore", "omnivore", "herbivore"),
     nocturnal = c("no", "yes", "no")
   )

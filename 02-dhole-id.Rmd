@@ -23,6 +23,7 @@ source("R/data.R")              # derived_path(), digunakan oleh read_fit_summar
 source("R/fit.R")               # read_fit_summary(): hasil tersimpan dari model yang di-fit pada semua mamalia
 source("R/schematic.R")         # data_schematic() dan traits_schematic(): gambar tabel-tabel
 source("R/session1.R")          # session1_dhole_map(): gambar ajag dari Sesi 1, digambar ulang
+source("R/angka.R")           # format angka Indonesia untuk tampilan: angka(), tampil() dan sumbu grafik
 ```
 
 ```{r packages}
@@ -56,7 +57,7 @@ d <- list(info = info,
           # drop = FALSE mempertahankan OTU sebagai matriks
           OTU = OTU[, dhole_col, drop = FALSE])
 
-dim(d$OTU) # 1818 baris X 1 spesies, urutan baris sama dengan info
+dim(d$OTU) |> tampil() # 1818 baris X 1 spesies, urutan baris sama dengan info
 ```
 
 Klik `d` di tab Environment untuk melihatnya. Apakah Anda memahami mengapa `d$OTU` memiliki jumlah baris yang sama dengan `d$info`?
@@ -69,7 +70,7 @@ Klik `d` di tab Environment untuk melihatnya. Apakah Anda memahami mengapa `d$OT
 
 ```{r}
 # ingat kembali bagaimana info dan OTU disusun
-data_schematic()
+data_schematic(decimal.mark = ",")
 ```
 
 ## Pertama, lakukan fitting model occJSDM pada data simulasi, yang jawabannya kita ketahui
@@ -181,7 +182,7 @@ sim_check |>
   summarise(sites = n(),
             mean_probability = round(mean(probability), 2),
             lowest = round(min(probability), 2),
-            highest = round(max(probability), 2))
+            highest = round(max(probability), 2)) |> tampil()
 ```
 
 Klik `sim_check` di tab Environment untuk melihatnya.
@@ -222,7 +223,7 @@ Bagaimana kinerja model? Ada tiga baris:
 sim_check |>
   summarise(truly_present = sum(present),
             detected = sum(positive > 0),
-            expected_present = round(sum(probability), 1))
+            expected_present = round(sum(probability), 1)) |> tampil()
 ```
 
 Model memperkirakan spesies hadir di sekitar 47 atau 48 lokasi. Kebenarannya adalah 46. Lumayan! Deteksi mentah hanya memberikan 37.
@@ -233,7 +234,7 @@ Model juga dapat memperoleh kembali laju pengambilan sampel dan laju deteksi PCR
 
 ```{r simulated-rates}
 c(collection = mean(sim_fit$results_output$theta_output),   # kita menggunakan 0.4
-  pcr        = mean(sim_fit$results_output$p_output))       # kita menggunakan 0.6
+  pcr        = mean(sim_fit$results_output$p_output)) |> tampil()       # kita menggunakan 0.6
 ```
 
 ### Apa yang baru saja kita lakukan?
@@ -366,7 +367,7 @@ map_data |>
                                   "kemungkinan absen",
                                   "kemungkinan hadir",
                                   "hampir pasti hadir"))) |>
-  count(verdict)
+  count(verdict) |> tampil()
 ```
 
 ### Kembali ke peta ajag dari Sesi 1
@@ -401,7 +402,7 @@ map_data |>
                      "GLG39", "GLG28")) |>
   select(Site, pattern, probability = model) |>
   mutate(probability = round(probability, 3)) |>
-  arrange(probability)
+  arrange(probability) |> tampil()
 ```
 
 - **Keempat kemungkinan positif palsu** dari Sesi 1 (GLG23055, GLG23052, GLG23053, GLG23064), masing-masing dengan pola deteksi (0,0,1), semuanya mendapat peluang beberapa persen atau kurang. Ini berarti occJSDM menyimpulkan bahwa deteksi tersebut adalah positif palsu.
@@ -416,13 +417,13 @@ map_data |>
   filter(raw == 0) |>
   summarise(undetected_sites = n(),
             expected_occupied = round(sum(model), 1),
-            highest_probability = round(max(model), 2))
+            highest_probability = round(max(model), 2)) |> tampil()
 
 # Semua lokasi: berapa yang terdeteksi, dan berapa banyak yang diperkirakan model dihuni ajag?
 map_data |>
   summarise(sites = n(),
             detected = sum(raw > 0),
-            expected_occupied = round(sum(model), 1))
+            expected_occupied = round(sum(model), 1)) |> tampil()
 ```
 
 - **Negatif palsu.** Sesi 1 menanyakan berapa banyak dari 60 lingkaran kosong yang merupakan negatif palsu. Jawaban model adalah sekitar 1,8 lokasi (`expected_occupied` pada tabel pertama dari dua tabel yang dicetak chunk di Console).
@@ -447,7 +448,7 @@ baseline |>
   summarise(mean = mean(draw),
             lower = quantile(draw, 0.025),
             upper = quantile(draw, 0.975)) |>
-  round(2)
+  round(2) |> tampil()
 ```
 
 Sebuah lokasi acuan rata-rata memiliki peluang sekitar 20% untuk dihuni ajag, tetapi interval 95%-nya lebar: 0,08 hingga 0,38.
@@ -489,7 +490,7 @@ rates <- bind_rows(
   "Lab: laju positif palsu per PCR" = summarise_draws(lab_fp_draws),
   .id = "rate")                               # nama-nama menjadi sebuah kolom
 
-rates |> mutate(across(where(is.numeric), \(x) round(x, 3)))
+rates |> mutate(across(where(is.numeric), \(x) round(x, 3))) |> tampil()
 ```
 
 Sampel dari lokasi yang dihuni ajag menangkap DNA-nya sekitar tujuh dari sepuluh kali, dan PCR pada sampel tersebut mendeteksinya sekitar enam dari sepuluh kali. Kedua laju positif palsu bernilai beberapa persen. Kedengarannya kecil, tetapi dengan 18 PCR di setiap 101 lokasi, beberapa persen sudah cukup untuk menghasilkan positif tunggal yang tersebar di lokasi-lokasi yang tidak dihuni ajag.
@@ -537,7 +538,7 @@ designs <- expand_grid(field_samples = c(1, 2, 3, 6),
   unnest(detection) |>
   mutate(across(c(mean, lower, upper), \(x) round(x, 2)))
 
-designs
+designs |> tampil()
 ```
 
 Klik `designs` di tab Environment untuk melihatnya. Sekarang kita membuat plotnya: satu garis untuk setiap jumlah sampel lapangan.
@@ -597,7 +598,7 @@ ggplot(effects, aes(mean, covariate)) +
 
 effects |>
   summarise(effects = n(),
-            intervals_crossing_zero = sum(lower < 0 & upper > 0))
+            intervals_crossing_zero = sum(lower < 0 & upper > 0)) |> tampil()
 ```
 
 Cara membaca gambar ini:
@@ -611,7 +612,7 @@ Cara membaca gambar ini:
 Efek pada skala log-odds sulit dibayangkan, sehingga `plotOccupancyGradient()` menggambar salah satunya sebagai peluang, dengan menahan kovariat lain pada nilai tipikal:
 
 ```{r gradient}
-plotOccupancyGradient(fit, covName = "Human_modification_1km")
+plotOccupancyGradient(fit, covName = "Human_modification_1km") + scale_x_continuous() + scale_y_continuous()
 ```
 
 Pita yang diarsir adalah interval 95%. Anda dapat menarik garis horizontal melalui pita dari kiri ke kanan, dan garis horizontal berarti kovariat tidak memiliki efek. Ini adalah pesan yang sama dengan interval efek yang melewati nol pada gambar di atas.
@@ -644,13 +645,13 @@ Kita sudah membuat `diag` dengan `returnConvergenceDiagnostics()` di atas, untuk
 diag |>
   summarise(parameters = n(),
             rhat_above_1.01 = sum(rhat > 1.01, na.rm = TRUE),
-            ess_below_400 = sum(ess < 400, na.rm = TRUE))
+            ess_below_400 = sum(ess < 400, na.rm = TRUE)) |> tampil()
 
 flagged <- diag |>
   filter(rhat > 1.01 | ess < 400) |>
   select(param, label1, mean, rhat, ess)
 
-flagged
+flagged |> tampil()
 ```
 
 Klik `diag` di tab Environment untuk melihatnya. Tabel ini memiliki satu baris per parameter.
@@ -680,12 +681,12 @@ draws_b0 <- fit$results_output$jsdm_output$B0_output
 # ditandai: ess di bawah 400
 plotTraceplot(draws_p,
               param_name = "p (ditandai)",
-              dimnames1 = "ajag")
+              dimnames1 = "ajag") + scale_x_continuous() + scale_y_continuous()
 
 # tidak ditandai
 plotTraceplot(draws_b0,
               param_name = "okupansi dasar (tidak ditandai)",
-              dimnames1 = "ajag")
+              dimnames1 = "ajag") + scale_x_continuous() + scale_y_continuous()
 
 # efek hujan adalah baris ketiga: intercept, Filter_vol, PrevDayRain
 draws_rain <- array(fit$results_output$beta_theta_output[3, 1, , ], dim = c(1, 5000, 2))
@@ -693,7 +694,7 @@ draws_rain <- array(fit$results_output$beta_theta_output[3, 1, , ], dim = c(1, 5
 # di batas: rhat mendekati 1.01
 plotTraceplot(draws_rain,
               param_name = "efek hujan (di batas)",
-              dimnames1 = "ajag")
+              dimnames1 = "ajag") + scale_x_continuous() + scale_y_continuous()
 ```
 
 - Dua rantai yang baik terlihat seperti ulat berbulu yang saling tumpang tindih dan mengembara di sekitar nilai yang sama.
@@ -717,7 +718,7 @@ Setiap hasil di atas adalah tabel R biasa, sehingga `write.csv()` dapat menyimpa
 ```{r save, eval = FALSE}
 map_data |>
   select(Site, Xs.1, Xs.2, pattern, raw, probability = model) |>
-  write.csv("dhole_by_site.csv", row.names = FALSE)
+  write.csv("dhole_by_site.csv", row.names = FALSE) |> tampil()
 ```
 
 ## Latihan praktik
@@ -779,7 +780,7 @@ takin <- sites |>
 takin |>
   filter(positive_pcrs > 0) |>
   arrange(Xs.2) |>                                  # dari selatan ke utara
-  select(Site, latitude = Xs.2, positive_pcrs, probability)
+  select(Site, latitude = Xs.2, positive_pcrs, probability) |> tampil()
 ```
 
 - Di mana deteksi takin yang lemah, dan berapa peluang yang diberikan model untuk deteksi tersebut?
@@ -831,7 +832,7 @@ ggplot(compare_two, aes(three_samples, two_samples)) +
 
 compare_two |>
   filter(abs(three_samples - two_samples) > 0.2) |>   # lokasi yang paling banyak berubah
-  mutate(across(c(three_samples, two_samples), \(x) round(x, 2)))
+  mutate(across(c(three_samples, two_samples), \(x) round(x, 2))) |> tampil()
 ```
 
 - Lokasi mana yang paling banyak berubah? Lihat `pattern`-nya: sampel mana yang dibuang, dan apa isinya?
@@ -872,7 +873,7 @@ compare_rain <- map_data |>
 
 compare_rain |>
   filter(abs(with_rain - without_rain) > 0.1) |>   # lokasi yang paling banyak berubah
-  mutate(across(c(with_rain, without_rain), \(x) round(x, 2)))
+  mutate(across(c(with_rain, without_rain), \(x) round(x, 2))) |> tampil()
 ```
 
 - Lokasi mana yang paling banyak berubah? Berapa banyak hujan yang turun sebelum lokasi tersebut disampel, dan berapa PCR yang positif di sana?

@@ -19,6 +19,7 @@ Seperti sebelumnya, chunk kode pertama hanya untuk keperluan lokakarya, dan chun
 ```{r workshop-setup}
 source("setup/pins.R")
 use_workshop_lib()            # hanya untuk pengujian; di sini tidak melakukan apa-apa
+source("R/angka.R")           # format angka Indonesia untuk tampilan: angka(), tampil() dan sumbu grafik
 ```
 
 ```{r packages}
@@ -45,7 +46,7 @@ Rencana adalah kumpulan lokasi yang paling mendekati pemenuhan setiap target dal
 Bagaimana `prioritizr` menemukan rencana? Dengan 101 lokasi dan ruang untuk 20, ada lebih dari 10^20^ kemungkinan kumpulan lokasi, jauh terlalu banyak untuk dicoba satu per satu.
 
 ```{r}
-choose(101, 20) # berapa banyak kombinasi 20 yang dapat dipilih dari 101?
+choose(101, 20) |> tampil() # berapa banyak kombinasi 20 yang dapat dipilih dari 101?
 ```
 
 Jadi `prioritizr` menuliskan masalah tersebut sebagai sekumpulan persamaan dan menyerahkannya kepada solver (paket bernama `highs`), yang dapat menyingkirkan banyak kelompok jawaban buruk sekaligus. Solver mencari kumpulan lokasi yang tetap berada dalam anggaran dan menyisakan total kekurangan terkecil: untuk setiap spesies, seberapa jauh spesies itu kurang dari targetnya, dikalikan dengan bobot spesies tersebut.
@@ -63,7 +64,7 @@ toy_pu <- tibble(id = 1:4,
                  species_B = c(0.9, 0.8, 0, 0),
                  species_C = c(0, 0, 0.9, 0))
 
-toy_pu
+toy_pu |> tampil()
 ```
 
 Klik `toy_pu` di tab Environment untuk melihatnya. Ini adalah tabel masukan utama untuk `prioritizr`: satu baris per unit perencanaan (lokasi), biayanya, dan satu kolom per fitur (spesies) yang berisi jumlahnya di lokasi tersebut.
@@ -84,7 +85,7 @@ toy_solution <- prioritizr::problem(toy_pu,
   add_highs_solver(verbose = TRUE) |>
   solve(run_checks = FALSE)
 
-toy_solution
+toy_solution |> tampil()
 ```
 
 Argumen **features** mencantumkan kolom-kolom yang berisi data okupansi spesies. Hanya dengan cara inilah `prioritizr` mengetahui kolom mana yang merupakan spesies.
@@ -206,7 +207,7 @@ plan_equal <- solution |>
   mutate(selected = solution_1 == 1) |>
   select(Site, selected)
 
-count(plan_equal, selected)
+count(plan_equal, selected) |> tampil()
 ```
 
 Keluaran `prioritizr` dikenal sebagai **rencana**.
@@ -299,7 +300,7 @@ ggplot(cov_equal, aes(held)) +
 
 # kelonggaran kecil (1e-9) mencegah galat pembulatan menggagalkan
 # spesies yang baru saja memenuhi targetnya
-cov_equal |> summarise(met = sum(held >= target - 1e-9), of = n())
+cov_equal |> summarise(met = sum(held >= target - 1e-9), of = n()) |> tampil()
 ```
 
 Klik `cov_equal` di tab Environment untuk melihatnya. Tabel ini memiliki satu baris per spesies, dengan bagian kehadirannya yang dimuat oleh rencana (`held`).
@@ -390,7 +391,7 @@ w_redlist <- status |>
   left_join(category_weights, by = "category")
 
 # ini adalah spesies yang tidak memiliki status yang dapat digunakan
-w_redlist |> filter(is.na(weight)) |> select(species, iucn, china_red_list)
+w_redlist |> filter(is.na(weight)) |> select(species, iucn, china_red_list) |> tampil()
 
 
 # ini adalah tabel bobot yang baru
@@ -400,7 +401,7 @@ w_redlist <- w_redlist |>
   select(species, weight)
 
 # jumlah spesies dalam setiap kategori
-count(w_redlist, weight)
+count(w_redlist, weight) |> tampil()
 ```
 
 Klik `w_redlist` di tab Environment untuk melihatnya. Tabel ini memiliki satu baris per spesies, dengan bobotnya. Klik kolom `weight` untuk mengurutkan berdasarkan bobot.
@@ -436,7 +437,7 @@ plan_equal |>
             size_plan_2 = sum(selected_2),
             only_plan_1 = sum(selected_1 & !selected_2),
             shared = sum(selected_1 & selected_2),
-            only_plan_2 = sum(!selected_1 & selected_2))
+            only_plan_2 = sum(!selected_1 & selected_2)) |> tampil()
 
 # spesies yang rentan atau lebih buruk, pada salah satu Daftar Merah
 (threatened <- w_redlist |>
@@ -453,7 +454,7 @@ bind_rows(
   summarise(threatened_species = n(),
             targets_met = sum(held >= target - 1e-9),
             mean_held = round(mean(held), 2),
-            .groups = "drop")
+            .groups = "drop") |> tampil()
 ```
 
 Setiap rencana memiliki 20 lokasi (yang ditentukan oleh anggaran kita):
@@ -483,7 +484,7 @@ cost_human <- sites |>
   mutate(cost = cost / mean(cost))
 
 # seluruh 101 lokasi tetap berbiaya total 101
-sum(cost_human$cost)
+sum(cost_human$cost) |> tampil()
 ```
 
 Klik `cost_human` di tab Environment untuk melihatnya. Di penampil, urutkan `cost_human$cost` naik dan turun.
@@ -496,7 +497,7 @@ Dalam `cost_equal`, semua lokasi berbiaya = 1. Sekarang banyak lokasi berbiaya \
 # aturan yang sama seperti untuk Rencana 1 dan 2: 20% dari biaya semua lokasi
 budget_human <- budget_frac * sum(cost_human$cost)
 
-budget_human
+budget_human |> tampil()
 ```
 
 `budget_human` adalah 20,2, anggaran yang sama dengan Rencana 1 dan 2.
@@ -536,10 +537,10 @@ bind_rows(
   summarise(sites = n(),
             mean_human_modification = round(mean(Human_modification_1km), 2),
             spent = round(sum(cost), 1),
-            .groups = "drop")
+            .groups = "drop") |> tampil()
 
 # berapa banyak lokasi Rencana 2 yang dipertahankan oleh Rencana 3?
-sum(plan_cost$selected & plan_redlist$selected)
+sum(plan_cost$selected & plan_redlist$selected) |> tampil()
 ```
 
 Ya, Rencana 3 mengonservasi lebih banyak lokasi, 32 alih-alih 20, dengan anggaran yang sama (`spent` adalah 20 untuk Rencana 1 dan 2, dan 20,2 untuk Rencana 3). Beberapa lokasi sangat murah (sedikit orang tinggal di sana, sehingga modifikasi manusianya kecil), dan Rencana 3 dapat melihat hal ini. Rencana 3 mempertahankan seluruh 20 lokasi Rencana 2 dan menambahkan 12 lokasi lagi, karena anggaran menjadi lebih jauh jangkauannya ketika Anda dapat memilih lokasi-lokasi yang murah.
@@ -559,7 +560,7 @@ bind_rows(
   group_by(plan) |>
   summarise(targets_met = sum(held >= target - 1e-9),
             mean_held = round(mean(held), 2),
-            .groups = "drop")
+            .groups = "drop") |> tampil()
 ```
 
 Ya. Sekarang 11 spesies terancam memenuhi targetnya. Ini karena `prioritizr` telah diberi informasi biaya lokasi, dan ia membeli lebih banyak lokasi, yang meningkatkan cakupan lebih banyak spesies.
@@ -579,7 +580,7 @@ w_wild <- w_redlist |>
   select(species, weight)
 
 # berapa banyak spesies yang sekarang ada dalam dataset?
-w_wild |> summarise(species_in_plan = sum(weight > 0))
+w_wild |> summarise(species_in_plan = sum(weight > 0)) |> tampil()
 
 # siapkan dan selesaikan rencananya
 plan_wild <- make_plan(w_wild,
@@ -589,7 +590,7 @@ plan_wild <- make_plan(w_wild,
 # berapa banyak lokasi yang berubah?
 plan_wild |>
   left_join(plan_cost, by = "Site", suffix = c("_4", "_3")) |>
-  summarise(sites_changed_from_plan_3 = sum(selected_4 != selected_3))
+  summarise(sites_changed_from_plan_3 = sum(selected_4 != selected_3)) |> tampil()
 
 p4 <- plot_plan(plan_wild,
                 "Rencana 4: hanya spesies liar,\nbobot Daftar Merah, biaya = modifikasi manusia")
@@ -623,10 +624,10 @@ bind_rows(
   summarise(sites = n(),
             in_reserve = sum(Site %in% inside_reserve),
             share_in_reserve = round(mean(Site %in% inside_reserve), 2),
-            .groups = "drop")
+            .groups = "drop") |> tampil()
 
 sites |> summarise(sites_inside_reserve = sum(streamOrigin == "insideGLGS"),
-                   of = n())
+                   of = n()) |> tampil()
 ```
 
 Hanya 51 dari 101 lokasi yang berada di dalam cagar alam, sekitar separuhnya, tetapi setiap rencana menempatkan dua pertiga hingga tiga perempat lokasinya di sana (0,65 hingga 0,73). Itu lebih banyak dari separuh yang akan dihasilkan oleh pemilihan lokasi secara acak, tetapi dengan hanya 20 hingga 33 lokasi dalam sebuah rencana, sebagian dari perbedaan itu bisa jadi kebetulan.

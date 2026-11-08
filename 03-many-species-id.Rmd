@@ -19,6 +19,7 @@ Seperti sebelumnya, chunk kode pertama hanya untuk keperluan lokakarya, dan chun
 ```{r workshop-setup}
 source("setup/pins.R")
 use_workshop_lib()                  # gunakan paket yang dipasang untuk lokakarya
+source("R/angka.R")           # format angka Indonesia untuk tampilan: angka(), tampil() dan sumbu grafik
 ```
 
 ```{r packages}
@@ -216,13 +217,13 @@ conv <- fit$diagnostics |>
          effects_settled = rhat_effects <= 1.1,
          settled = detection_settled & effects_settled)
 
-conv |> count(detection_settled, effects_settled)
+conv |> count(detection_settled, effects_settled) |> tampil()
 
 # spesies yang gagal dalam salah satu pemeriksaan, yang paling jarang terlebih dahulu
 conv |>
   filter(!settled) |>
   arrange(sites_detected) |>
-  select(species, sites_detected, rhat_detection, rhat_effects)
+  select(species, sites_detected, rhat_detection, rhat_effects) |> tampil()
 ```
 
 Klik `conv` di tab Environment untuk melihatnya. Tabel ini memiliki satu baris per spesies.
@@ -339,7 +340,7 @@ profile |>
          true_positive = p_mean) |>
   mutate(false_positive = round(false_positive, 3),
          true_positive = round(true_positive, 2)) |>
-  head(10)
+  head(10) |> tampil()
 ```
 
 Laju positif palsu tertinggi dimiliki oleh spesies yang terdeteksi di sebagian besar lokasi. Spesies tersebut mencakup babi dan sapi, yang DNA-nya kemungkinan mencapai sungai dari peternakan dan permukiman, tetapi juga beberapa mamalia kecil yang umum. Model tidak dapat menjelaskan mengapa suatu spesies memiliki laju yang tinggi, hanya bahwa deteksi mentahnya melebih-lebihkan tempat hidupnya.
@@ -389,7 +390,7 @@ takin |>
   filter(positive_pcrs > 0) |>
   arrange(Xs.2) |>
   mutate(across(c(cond_mean, psi_mean), \(x) round(x, 2))) |>
-  select(Site, latitude = Xs.2, positive_pcrs, cond_mean, psi_mean)
+  select(Site, latitude = Xs.2, positive_pcrs, cond_mean, psi_mean) |> tampil()
 ```
 
 ```{r takin-map, fig.width = 7, fig.height = 7}
@@ -460,7 +461,7 @@ richness <- occ |>
 
 richness |>
   summarise(detected = mean(detected),
-            expected = mean(expected))
+            expected = mean(expected)) |> tampil()
 ```
 
 > **Diskusikan**. Rata-rata, di suatu lokasi terdeteksi 22,5 spesies, tetapi model hanya mengharapkan 11,4. Ingat kembali laju positif palsu. Mengapa model mungkin mengharapkan lebih sedikit spesies daripada yang terdeteksi?
@@ -489,7 +490,7 @@ occ |>
   summarise(expected = sum(cond_mean), .groups = "drop") |>
   group_by(order) |>
   summarise(mean_per_site = round(mean(expected), 2)) |>
-  arrange(desc(mean_per_site))
+  arrange(desc(mean_per_site)) |> tampil()
 ```
 
 Sesi 4 hanya membutuhkan peluang-peluang kehadiran ini, bukan seluruh hasil fit, sehingga sesi tersebut membacanya dari sebuah tabel kecil, `data-derived/occupancy_long.csv`. Tabel ini memiliki satu baris per lokasi dan spesies, dengan taksonomi dan status konservasi yang disertakan. Chunk di bawah menunjukkan cara tabel tersebut disimpan. Chunk ini tidak dijalankan di kelas, karena filenya sudah tersedia.
@@ -605,7 +606,7 @@ responding_species <- reserve_effects |>
   arrange(covariate, desc(estimate)) |>
   select(covariate, species, red_list, estimate, lower, upper, odds_multiplier)
 
-responding_species
+responding_species |> tampil()
 ```
 
 Klik `responding_species` di tab Environment untuk melihatnya.
@@ -739,13 +740,13 @@ assoc <- fit$assoc |>
 assoc |>
   summarise(credible_pairs = n(),
             positive = sum(median > 0),
-            negative = sum(median < 0))
+            negative = sum(median < 0)) |> tampil()
 
 assoc |>
   arrange(desc(median)) |>
   select(species_a, species_b, correlation = median) |>
   mutate(correlation = round(correlation, 2)) |>
-  head(20)
+  head(20) |> tampil()
 ```
 
 Korelasi sebesar 1 berarti dua spesies selalu ditemukan bersama, setelah kovariat dan efek lokasi tersembunyi diperhitungkan; 0 berarti mengetahui satu spesies tidak memberi tahu Anda apa pun tentang spesies lainnya.
