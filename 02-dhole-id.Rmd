@@ -881,6 +881,8 @@ compare_rain |>
 
 ## Lakukan dengan asisten (menggunakan perangkat occJSDM)
 
+Asisten menjawab dalam bahasa Inggris. Agar asisten menjawab dalam Bahasa Indonesia, mulailah setiap percakapan dengan mengetik: *Mulai sekarang, jawablah dalam Bahasa Indonesia. Biarkan kode R, nama fungsi, nama kolom dan nama file dalam bahasa Inggris.*
+
 Instruktur Anda telah menghubungkan Posit Assistant ke empat perangkat occJSDM: `validate_data`, `fit_model`, `diagnostics` dan `summarise_fit`. Perangkat-perangkat ini melakukan langkah-langkah yang sama dengan yang baru saja Anda jalankan. Ketik setiap permintaan ke panel Posit Assistant, dengan kata-kata Anda sendiri.
 
 1.  Minta asisten untuk memeriksa file data `data-derived/dhole_input.rds` dengan `validate_data`. Berikan kovariat okupansi `annual_precipitation`, `mean_temperature`, `Human_modification_1km`, `Percent_of_forest_cover_1km`, `Patch_density_1km`, `Edge_density_1km`, `streamOrigin` dan `Regional_Division`, serta kovariat pengambilan sampel `Filter_vol` dan `PrevDayRain`. Minta asisten menjelaskan setiap masalah sebelum fitting.

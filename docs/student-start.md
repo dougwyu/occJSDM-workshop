@@ -16,6 +16,7 @@ check_setup()
     - In the model menu under the chat box, choose **Claude Haiku 5.5**, not "Auto Router". It is cheap, and it is the model the sessions were tested with.
     - Check the connection: type `/mcp` in the chat box and press Enter. The panel that opens should list **occJSDM** as **Connected**.
     - When the assistant wants to run R code in your session, it asks you first. Read the code, and approve it only if you understand what it will do. The occJSDM tools run without asking.
+    - The assistant replies in English. To have it reply in Bahasa Indonesia, start each conversation by typing: *Mulai sekarang, jawablah dalam Bahasa Indonesia. Biarkan kode R, nama fungsi, nama kolom dan nama file dalam bahasa Inggris.* ("From now on, answer in Bahasa Indonesia. Keep R code, function names, column names and file names in English.")
 4.  Open `01-why-model.Rmd`. It opens in Visual mode. Run the chunks one at a time with the green arrows, or all of them with Run All (Ctrl+Alt+R). Tables appear in the Console and plots in the Plots pane.
 
 If a line in step 2 says `[FAIL]`, tell your instructor. If the assistant does not respond, carry on with the code in the files. Everything in the sessions works without it.

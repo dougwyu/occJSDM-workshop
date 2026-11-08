@@ -654,7 +654,9 @@ Dalam kelompok, pilih satu perubahan dan laporkan bagaimana rencana menanggapiny
 
 Untuk masing-masing, sebutkan lokasi mana yang berpindah, dan apakah jawabannya akan mengubah apa yang Anda sampaikan kepada pengelola kawasan.
 
-## Tanyakan kepada asisten (opsional)
+## Bertanya kepada asisten (opsional)
+
+Asisten menjawab dalam bahasa Inggris. Agar asisten menjawab dalam Bahasa Indonesia, mulailah setiap percakapan dengan mengetik: *Mulai sekarang, jawablah dalam Bahasa Indonesia. Biarkan kode R, nama fungsi, nama kolom dan nama file dalam bahasa Inggris.*
 
 Posit Assistant dapat membantu Anda mengubah kode di atas. Di panel Posit Assistant, cobalah:
 

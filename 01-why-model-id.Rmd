@@ -636,6 +636,8 @@ Kemudian kita mencocokkan model yang sama pada data ajag yang nyata dan mencoba 
 
 ## Bertanya kepada asisten (opsional)
 
+Asisten menjawab dalam bahasa Inggris. Agar asisten menjawab dalam Bahasa Indonesia, mulailah setiap percakapan dengan mengetik: *Mulai sekarang, jawablah dalam Bahasa Indonesia. Biarkan kode R, nama fungsi, nama kolom dan nama file dalam bahasa Inggris.*
+
 Di panel Posit Assistant, cobalah:
 
 - *Dengan menggunakan objek-objek di sesi saya, buatlah peta dan tabel yang sama untuk takin, Budorcas taxicolor.*

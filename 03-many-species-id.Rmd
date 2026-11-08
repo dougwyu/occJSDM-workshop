@@ -760,6 +760,8 @@ Asosiasi bukanlah interaksi. Dua spesies dapat muncul bersama karena berbagi hab
 
 ## Bertanya kepada asisten (opsional)
 
+Asisten menjawab dalam bahasa Inggris. Agar asisten menjawab dalam Bahasa Indonesia, mulailah setiap percakapan dengan mengetik: *Mulai sekarang, jawablah dalam Bahasa Indonesia. Biarkan kode R, nama fungsi, nama kolom dan nama file dalam bahasa Inggris.*
+
 Posit Assistant dapat membantu Anda menulis kode R untuk tabel-tabel dalam sesi ini. Di panel Posit Assistant, cobalah:
 
 - *Spesies mana yang memiliki laju positif palsu di atas 0,1, dan berapa proporsi di antaranya yang domestik?*
