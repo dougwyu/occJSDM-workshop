@@ -1,0 +1,135 @@
+Essay Coach questions for the occJSDM workshop
+
+One question per session. Each is a short-answer question scored out of 10, with the marks for each paragraph of the model answer in square brackets, and marking guidance that says how to award partial credit. Students may answer from memory of the session; exact numbers are never required for credit unless the guidance says so.
+
+
+=====================================================================
+QUESTION 1 (Session 1: Why model? What eDNA summaries cannot tell you)
+=====================================================================
+
+Title: A detection is not a presence
+Type: Short answer, scored out of 10
+
+PROMPT
+
+Session 1 ended with a map of raw dhole (Cuon alpinus) detections at the 101 Gaoligongshan sites. Explain why that map can be wrong in both directions, giving one example of each kind of error from the dhole data or the simulated survey. Then explain why the composition chart and the ecoCopula ordination cannot answer a manager's question "where is the dhole?", even though they show real patterns.
+
+MODEL ANSWER
+
+In the raw map, a species counts as detected at a site if any one of its 18 PCRs (3 field samples x 6 PCRs) was positive, and a site with no positive PCR is drawn as empty. Neither of these is the same as the animal being present or absent. A positive PCR can come from the dhole's DNA or from contamination in the field or the lab, and a site where the dhole lives can produce no positive PCR at all if every sample missed its DNA. [2]
+
+False positives: four of the detecting sites, all in the south, had exactly one positive PCR out of 18, a pattern of (0, 0, 1). One PCR alone cannot tell a trace of real dhole DNA from contamination. Ji et al. (2025) found the same for the takin, with a few weak detections in the south where the takin is known not to live. So some of the 41 red circles on the raw map are probably sites where the dhole is absent. [2]
+
+False negatives: at GLG39, field samples 2 and 3 had 2 and 3 positive PCRs out of 6, so the dhole's DNA was almost certainly in the water, but sample 1 taken at the same place had none. If one sample can miss the dhole, then sometimes all three will, and such a site is drawn as an empty circle. So some of the 60 empty circles are probably sites where the dhole is present. The simulated survey makes this concrete: with a 40% chance that a sample catches the DNA and a 60% chance that a PCR detects it, the imaginary species was present at 46 sites but detected at only 37, and the 9 missed sites look exactly like absences in the data. [2]
+
+The composition chart counts species by taxonomic order, so it summarises what was detected across the whole survey and says nothing about any one site. The ordination places sites and species on two latent axes so that species detected at the same sites sit together. It is built from the same raw presence table (any positive PCR counts), so it carries the same false positives and false negatives, and its axes have no units: the pattern from top to bottom goes with human modification, with reserve status, and also with latitude, temperature, forest cover and region, so it cannot say which of these matters. It shows which species tend to be detected together, not whether a given species is at a given site. [2]
+
+What is needed instead is a model that separates the presence of the animal at a site from the detection of its DNA in a sample and a PCR, using the replicate structure of the survey (sites, samples within sites, PCRs within samples). That is what the occupancy model in Session 2 does, and it corrects for both kinds of error. Until then, ordinations give ideas to test, not answers. [2]
+
+MARKING GUIDANCE
+
+- Paragraph 1 (2 marks): award 1 mark for saying that a detection means at least one positive PCR of the 18 and that this is not the same as presence; award the second mark for naming both directions of error (a positive PCR without the animal, and no positive PCR with the animal). An answer that only mentions one direction here gets 1 mark.
+- Paragraph 2 (2 marks): any site with a single positive PCR out of 18, or the (0, 0, 1) pattern, is a valid example. The takin example from Ji et al. is also acceptable. Contamination as the mechanism is required for full marks; "it might be a mistake" with no mechanism gets 1 mark.
+- Paragraph 3 (2 marks): accept either the GLG39 argument (one sample missed, so all three can) or the simulated survey (46 present, 37 detected, 9 missed) as the example. Exact numbers are not required; "about 10 sites were missed" is fine. The key idea for full marks is that a missed site looks identical to a true absence in the data.
+- Paragraph 4 (2 marks): award 1 mark for the point that the ordination is built from the same raw detections and so contains the same errors, and 1 mark for the point that it shows association between species and sites, not presence at a site, or that its axes are confounded with several covariates. Either of those two second points is enough.
+- Paragraph 5 (2 marks): award for saying that a model is needed that separates presence from detection, using the replicates. Naming the occupancy model or occJSDM is not required. An answer that instead says "do more surveys" without a model gets at most 1 mark.
+- Do not deduct for answering in a different order or for extra correct material.
+
+
+=====================================================================
+QUESTION 2 (Session 2: Where is the dhole, really?)
+=====================================================================
+
+Title: Reading the dhole occupancy model
+Type: Short answer, scored out of 10
+
+PROMPT
+
+The occupancy model fitted in Session 2 expects the dhole at about 17 of the 101 sites, although it was detected at 41. Explain how the model arrives at a different answer from the raw detections, what this says about the main kind of error in the dhole survey, and what you checked before trusting the result. Say which parts of the result are firm and which are not.
+
+MODEL ANSWER
+
+The model uses the structure of the survey (PCRs within field samples within sites) to estimate, separately, where the dhole lives and how well its DNA is collected and detected. For the dhole it estimated that a sample from an occupied site catches the DNA about 7 times in 10, that a PCR on such a sample detects it about 6 times in 10, and that both false-positive rates (in the field and in the lab) are a few percent. Although a few percent sounds small, with 18 PCRs at each of 101 sites it is enough to produce scattered single positives at sites where the dhole does not live. [2]
+
+Given those rates, the model weighs each site's detection pattern. Sites with one positive PCR out of 18, such as the four southern sites with (0, 0, 1), get a probability of presence of a few percent or less: the model judges them to be false positives. Sites with several positives get a high probability, and GLG28, positive in all 18 PCRs, is certain. GLG39, with pattern (0, 2, 3), also gets a high probability: the model treats the empty sample as a false negative and looks past it. Adding the probabilities over all sites gives about 17 expected occupied sites, far fewer than the 41 sites with any detection. [2]
+
+So the main error in the dhole survey is false positives, not false negatives. With 3 samples and 6 PCRs per sample, the model calculates that the survey detects the dhole at about 96% of the sites where it lives, so few occupied sites are missed. Of the 60 sites with no detection, the model expects only about 2 to hold the dhole. More PCRs per sample would add almost nothing; more field samples would help more, because what limits detection is whether a sample catches the DNA at all. [2]
+
+Before trusting the result, the fit was checked in two ways. First, the same model was run on the simulated species from Session 1, where the truth is known: it expected the species at about 47 sites against a true 46 (raw detections gave 37), gave the missed sites a "maybe" probability of about 0.4, and recovered the 40% collection and 60% PCR rates used to build the survey. Second, the MCMC chains were checked with returnConvergenceDiagnostics(): rhat should be close to 1 (at most 1.01) so that the two chains agree, and the effective sample size should be at least 400. For the dhole only small flags appeared (p and q had low effective sample sizes, and the rain effect sat near the rhat line), and the conclusion that one positive PCR is weak evidence does not depend on the exact value of p. [2]
+
+What is firm is the probability of presence at each site: most sites are close to 0 or close to 1, with only a few in the middle. What is not firm is why the dhole is where it is: all nine occupancy covariate effects have 95% intervals that cross zero, so the data cannot tell whether human modification, reserve status or any other covariate matters, and the baseline occupancy (about 0.2) has a wide interval of about 0.08 to 0.38. The right report says both: where the dhole is, with confidence, and that the reasons remain open. [2]
+
+MARKING GUIDANCE
+
+- Paragraph 1 (2 marks): award 1 mark for the idea that the model estimates detection rates separately from occupancy using the sample and PCR replicates, and 1 mark for mentioning that false-positive rates are estimated and that even a small rate produces single positives across 1,818 PCRs. Approximate rates (collection about 0.7, PCR detection about 0.6) are a bonus, not a requirement.
+- Paragraph 2 (2 marks): award 1 mark for explaining that single-positive sites are judged false positives, and 1 mark for either the GLG39 point (a zero sample is treated as a false negative when the other samples are strong) or the point that summing the probabilities gives the expected number of occupied sites.
+- Paragraph 3 (2 marks): the required conclusion is that the error is mainly false positives. Award the second mark for a reason: the survey design detects the dhole at nearly all occupied sites (about 96%), or the model expects only about 2 false negatives among the 60 empty sites. Accept "more field samples help more than more PCRs" as the second mark if the false-negative reasoning is otherwise thin.
+- Paragraph 4 (2 marks): award 1 mark for the simulated-truth check (the model recovered about the right number of sites and the rates) and 1 mark for the convergence check (rhat near 1, effective sample size at least 400, traceplots). An answer that names only one of the two checks gets 1 mark. Exact rhat or ess thresholds are not required, but "the two chains agree" or an equivalent must appear.
+- Paragraph 5 (2 marks): award 1 mark for saying the site probabilities are firm, and 1 mark for saying the covariate effects are not (intervals cross zero). An answer that claims human modification or reserves clearly affect the dhole loses this second mark.
+- Do not deduct for answering in a different order or for extra correct material.
+
+
+=====================================================================
+QUESTION 3 (Session 3: Many species at once)
+=====================================================================
+
+Title: Two probabilities of presence
+Type: Short answer, scored out of 10
+
+PROMPT
+
+The joint model of all 108 mammals gives two probabilities of presence for every species at every site, psi_mean and cond_mean. Explain what each one is and how they differ, using the takin (Budorcas taxicolor) as your example. A park manager asks two things: where does the takin live, and which sites should we check with camera traps? Say which probability you would use for each and why. Finish by saying why the species were modelled jointly rather than one at a time, and what you checked before reading any of these numbers.
+
+MODEL ANSWER
+
+psi_mean is the predictive occupancy probability: the probability that a site with these characteristics is occupied, calculated from the measured occupancy covariates and the hidden covariates alone, without using the species' own detections at that site. cond_mean is the conditional occupancy probability: it starts from the same covariate information and then adds the species' own PCR results at the site, so it is the probability that the species is present given what was detected there. Both are posterior means, and the package does not yet give intervals for them. [2]
+
+For the takin, the two differ most at weakly detected sites. At the six northern sites where 13 to 18 of the 18 PCRs were positive, cond_mean is 1, while psi_mean is only about 0.5 to 0.9, because psi_mean does not see the detections. At the 16 sites with only 1 to 4 positive PCRs, cond_mean is at most 0.15: given how strong the detections are where the takin clearly lives, the model judges these weak detections to be false positives. psi_mean separates those 16 sites. At the 4 southern and 3 eastern sites it is near zero (0.03 or 0.08 or less), consistent with the takin's known range, but at the 9 northern weak-detection sites it rises to about 0.3 at most, because their covariates give them a fair chance of holding a takin. [2]
+
+To say where the takin lives, I would show psi_mean. It rests on how the covariates act across all the sites, so it is the more robust measure of where a species lives and it is what the maps in Ji et al. (2025) show; cond_mean can be pulled up by heavy contamination at a single site. To choose sites for camera traps, I would compare the two: a site with a low cond_mean (weak detections, judged false positive) but a moderate psi_mean (favourable covariates) is exactly a site worth surveying again, so the northern weak-detection sites would go first, and the southern ones, with low values on both, last. [2]
+
+The species were modelled jointly because a joint species distribution model shares information between species. Sites always differ in ways that were not measured (microclimate, disturbance history, isolation), and such a difference affects several species at once, so it shows up as groups of species that appear together or are missing together more often than the measured covariates explain. The model estimates these hidden environmental covariates (four of them here, n_factors = 4) from the survey itself, which a single-species model cannot do, and the residual associations that remain are a place to start asking which species go together, not an answer. [2]
+
+Before reading any of the numbers, convergence was checked for every species: for each one, the largest rhat among its detection parameters and among its covariate effects, with 1.1 as the limit. Detection had settled for all but one species and the covariate effects for all but five; the five unsettled species were all rarely detected (11 sites or fewer), and the dhole and the takin passed. For the flagged species the covariate effects should not be read and the probabilities of presence should be treated with care, because they are built from the same effects. [2]
+
+MARKING GUIDANCE
+
+- Paragraph 1 (2 marks): award 1 mark for each probability correctly defined. The essential distinction is that psi_mean does not use the site's own detections and cond_mean does. The names "predictive" and "conditional" are not required. An answer that says psi_mean is "a prediction for unsurveyed sites" is wrong (the hidden covariates come from the survey) and loses 1 mark.
+- Paragraph 2 (2 marks): award 1 mark for the strong northern sites (cond_mean near 1, psi_mean lower) and 1 mark for the weak-detection sites (cond_mean low because the detections are judged false positives, psi_mean varying with the covariates, higher in the north than in the south). Exact counts (6 strong sites, 16 weak, 9 northern) and exact values are not required.
+- Paragraph 3 (2 marks): award 1 mark for psi_mean to say where the takin lives, with a reason (more robust, rests on all sites, less affected by contamination at one site). Award 1 mark for choosing camera-trap sites by low cond_mean with moderate psi_mean, or an equivalent description of weak detections at sites with favourable covariates. An answer that uses cond_mean for both with a good reason (it uses all the information) gets 1 mark for the pair, not 2.
+- Paragraph 4 (2 marks): award 1 mark for sharing information between species or estimating hidden site effects, and 1 mark for explaining what a hidden covariate is (an unmeasured site difference that affects several species, seen as species appearing or missing together). "An association is not an interaction" is a bonus, not a requirement.
+- Paragraph 5 (2 marks): award 1 mark for checking convergence (rhat per species) before reading results, and 1 mark for the consequence: the unsettled species were rare ones, and their effects should not be read. The 1.1 threshold and the exact count of five are not required.
+- Do not deduct for answering in a different order or for extra correct material.
+
+
+=====================================================================
+QUESTION 4 (Session 4: Where should we protect?)
+=====================================================================
+
+Title: From occupancy probabilities to a conservation plan
+Type: Short answer, scored out of 10
+
+PROMPT
+
+Session 4 used prioritizr to choose which of the 101 Gaoligongshan sites to protect for 108 mammal species. Explain the three inputs the plan needs and how the solver uses them. Explain, using the toy example or otherwise, why the plan does not simply pick the richest sites. Then describe what happened to the plan when threatened species were given higher weights and when sites were allowed to cost different amounts, and explain why the cost change had the bigger effect. Finish with three things the plan cannot tell a park manager.
+
+MODEL ANSWER
+
+A systematic conservation plan needs three inputs. Features are the things to protect, here the 108 species, each described by its probability of presence (cond_mean from Session 3) at each of the 101 sites, which are the planning units. Targets say how much of each feature is enough, here 50% of each species' total probability of presence summed over all sites. Costs and a budget say what protecting each site costs and how much can be spent in total, here 20% of the cost of protecting every site. prioritizr writes this as a set of equations and hands it to the highs solver, which looks for the set of sites that stays within the budget and leaves the smallest total shortfall, where each species' shortfall is how far it falls below its target, multiplied by its weight. With 101 sites and room for 20 there are more than 10^20 possible sets, so the solver rules out large groups of poor answers at once rather than trying them one by one. [2]
+
+The plan does not simply pick the richest sites, because sites must complement each other. In the toy survey of 4 sites and 3 species with a budget of 2, sites 1 and 2 were the richest, each holding species A and B, but protecting both would give species C nothing. The solver chose sites 1 and 3: site 1 alone holds 0.9 of 1.7 for A and for B, which meets their 50% targets, and site 3 is the only site with species C. The chosen sites together meet the targets, which a list of the richest sites does not. [2]
+
+With equal weights and equal costs, the plan picked 20 sites, and only 32 of the 108 species reached their 50% target: the budget was too small to hold half of every species' presence. Weighting species by Red List category (Critically Endangered 5 down to Least Concern 1, using the China Red List where IUCN has no entry) changed only 3 of the 20 sites, and among the 12 threatened species the number meeting its target rose from 3 to 4, a small gain. The budget still bought the same 20 sites, so there was little room to move. [2]
+
+Using each site's human modification as its cost, rescaled so that the 101 sites still cost 101 in total, had a much larger effect. The budget stayed at 20.2, but costs now ran from about 0.22 to 2.26, and the sites the species need turned out to be cheap, little-modified sites. Plan 2's 20 sites cost only 13.8 at the new prices, so the same budget bought 32 sites, all 20 of Plan 2's plus 12 more, and the number of threatened species meeting their target rose to 11. This worked only because, in this landscape, the species live in cheap places; where species live in expensive, modified land, costs would work against the plan. Leaving out the 9 domestic species as well changed 7 further sites. [2]
+
+The plan cannot tell a manager several things. Putting a site in the plan is not the same as protecting the species there: the plan works with probabilities, and a site helps a species only if the species is truly present and the site is then managed well. The probabilities are used as if they were exact, because the package does not yet carry their uncertainty through, so a site at 0.6 plus or minus 0.1 counts the same as one at 0.6 plus or minus 0.3, and the species whose chains had not settled in Session 3 carry less reliable probabilities. The 101 surveyed sites are the only planning units, so the plan says nothing about the rest of the landscape, and the 50% target, 20% budget, Red List weights and human modification as a stand-in for cost are all choices that change the answer. Most of each plan's sites were already inside a reserve, so the new proposals are the few sites it picks outside them. [2]
+
+MARKING GUIDANCE
+
+- Paragraph 1 (2 marks): award 1 mark for naming the three inputs (features with probabilities of presence, targets, costs with a budget) and 1 mark for describing the objective: minimise the total weighted shortfall from the targets within the budget. Naming prioritizr or highs is not required. The 50% target and 20% budget values are a bonus.
+- Paragraph 2 (2 marks): award for the idea of complementarity, that the chosen sites together meet the targets. The toy example with its numbers is the easiest way to show it but any correct illustration is acceptable, including one invented by the student, provided it shows a species that the richest sites would miss.
+- Paragraph 3 (2 marks): award 1 mark for the baseline result (20 sites, most species short of the target; the exact 32 of 108 is not required) and 1 mark for the Red List weighting producing only a small change (few sites moved, about one more threatened species meeting its target). An explanation that the fixed budget of 20 equal-cost sites leaves little room is a bonus.
+- Paragraph 4 (2 marks): award 1 mark for the mechanism (costs rescaled to the same total and the same budget, but the sites the species need are cheap, so the budget buys more sites, about 32) and 1 mark for the qualification that this depends on the landscape and would reverse where species live in expensive land. The exact counts (32 sites, 11 threatened species, 13.8) are not required.
+- Paragraph 5 (2 marks): award 2 marks for any three of: a chosen site does not guarantee the species is present or protected; uncertainty in the probabilities is ignored; unsettled species are less reliable; only the 101 sites are planned, not the landscape; targets, budget, weights and cost are choices; most chosen sites are already in reserves. Two of these earn 1 mark; one earns 0.
+- Do not deduct for answering in a different order or for extra correct material.
