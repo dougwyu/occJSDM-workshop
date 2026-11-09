@@ -1,0 +1,135 @@
+Pertanyaan Essay Coach untuk lokakarya occJSDM (Bahasa Indonesia)
+
+Satu pertanyaan per sesi. Setiap pertanyaan adalah pertanyaan jawaban singkat dengan skor maksimal 10, dengan nilai untuk setiap paragraf jawaban model ditulis dalam kurung siku, dan panduan penilaian yang menjelaskan cara memberikan nilai parsial. Mahasiswa boleh menjawab dari ingatan tentang sesi; angka yang tepat tidak pernah diwajibkan untuk mendapat nilai kecuali panduan menyatakan sebaliknya.
+
+
+=====================================================================
+PERTANYAAN 1 (Sesi 1: Mengapa membuat model? Apa yang tidak dapat diungkapkan oleh ringkasan eDNA)
+=====================================================================
+
+Judul: Deteksi bukanlah kehadiran
+Jenis: Jawaban singkat, skor maksimal 10
+
+PERTANYAAN
+
+Sesi 1 diakhiri dengan peta deteksi mentah ajag (Cuon alpinus) di 101 lokasi Gaoligongshan. Jelaskan mengapa peta itu bisa salah dalam dua arah, dengan memberikan satu contoh untuk setiap jenis kesalahan dari data ajag atau dari survei simulasi. Kemudian jelaskan mengapa bagan komposisi dan ordinasi ecoCopula tidak dapat menjawab pertanyaan pengelola kawasan "di mana ajag berada?", meskipun keduanya menunjukkan pola yang nyata.
+
+JAWABAN MODEL
+
+Pada peta mentah, suatu spesies dihitung terdeteksi di suatu lokasi jika salah satu saja dari 18 PCR-nya (3 sampel lapangan x 6 PCR) positif, dan lokasi tanpa PCR positif digambar sebagai lingkaran kosong. Keduanya tidak sama dengan hewan itu hadir atau tidak hadir. PCR positif bisa berasal dari DNA ajag atau dari kontaminasi di lapangan atau di laboratorium, dan lokasi tempat ajag hidup bisa tidak menghasilkan PCR positif sama sekali jika setiap sampel gagal menangkap DNA-nya. [2]
+
+Positif palsu: empat lokasi yang terdeteksi, semuanya di selatan, hanya memiliki tepat satu PCR positif dari 18, dengan pola (0, 0, 1). Satu PCR saja tidak dapat membedakan jejak DNA ajag yang nyata dari kontaminasi. Ji et al. (2025) menemukan hal yang sama untuk takin, dengan beberapa deteksi lemah di selatan, tempat takin diketahui tidak hidup. Jadi sebagian dari 41 lingkaran merah pada peta mentah kemungkinan adalah lokasi tempat ajag tidak ada. [2]
+
+Negatif palsu: di GLG39, sampel lapangan 2 dan 3 memiliki 2 dan 3 PCR positif dari 6, sehingga DNA ajag hampir pasti ada di air, tetapi sampel 1 yang diambil di tempat yang sama tidak memiliki PCR positif. Jika satu sampel bisa melewatkan ajag, maka kadang-kadang ketiganya akan melewatkannya, dan lokasi seperti itu digambar sebagai lingkaran kosong. Jadi sebagian dari 60 lingkaran kosong kemungkinan adalah lokasi tempat ajag hadir. Survei simulasi membuat hal ini nyata: dengan peluang 40% bahwa sampel menangkap DNA dan peluang 60% bahwa PCR mendeteksinya, spesies khayalan itu hadir di 46 lokasi tetapi hanya terdeteksi di 37, dan 9 lokasi yang terlewat tampak persis seperti ketidakhadiran dalam data. [2]
+
+Bagan komposisi menghitung spesies menurut ordo taksonomi, sehingga ia meringkas apa yang terdeteksi di seluruh survei dan tidak mengatakan apa pun tentang satu lokasi tertentu. Ordinasi menempatkan lokasi dan spesies pada dua sumbu laten sehingga spesies yang terdeteksi di lokasi yang sama berada berdekatan. Ordinasi dibangun dari tabel kehadiran mentah yang sama (setiap PCR positif dihitung), sehingga membawa positif palsu dan negatif palsu yang sama, dan sumbunya tidak memiliki satuan: pola dari atas ke bawah sejalan dengan modifikasi manusia, dengan status cagar alam, dan juga dengan lintang, suhu, tutupan hutan dan wilayah, sehingga ordinasi tidak dapat mengatakan mana yang penting. Ordinasi menunjukkan spesies mana yang cenderung terdeteksi bersama, bukan apakah suatu spesies ada di suatu lokasi. [2]
+
+Yang dibutuhkan adalah model yang memisahkan kehadiran hewan di suatu lokasi dari deteksi DNA-nya dalam sampel dan PCR, dengan memanfaatkan struktur replikat survei (lokasi, sampel di dalam lokasi, PCR di dalam sampel). Itulah yang dilakukan model okupansi di Sesi 2, dan model itu mengoreksi kedua jenis kesalahan. Sebelum itu, ordinasi memberi gagasan untuk diuji, bukan jawaban. [2]
+
+PANDUAN PENILAIAN
+
+- Paragraf 1 (2 nilai): berikan 1 nilai untuk menyatakan bahwa deteksi berarti setidaknya satu PCR positif dari 18 dan bahwa ini tidak sama dengan kehadiran; berikan nilai kedua untuk menyebutkan kedua arah kesalahan (PCR positif tanpa hewan, dan tidak ada PCR positif padahal hewan ada). Jawaban yang hanya menyebut satu arah di sini mendapat 1 nilai.
+- Paragraf 2 (2 nilai): setiap lokasi dengan satu PCR positif dari 18, atau pola (0, 0, 1), adalah contoh yang sah. Contoh takin dari Ji et al. juga dapat diterima. Kontaminasi sebagai mekanisme diwajibkan untuk nilai penuh; "mungkin itu kesalahan" tanpa mekanisme mendapat 1 nilai.
+- Paragraf 3 (2 nilai): terima argumen GLG39 (satu sampel terlewat, jadi ketiganya bisa terlewat) atau survei simulasi (46 hadir, 37 terdeteksi, 9 terlewat) sebagai contoh. Angka tepat tidak diwajibkan; "sekitar 10 lokasi terlewat" sudah cukup. Gagasan kunci untuk nilai penuh adalah bahwa lokasi yang terlewat tampak identik dengan ketidakhadiran sejati dalam data.
+- Paragraf 4 (2 nilai): berikan 1 nilai untuk poin bahwa ordinasi dibangun dari deteksi mentah yang sama sehingga mengandung kesalahan yang sama, dan 1 nilai untuk poin bahwa ordinasi menunjukkan asosiasi antara spesies dan lokasi, bukan kehadiran di suatu lokasi, atau bahwa sumbunya bercampur dengan beberapa kovariat. Salah satu dari dua poin kedua itu sudah cukup.
+- Paragraf 5 (2 nilai): berikan untuk menyatakan bahwa dibutuhkan model yang memisahkan kehadiran dari deteksi dengan memanfaatkan replikat. Menyebut nama model okupansi atau occJSDM tidak diwajibkan. Jawaban yang hanya mengatakan "lakukan lebih banyak survei" tanpa model mendapat paling banyak 1 nilai.
+- Jangan mengurangi nilai karena urutan jawaban berbeda atau karena materi tambahan yang benar.
+
+
+=====================================================================
+PERTANYAAN 2 (Sesi 2: Di mana ajag sebenarnya?)
+=====================================================================
+
+Judul: Membaca model okupansi ajag
+Jenis: Jawaban singkat, skor maksimal 10
+
+PERTANYAAN
+
+Model okupansi yang di-fit di Sesi 2 memperkirakan ajag hadir di sekitar 17 dari 101 lokasi, padahal ajag terdeteksi di 41 lokasi. Jelaskan bagaimana model sampai pada jawaban yang berbeda dari deteksi mentah, apa artinya ini tentang jenis kesalahan utama dalam survei ajag, dan apa yang Anda periksa sebelum memercayai hasilnya. Sebutkan bagian hasil mana yang kokoh dan mana yang tidak.
+
+JAWABAN MODEL
+
+Model memanfaatkan struktur survei (PCR di dalam sampel lapangan di dalam lokasi) untuk memperkirakan, secara terpisah, di mana ajag hidup dan seberapa baik DNA-nya dikoleksi dan dideteksi. Untuk ajag, model memperkirakan bahwa sampel dari lokasi yang dihuni menangkap DNA sekitar 7 dari 10 kali, bahwa PCR pada sampel seperti itu mendeteksinya sekitar 6 dari 10 kali, dan bahwa kedua laju positif palsu (di lapangan dan di laboratorium) hanya beberapa persen. Meskipun beberapa persen terdengar kecil, dengan 18 PCR di masing-masing 101 lokasi, itu cukup untuk menghasilkan PCR positif tunggal yang tersebar di lokasi tempat ajag tidak hidup. [2]
+
+Dengan laju tersebut, model menimbang pola deteksi setiap lokasi. Lokasi dengan satu PCR positif dari 18, seperti empat lokasi selatan dengan pola (0, 0, 1), mendapat peluang kehadiran beberapa persen atau kurang: model menilai bahwa itu positif palsu. Lokasi dengan beberapa PCR positif mendapat peluang tinggi, dan GLG28, yang positif pada seluruh 18 PCR, dinilai pasti. GLG39, dengan pola (0, 2, 3), juga mendapat peluang tinggi: model memperlakukan sampel yang kosong sebagai negatif palsu dan mengabaikannya. Menjumlahkan peluang di semua lokasi memberikan sekitar 17 lokasi yang diperkirakan dihuni, jauh lebih sedikit daripada 41 lokasi dengan deteksi apa pun. [2]
+
+Jadi kesalahan utama dalam survei ajag adalah positif palsu, bukan negatif palsu. Dengan 3 sampel dan 6 PCR per sampel, model menghitung bahwa survei mendeteksi ajag di sekitar 96% lokasi tempat ia hidup, sehingga hanya sedikit lokasi yang dihuni yang terlewat. Dari 60 lokasi tanpa deteksi, model hanya memperkirakan sekitar 2 lokasi yang dihuni ajag. Menambah PCR per sampel hampir tidak menambah apa pun; menambah sampel lapangan lebih membantu, karena yang membatasi deteksi adalah apakah sampel menangkap DNA sama sekali. [2]
+
+Sebelum memercayai hasilnya, fit diperiksa dengan dua cara. Pertama, model yang sama dijalankan pada spesies simulasi dari Sesi 1, yang kebenarannya diketahui: model memperkirakan spesies itu hadir di sekitar 47 lokasi dibandingkan dengan kebenaran 46 (deteksi mentah memberikan 37), memberikan peluang "mungkin" sekitar 0,4 kepada lokasi yang terlewat, dan memulihkan laju koleksi 40% dan laju PCR 60% yang dipakai untuk membangun survei. Kedua, rantai MCMC diperiksa dengan returnConvergenceDiagnostics(): rhat harus dekat dengan 1 (paling tinggi 1,01) agar kedua rantai sepakat, dan ukuran sampel efektif harus paling sedikit 400. Untuk ajag hanya muncul tanda kecil (p dan q memiliki ukuran sampel efektif yang rendah, dan efek hujan berada di dekat batas rhat), dan kesimpulan bahwa satu PCR positif adalah bukti yang lemah tidak bergantung pada nilai p yang tepat. [2]
+
+Yang kokoh adalah peluang kehadiran di setiap lokasi: sebagian besar lokasi dekat dengan 0 atau dekat dengan 1, dengan hanya sedikit di tengah. Yang tidak kokoh adalah mengapa ajag berada di tempatnya: kesembilan efek kovariat okupansi memiliki interval 95% yang melewati nol, sehingga data tidak dapat mengatakan apakah modifikasi manusia, status cagar alam atau kovariat lain mana pun berpengaruh, dan okupansi dasar (sekitar 0,2) memiliki interval yang lebar, sekitar 0,08 sampai 0,38. Laporan yang benar menyampaikan keduanya: di mana ajag berada, dengan keyakinan, dan bahwa alasannya masih terbuka. [2]
+
+PANDUAN PENILAIAN
+
+- Paragraf 1 (2 nilai): berikan 1 nilai untuk gagasan bahwa model memperkirakan laju deteksi secara terpisah dari okupansi dengan memanfaatkan replikat sampel dan PCR, dan 1 nilai untuk menyebutkan bahwa laju positif palsu diperkirakan dan bahwa laju kecil pun menghasilkan PCR positif tunggal di antara 1.818 PCR. Laju perkiraan (koleksi sekitar 0,7, deteksi PCR sekitar 0,6) adalah bonus, bukan keharusan.
+- Paragraf 2 (2 nilai): berikan 1 nilai untuk menjelaskan bahwa lokasi dengan satu PCR positif dinilai sebagai positif palsu, dan 1 nilai untuk poin GLG39 (sampel kosong diperlakukan sebagai negatif palsu ketika sampel lain kuat) atau poin bahwa menjumlahkan peluang memberikan jumlah lokasi yang diperkirakan dihuni.
+- Paragraf 3 (2 nilai): kesimpulan yang diwajibkan adalah bahwa kesalahannya terutama positif palsu. Berikan nilai kedua untuk alasannya: rancangan survei mendeteksi ajag di hampir semua lokasi yang dihuni (sekitar 96%), atau model hanya memperkirakan sekitar 2 negatif palsu di antara 60 lokasi kosong. Terima "menambah sampel lapangan lebih membantu daripada menambah PCR" sebagai nilai kedua jika penalaran tentang negatif palsu tipis.
+- Paragraf 4 (2 nilai): berikan 1 nilai untuk pemeriksaan dengan kebenaran simulasi (model memulihkan jumlah lokasi dan laju yang kira-kira benar) dan 1 nilai untuk pemeriksaan konvergensi (rhat dekat 1, ukuran sampel efektif paling sedikit 400, traceplot). Jawaban yang hanya menyebut satu dari dua pemeriksaan mendapat 1 nilai. Ambang rhat atau ess yang tepat tidak diwajibkan, tetapi "kedua rantai sepakat" atau padanannya harus muncul.
+- Paragraf 5 (2 nilai): berikan 1 nilai untuk menyatakan bahwa peluang per lokasi kokoh, dan 1 nilai untuk menyatakan bahwa efek kovariat tidak kokoh (interval melewati nol). Jawaban yang mengklaim bahwa modifikasi manusia atau cagar alam jelas memengaruhi ajag kehilangan nilai kedua ini.
+- Jangan mengurangi nilai karena urutan jawaban berbeda atau karena materi tambahan yang benar.
+
+
+=====================================================================
+PERTANYAAN 3 (Sesi 3: Banyak spesies sekaligus)
+=====================================================================
+
+Judul: Dua peluang kehadiran
+Jenis: Jawaban singkat, skor maksimal 10
+
+PERTANYAAN
+
+Model gabungan untuk seluruh 108 mamalia memberikan dua peluang kehadiran untuk setiap spesies di setiap lokasi, psi_mean dan cond_mean. Jelaskan apa masing-masingnya dan bagaimana keduanya berbeda, dengan takin (Budorcas taxicolor) sebagai contoh Anda. Seorang pengelola kawasan menanyakan dua hal: di mana takin hidup, dan lokasi mana yang harus kami periksa dengan kamera jebak? Sebutkan peluang mana yang akan Anda gunakan untuk masing-masing pertanyaan dan mengapa. Akhiri dengan menjelaskan mengapa spesies dimodelkan secara gabungan dan bukan satu per satu, dan apa yang Anda periksa sebelum membaca angka-angka ini.
+
+JAWABAN MODEL
+
+psi_mean adalah peluang okupansi prediktif: peluang bahwa lokasi dengan karakteristik seperti ini dihuni, yang dihitung dari kovariat okupansi yang diukur dan kovariat tersembunyi saja, tanpa menggunakan deteksi spesies itu sendiri di lokasi tersebut. cond_mean adalah peluang okupansi bersyarat: ia berangkat dari informasi kovariat yang sama lalu menambahkan hasil PCR spesies itu sendiri di lokasi tersebut, sehingga ia adalah peluang bahwa spesies hadir dengan mengetahui apa yang terdeteksi di sana. Keduanya adalah rata-rata posterior, dan paket belum memberikan interval untuk keduanya. [2]
+
+Untuk takin, keduanya paling berbeda di lokasi dengan deteksi lemah. Di enam lokasi utara tempat 13 sampai 18 dari 18 PCR positif, cond_mean adalah 1, sedangkan psi_mean hanya sekitar 0,5 sampai 0,9, karena psi_mean tidak melihat deteksi. Di 16 lokasi dengan hanya 1 sampai 4 PCR positif, cond_mean paling tinggi 0,15: mengingat betapa kuatnya deteksi di tempat takin jelas hidup, model menilai deteksi lemah ini sebagai positif palsu. psi_mean memilah ke-16 lokasi itu. Di 4 lokasi selatan dan 3 lokasi timur nilainya mendekati nol (0,03 atau 0,08 atau kurang), sesuai dengan sebaran takin yang diketahui, tetapi di 9 lokasi utara dengan deteksi lemah nilainya naik sampai sekitar 0,3, karena kovariatnya memberi lokasi-lokasi itu peluang yang cukup untuk dihuni takin. [2]
+
+Untuk mengatakan di mana takin hidup, saya akan menunjukkan psi_mean. Ia bertumpu pada bagaimana kovariat bekerja di seluruh lokasi, sehingga merupakan ukuran yang lebih kokoh tentang di mana spesies hidup, dan itulah yang ditunjukkan peta dalam Ji et al. (2025); cond_mean dapat terangkat oleh kontaminasi berat di satu lokasi. Untuk memilih lokasi kamera jebak, saya akan membandingkan keduanya: lokasi dengan cond_mean rendah (deteksi lemah, dinilai positif palsu) tetapi psi_mean sedang (kovariat yang mendukung) adalah persis lokasi yang layak disurvei ulang, sehingga lokasi utara dengan deteksi lemah akan diperiksa lebih dulu, dan lokasi selatan, dengan nilai rendah pada keduanya, paling akhir. [2]
+
+Spesies dimodelkan secara gabungan karena model distribusi spesies gabungan berbagi informasi antar spesies. Lokasi selalu berbeda dalam hal-hal yang tidak diukur (iklim mikro, riwayat gangguan, keterpencilan), dan perbedaan seperti itu memengaruhi beberapa spesies sekaligus, sehingga tampak sebagai kelompok spesies yang muncul bersama atau hilang bersama lebih sering daripada yang dijelaskan kovariat yang diukur. Model memperkirakan kovariat lingkungan tersembunyi ini (empat di sini, n_factors = 4) dari survei itu sendiri, yang tidak dapat dilakukan model spesies tunggal, dan asosiasi residual yang tersisa adalah titik awal untuk bertanya spesies mana yang berpasangan, bukan jawaban. [2]
+
+Sebelum membaca angka mana pun, konvergensi diperiksa untuk setiap spesies: untuk masing-masing, rhat terbesar di antara parameter deteksinya dan di antara efek kovariatnya, dengan batas 1,1. Deteksi telah stabil untuk semua kecuali satu spesies dan efek kovariat untuk semua kecuali lima; kelima spesies yang belum stabil semuanya jarang terdeteksi (11 lokasi atau kurang), dan ajag serta takin lolos. Untuk spesies yang ditandai, efek kovariat tidak boleh dibaca dan peluang kehadirannya harus diperlakukan dengan hati-hati, karena dibangun dari efek yang sama. [2]
+
+PANDUAN PENILAIAN
+
+- Paragraf 1 (2 nilai): berikan 1 nilai untuk setiap peluang yang didefinisikan dengan benar. Perbedaan pokoknya adalah bahwa psi_mean tidak menggunakan deteksi di lokasi itu sendiri dan cond_mean menggunakannya. Nama "prediktif" dan "bersyarat" tidak diwajibkan. Jawaban yang mengatakan psi_mean adalah "prediksi untuk lokasi yang belum disurvei" adalah salah (kovariat tersembunyi berasal dari survei) dan kehilangan 1 nilai.
+- Paragraf 2 (2 nilai): berikan 1 nilai untuk lokasi utara dengan deteksi kuat (cond_mean mendekati 1, psi_mean lebih rendah) dan 1 nilai untuk lokasi dengan deteksi lemah (cond_mean rendah karena deteksi dinilai positif palsu, psi_mean bervariasi menurut kovariat, lebih tinggi di utara daripada di selatan). Jumlah tepat (6 lokasi kuat, 16 lemah, 9 utara) dan nilai tepat tidak diwajibkan.
+- Paragraf 3 (2 nilai): berikan 1 nilai untuk psi_mean sebagai jawaban tentang di mana takin hidup, dengan alasan (lebih kokoh, bertumpu pada seluruh lokasi, kurang terpengaruh kontaminasi di satu lokasi). Berikan 1 nilai untuk memilih lokasi kamera jebak berdasarkan cond_mean rendah dengan psi_mean sedang, atau penjelasan setara tentang deteksi lemah di lokasi dengan kovariat yang mendukung. Jawaban yang menggunakan cond_mean untuk keduanya dengan alasan yang baik (ia memakai semua informasi) mendapat 1 nilai untuk pasangan itu, bukan 2.
+- Paragraf 4 (2 nilai): berikan 1 nilai untuk berbagi informasi antar spesies atau memperkirakan efek lokasi tersembunyi, dan 1 nilai untuk menjelaskan apa itu kovariat tersembunyi (perbedaan lokasi yang tidak diukur yang memengaruhi beberapa spesies, terlihat sebagai spesies yang muncul atau hilang bersama). "Asosiasi bukanlah interaksi" adalah bonus, bukan keharusan.
+- Paragraf 5 (2 nilai): berikan 1 nilai untuk memeriksa konvergensi (rhat per spesies) sebelum membaca hasil, dan 1 nilai untuk konsekuensinya: spesies yang belum stabil adalah spesies yang jarang, dan efeknya tidak boleh dibaca. Ambang 1,1 dan jumlah tepat lima tidak diwajibkan.
+- Jangan mengurangi nilai karena urutan jawaban berbeda atau karena materi tambahan yang benar.
+
+
+=====================================================================
+PERTANYAAN 4 (Sesi 4: Di mana kita harus melindungi?)
+=====================================================================
+
+Judul: Dari peluang okupansi ke rencana konservasi
+Jenis: Jawaban singkat, skor maksimal 10
+
+PERTANYAAN
+
+Sesi 4 menggunakan prioritizr untuk memilih lokasi mana dari 101 lokasi Gaoligongshan yang harus dilindungi untuk 108 spesies mamalia. Jelaskan tiga masukan yang dibutuhkan rencana dan bagaimana solver menggunakannya. Jelaskan, dengan contoh mainan atau cara lain, mengapa rencana tidak sekadar memilih lokasi yang paling kaya. Kemudian uraikan apa yang terjadi pada rencana ketika spesies terancam diberi bobot lebih tinggi dan ketika lokasi dibiarkan memiliki biaya yang berbeda-beda, dan jelaskan mengapa perubahan biaya berdampak lebih besar. Akhiri dengan tiga hal yang tidak dapat disampaikan rencana kepada pengelola kawasan.
+
+JAWABAN MODEL
+
+Rencana konservasi sistematis membutuhkan tiga masukan. Fitur adalah hal-hal yang ingin dilindungi, di sini 108 spesies, masing-masing digambarkan oleh peluang kehadirannya (cond_mean dari Sesi 3) di setiap dari 101 lokasi, yang menjadi unit perencanaan. Target menyatakan seberapa banyak dari setiap fitur yang dianggap cukup, di sini 50% dari total peluang kehadiran setiap spesies yang dijumlahkan di semua lokasi. Biaya dan anggaran menyatakan berapa biaya melindungi setiap lokasi dan berapa total yang dapat dibelanjakan, di sini 20% dari biaya melindungi semua lokasi. prioritizr menuliskan ini sebagai sekumpulan persamaan dan menyerahkannya kepada solver highs, yang mencari kumpulan lokasi yang tetap dalam anggaran dan menyisakan total shortfall terkecil, di mana shortfall setiap spesies adalah seberapa jauh ia berada di bawah targetnya, dikalikan dengan bobotnya. Dengan 101 lokasi dan ruang untuk 20, ada lebih dari 10^20 kumpulan yang mungkin, sehingga solver menyingkirkan kelompok besar jawaban buruk sekaligus alih-alih mencoba satu per satu. [2]
+
+Rencana tidak sekadar memilih lokasi yang paling kaya, karena lokasi-lokasi harus saling melengkapi. Dalam survei mainan dengan 4 lokasi dan 3 spesies dan anggaran 2, lokasi 1 dan 2 adalah yang paling kaya, masing-masing memuat spesies A dan B, tetapi melindungi keduanya tidak memberi apa pun kepada spesies C. Solver memilih lokasi 1 dan 3: lokasi 1 saja memuat 0,9 dari 1,7 untuk A dan untuk B, yang memenuhi target 50% keduanya, dan lokasi 3 adalah satu-satunya lokasi dengan spesies C. Lokasi yang dipilih bersama-sama memenuhi target, yang tidak dilakukan oleh daftar lokasi terkaya. [2]
+
+Dengan bobot sama dan biaya sama, rencana memilih 20 lokasi, dan hanya 32 dari 108 spesies yang mencapai target 50%: anggaran terlalu kecil untuk memuat separuh kehadiran setiap spesies. Pembobotan spesies menurut kategori Daftar Merah (Kritis 5 sampai Risiko Rendah 1, memakai Daftar Merah Tiongkok ketika IUCN tidak memiliki entri) hanya mengubah 3 dari 20 lokasi, dan di antara 12 spesies terancam, jumlah yang memenuhi targetnya naik dari 3 menjadi 4, perolehan yang kecil. Anggaran masih membeli 20 lokasi yang sama, sehingga hanya sedikit ruang untuk bergerak. [2]
+
+Memakai modifikasi manusia setiap lokasi sebagai biayanya, yang diskalakan ulang sehingga 101 lokasi tetap berbiaya total 101, berdampak jauh lebih besar. Anggaran tetap 20,2, tetapi biaya kini berkisar dari sekitar 0,22 sampai 2,26, dan lokasi yang dibutuhkan spesies ternyata adalah lokasi murah yang sedikit dimodifikasi. Ke-20 lokasi Rencana 2 hanya berbiaya 13,8 pada harga baru, sehingga anggaran yang sama membeli 32 lokasi, seluruh 20 lokasi Rencana 2 ditambah 12 lagi, dan jumlah spesies terancam yang memenuhi targetnya naik menjadi 11. Ini berhasil hanya karena, di bentang alam ini, spesies hidup di tempat yang murah; di tempat spesies hidup di lahan yang mahal dan termodifikasi, biaya justru akan bekerja melawan rencana. Mengeluarkan 9 spesies domestik juga mengubah 7 lokasi lagi. [2]
+
+Rencana tidak dapat menyampaikan beberapa hal kepada pengelola. Memasukkan lokasi ke dalam rencana tidak sama dengan melindungi spesies di sana: rencana bekerja dengan peluang, dan suatu lokasi membantu suatu spesies hanya jika spesies itu benar-benar hadir dan lokasi itu kemudian dikelola dengan baik. Peluang dipakai seolah-olah tepat, karena paket belum membawa ketidakpastiannya, sehingga lokasi dengan 0,6 plus minus 0,1 dihitung sama dengan lokasi dengan 0,6 plus minus 0,3, dan spesies yang rantainya belum stabil di Sesi 3 membawa peluang yang kurang andal. Ke-101 lokasi yang disurvei adalah satu-satunya unit perencanaan, sehingga rencana tidak mengatakan apa pun tentang bentang alam selebihnya, dan target 50%, anggaran 20%, bobot Daftar Merah dan modifikasi manusia sebagai pengganti biaya semuanya adalah pilihan yang mengubah jawaban. Sebagian besar lokasi setiap rencana sudah berada di dalam cagar alam, sehingga usulan barunya adalah beberapa lokasi yang dipilih di luar cagar alam. [2]
+
+PANDUAN PENILAIAN
+
+- Paragraf 1 (2 nilai): berikan 1 nilai untuk menyebutkan tiga masukan (fitur dengan peluang kehadiran, target, biaya dengan anggaran) dan 1 nilai untuk menguraikan tujuannya: meminimalkan total shortfall berbobot dari target dalam batas anggaran. Menyebut prioritizr atau highs tidak diwajibkan. Nilai target 50% dan anggaran 20% adalah bonus.
+- Paragraf 2 (2 nilai): berikan untuk gagasan saling melengkapi, bahwa lokasi yang dipilih bersama-sama memenuhi target. Contoh mainan dengan angkanya adalah cara termudah untuk menunjukkannya, tetapi ilustrasi apa pun yang benar dapat diterima, termasuk yang dibuat sendiri oleh mahasiswa, asalkan menunjukkan spesies yang akan terlewat oleh lokasi terkaya.
+- Paragraf 3 (2 nilai): berikan 1 nilai untuk hasil dasar (20 lokasi, sebagian besar spesies tidak mencapai target; angka tepat 32 dari 108 tidak diwajibkan) dan 1 nilai untuk pembobotan Daftar Merah yang hanya menghasilkan perubahan kecil (sedikit lokasi bergeser, sekitar satu spesies terancam lagi memenuhi targetnya). Penjelasan bahwa anggaran tetap 20 lokasi berbiaya sama menyisakan sedikit ruang adalah bonus.
+- Paragraf 4 (2 nilai): berikan 1 nilai untuk mekanismenya (biaya diskalakan ulang ke total yang sama dan anggaran yang sama, tetapi lokasi yang dibutuhkan spesies murah, sehingga anggaran membeli lebih banyak lokasi, sekitar 32) dan 1 nilai untuk kualifikasi bahwa ini bergantung pada bentang alam dan akan berbalik di tempat spesies hidup di lahan yang mahal. Jumlah tepat (32 lokasi, 11 spesies terancam, 13,8) tidak diwajibkan.
+- Paragraf 5 (2 nilai): berikan 2 nilai untuk tiga dari: lokasi yang dipilih tidak menjamin spesies hadir atau terlindungi; ketidakpastian peluang diabaikan; spesies yang belum stabil kurang andal; hanya 101 lokasi yang direncanakan, bukan bentang alam; target, anggaran, bobot dan biaya adalah pilihan; sebagian besar lokasi yang dipilih sudah berada di cagar alam. Dua dari ini mendapat 1 nilai; satu mendapat 0.
+- Jangan mengurangi nilai karena urutan jawaban berbeda atau karena materi tambahan yang benar.
