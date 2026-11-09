@@ -12,7 +12,7 @@ Type: Short answer, scored out of 10
 
 PROMPT
 
-Session 1 ended with a map of raw dhole (Cuon alpinus) detections at the 101 Gaoligongshan sites. Explain why that map can be wrong in both directions, giving one example of each kind of error from the dhole data or the simulated survey. Then explain why the composition chart and the ecoCopula ordination cannot answer a manager's question "where is the dhole?", even though they show real patterns.
+Session 1 ended with a map of raw dhole (Cuon alpinus) detections at the 101 Gaoligongshan sites. Explain why that map can be wrong in both directions (false negative and false positive). Looking at the dhole data, find one example of each kind of error. Then explain why the composition chart and the ecoCopula ordination cannot answer a manager's question "where is the dhole?", even though they show real patterns.
 
 MODEL ANSWER
 
@@ -45,7 +45,7 @@ Type: Short answer, scored out of 10
 
 PROMPT
 
-The occupancy model fitted in Session 2 expects the dhole at about 17 of the 101 sites, although it was detected at 41. Explain how the model arrives at a different answer from the raw detections, what this says about the main kind of error in the dhole survey, and what you checked before trusting the result. Say which parts of the result are firm and which are not.
+The occupancy model fitted in Session 2 expects the dhole at about 17 of the 101 sites, although it was detected at 41. Explain why the model arrives at a different answer from the raw detections, what this says about the main kind of error in the dhole survey. What do we check before trusting the result (there are two parts to the answer)? Looking at the convergence diagnostics, say which parts of the model output are firm and which are not.
 
 MODEL ANSWER
 
@@ -111,7 +111,7 @@ Type: Short answer, scored out of 10
 
 PROMPT
 
-Session 4 used prioritizr to choose which of the 101 Gaoligongshan sites to protect for 108 mammal species. Explain the three inputs the plan needs and how the solver uses them. Explain, using the toy example or otherwise, why the plan does not simply pick the richest sites. Then describe what happened to the plan when threatened species were given higher weights and when sites were allowed to cost different amounts, and explain why the cost change had the bigger effect. Finish with three things the plan cannot tell a park manager.
+Session 4 used prioritizr to choose which of the 101 Gaoligongshan sites to protect for 108 mammal species. Explain the three inputs the plan needs and how the solver uses them. Explain, using the toy example, why the plan does not simply pick the richest sites. Then describe what happened to the plan when threatened species were given higher weights and when sites were allowed to cost different amounts, and explain why the cost change had the bigger effect. Finish with three things the plan cannot tell a park manager.
 
 MODEL ANSWER
 
@@ -121,7 +121,7 @@ The plan does not simply pick the richest sites, because sites must complement e
 
 With equal weights and equal costs, the plan picked 20 sites, and only 32 of the 108 species reached their 50% target: the budget was too small to hold half of every species' presence. Weighting species by Red List category (Critically Endangered 5 down to Least Concern 1, using the China Red List where IUCN has no entry) changed only 3 of the 20 sites, and among the 12 threatened species the number meeting its target rose from 3 to 4, a small gain. The budget still bought the same 20 sites, so there was little room to move. [2]
 
-Using each site's human modification as its cost, rescaled so that the 101 sites still cost 101 in total, had a much larger effect. The budget stayed at 20.2, but costs now ran from about 0.22 to 2.26, and the sites the species need turned out to be cheap, little-modified sites. Plan 2's 20 sites cost only 13.8 at the new prices, so the same budget bought 32 sites, all 20 of Plan 2's plus 12 more, and the number of threatened species meeting their target rose to 11. This worked only because, in this landscape, the species live in cheap places; where species live in expensive, modified land, costs would work against the plan. Leaving out the 9 domestic species as well changed 7 further sites. [2]
+Using each site's human modification as its cost, rescaled so that the 101 sites still cost 101 in total, had a much larger effect. The budget stayed at 20.2, but costs now ran from about 0.22 to 2.26, and the sites the species need turned out to be cheap, low-human-modification sites. Plan 2's 20 sites cost only 13.8 at the new prices, so the same budget bought 32 sites, all 20 of Plan 2's plus 12 more, and the number of threatened species meeting their target rose to 11. This worked only because, in this landscape, the species live in cheap places; where species live in expensive, modified land, costs would work against the plan. Leaving out the 9 domestic species as well changed 7 further sites. [2]
 
 The plan cannot tell a manager several things. Putting a site in the plan is not the same as protecting the species there: the plan works with probabilities, and a site helps a species only if the species is truly present and the site is then managed well. The probabilities are used as if they were exact, because the package does not yet carry their uncertainty through, so a site at 0.6 plus or minus 0.1 counts the same as one at 0.6 plus or minus 0.3, and the species whose chains had not settled in Session 3 carry less reliable probabilities. The 101 surveyed sites are the only planning units, so the plan says nothing about the rest of the landscape, and the 50% target, 20% budget, Red List weights and human modification as a stand-in for cost are all choices that change the answer. Most of each plan's sites were already inside a reserve, so the new proposals are the few sites it picks outside them. [2]
 

@@ -12,7 +12,7 @@ Jenis: Jawaban singkat, skor maksimal 10
 
 PERTANYAAN
 
-Sesi 1 diakhiri dengan peta deteksi mentah ajag (Cuon alpinus) di 101 lokasi Gaoligongshan. Jelaskan mengapa peta itu bisa salah dalam dua arah, dengan memberikan satu contoh untuk setiap jenis kesalahan dari data ajag atau dari survei simulasi. Kemudian jelaskan mengapa bagan komposisi dan ordinasi ecoCopula tidak dapat menjawab pertanyaan pengelola kawasan "di mana ajag berada?", meskipun keduanya menunjukkan pola yang nyata.
+Sesi 1 diakhiri dengan peta deteksi mentah ajag (Cuon alpinus) di 101 lokasi Gaoligongshan. Jelaskan mengapa peta itu bisa salah dalam dua arah (negatif palsu dan positif palsu). Dengan melihat data ajag, temukan satu contoh untuk setiap jenis kesalahan. Kemudian jelaskan mengapa bagan komposisi dan ordinasi ecoCopula tidak dapat menjawab pertanyaan pengelola kawasan "di mana ajag berada?", meskipun keduanya menunjukkan pola yang nyata.
 
 JAWABAN MODEL
 
@@ -45,7 +45,7 @@ Jenis: Jawaban singkat, skor maksimal 10
 
 PERTANYAAN
 
-Model okupansi yang di-fit di Sesi 2 memperkirakan ajag hadir di sekitar 17 dari 101 lokasi, padahal ajag terdeteksi di 41 lokasi. Jelaskan bagaimana model sampai pada jawaban yang berbeda dari deteksi mentah, apa artinya ini tentang jenis kesalahan utama dalam survei ajag, dan apa yang Anda periksa sebelum memercayai hasilnya. Sebutkan bagian hasil mana yang kokoh dan mana yang tidak.
+Model okupansi yang di-fit di Sesi 2 memperkirakan ajag hadir di sekitar 17 dari 101 lokasi, padahal ajag terdeteksi di 41 lokasi. Jelaskan mengapa model sampai pada jawaban yang berbeda dari deteksi mentah, dan apa artinya ini tentang jenis kesalahan utama dalam survei ajag. Apa yang kita periksa sebelum memercayai hasilnya (jawabannya terdiri atas dua bagian)? Dengan melihat diagnostik konvergensi, sebutkan bagian keluaran model mana yang kokoh dan mana yang tidak.
 
 JAWABAN MODEL
 
@@ -111,7 +111,7 @@ Jenis: Jawaban singkat, skor maksimal 10
 
 PERTANYAAN
 
-Sesi 4 menggunakan prioritizr untuk memilih lokasi mana dari 101 lokasi Gaoligongshan yang harus dilindungi untuk 108 spesies mamalia. Jelaskan tiga masukan yang dibutuhkan rencana dan bagaimana solver menggunakannya. Jelaskan, dengan contoh mainan atau cara lain, mengapa rencana tidak sekadar memilih lokasi yang paling kaya. Kemudian uraikan apa yang terjadi pada rencana ketika spesies terancam diberi bobot lebih tinggi dan ketika lokasi dibiarkan memiliki biaya yang berbeda-beda, dan jelaskan mengapa perubahan biaya berdampak lebih besar. Akhiri dengan tiga hal yang tidak dapat disampaikan rencana kepada pengelola kawasan.
+Sesi 4 menggunakan prioritizr untuk memilih lokasi mana dari 101 lokasi Gaoligongshan yang harus dilindungi untuk 108 spesies mamalia. Jelaskan tiga masukan yang dibutuhkan rencana dan bagaimana solver menggunakannya. Jelaskan, dengan contoh mainan, mengapa rencana tidak sekadar memilih lokasi yang paling kaya. Kemudian uraikan apa yang terjadi pada rencana ketika spesies terancam diberi bobot lebih tinggi dan ketika lokasi dibiarkan memiliki biaya yang berbeda-beda, dan jelaskan mengapa perubahan biaya berdampak lebih besar. Akhiri dengan tiga hal yang tidak dapat disampaikan rencana kepada pengelola kawasan.
 
 JAWABAN MODEL
 
@@ -121,7 +121,7 @@ Rencana tidak sekadar memilih lokasi yang paling kaya, karena lokasi-lokasi haru
 
 Dengan bobot sama dan biaya sama, rencana memilih 20 lokasi, dan hanya 32 dari 108 spesies yang mencapai target 50%: anggaran terlalu kecil untuk memuat separuh kehadiran setiap spesies. Pembobotan spesies menurut kategori Daftar Merah (Kritis 5 sampai Risiko Rendah 1, memakai Daftar Merah Tiongkok ketika IUCN tidak memiliki entri) hanya mengubah 3 dari 20 lokasi, dan di antara 12 spesies terancam, jumlah yang memenuhi targetnya naik dari 3 menjadi 4, perolehan yang kecil. Anggaran masih membeli 20 lokasi yang sama, sehingga hanya sedikit ruang untuk bergerak. [2]
 
-Memakai modifikasi manusia setiap lokasi sebagai biayanya, yang diskalakan ulang sehingga 101 lokasi tetap berbiaya total 101, berdampak jauh lebih besar. Anggaran tetap 20,2, tetapi biaya kini berkisar dari sekitar 0,22 sampai 2,26, dan lokasi yang dibutuhkan spesies ternyata adalah lokasi murah yang sedikit dimodifikasi. Ke-20 lokasi Rencana 2 hanya berbiaya 13,8 pada harga baru, sehingga anggaran yang sama membeli 32 lokasi, seluruh 20 lokasi Rencana 2 ditambah 12 lagi, dan jumlah spesies terancam yang memenuhi targetnya naik menjadi 11. Ini berhasil hanya karena, di bentang alam ini, spesies hidup di tempat yang murah; di tempat spesies hidup di lahan yang mahal dan termodifikasi, biaya justru akan bekerja melawan rencana. Mengeluarkan 9 spesies domestik juga mengubah 7 lokasi lagi. [2]
+Memakai modifikasi manusia setiap lokasi sebagai biayanya, yang diskalakan ulang sehingga 101 lokasi tetap berbiaya total 101, berdampak jauh lebih besar. Anggaran tetap 20,2, tetapi biaya kini berkisar dari sekitar 0,22 sampai 2,26, dan lokasi yang dibutuhkan spesies ternyata adalah lokasi murah dengan modifikasi manusia yang rendah. Ke-20 lokasi Rencana 2 hanya berbiaya 13,8 pada harga baru, sehingga anggaran yang sama membeli 32 lokasi, seluruh 20 lokasi Rencana 2 ditambah 12 lagi, dan jumlah spesies terancam yang memenuhi targetnya naik menjadi 11. Ini berhasil hanya karena, di bentang alam ini, spesies hidup di tempat yang murah; di tempat spesies hidup di lahan yang mahal dan termodifikasi, biaya justru akan bekerja melawan rencana. Mengeluarkan 9 spesies domestik juga mengubah 7 lokasi lagi. [2]
 
 Rencana tidak dapat menyampaikan beberapa hal kepada pengelola. Memasukkan lokasi ke dalam rencana tidak sama dengan melindungi spesies di sana: rencana bekerja dengan peluang, dan suatu lokasi membantu suatu spesies hanya jika spesies itu benar-benar hadir dan lokasi itu kemudian dikelola dengan baik. Peluang dipakai seolah-olah tepat, karena paket belum membawa ketidakpastiannya, sehingga lokasi dengan 0,6 plus minus 0,1 dihitung sama dengan lokasi dengan 0,6 plus minus 0,3, dan spesies yang rantainya belum stabil di Sesi 3 membawa peluang yang kurang andal. Ke-101 lokasi yang disurvei adalah satu-satunya unit perencanaan, sehingga rencana tidak mengatakan apa pun tentang bentang alam selebihnya, dan target 50%, anggaran 20%, bobot Daftar Merah dan modifikasi manusia sebagai pengganti biaya semuanya adalah pilihan yang mengubah jawaban. Sebagian besar lokasi setiap rencana sudah berada di dalam cagar alam, sehingga usulan barunya adalah beberapa lokasi yang dipilih di luar cagar alam. [2]
 
