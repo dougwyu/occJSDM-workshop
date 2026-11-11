@@ -180,7 +180,7 @@ presence <- info |>
   summarise(across(everything(), \(x) as.numeric(any(x > 0))))   # 1 if any of a site's 18 PCRs was positive, else 0
 
 y <- presence |>
-  column_to_rownames("Site") |>                            # ecoCopula wants the sites as row names
+  column_to_rownames("Site") |>     # ecoCopula wants the sites as row names
   select(where(\(x) sum(x) >= 5))   # keep only species detected at 5 or more sites because ordination is more robust when one removes rare species
 
 c(kept = ncol(y), dropped = ncol(presence) - 1 - ncol(y)) # we kept 80 species and dropped 28
