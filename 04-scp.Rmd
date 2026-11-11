@@ -650,9 +650,50 @@ In groups, choose one change and report how the plan responds.
 - Raise or lower the target (`target`) or the budget (`budget_frac`), then rerun the plans.
 - Weight a group of species, such as all carnivores, more heavily.
 - Use a different cost, such as forest cover.
-- Plan with `psi_mean` instead of `cond_mean`. Change the `occ_in` line in the `planning-units` chunk to `select(Site, species, cond_mean = psi_mean)`, so the rest of the code runs unchanged, and compare the sites chosen with Plan 1.
+- Plan with `psi_mean` instead of `cond_mean`. The first chunk below does this one for you, as a starting point.
 
 For each, say which sites move, and whether the answer would change what you tell a park manager.
+
+The chunks below are not run when this page is built, so run them yourself. The first one remakes Plan 1 with `psi_mean`. `make_plan()` and `coverage()` both read `occ_in`, so the chunk fills `occ_in` with `psi_mean`, makes the plan, and then puts `cond_mean` back.
+
+```{r exercise-psi, eval = FALSE}
+# psi_mean goes into the column called cond_mean, so make_plan() runs unchanged
+occ_in <- occ |> select(Site, species, cond_mean = psi_mean)
+
+plan_psi <- make_plan(w_equal,
+                      cost_equal,
+                      budget = budget_frac * nrow(cost_equal))
+
+# back to cond_mean, for the comparison below and the rest of the session
+occ_in <- occ |> select(Site, species, cond_mean)
+
+p_psi <- plot_plan(plan_psi, "Plan 1 with psi_mean")
+p1 + p_psi + plot_layout(guides = "collect")
+
+# how many sites do the two plans share?
+plan_equal |>
+  left_join(plan_psi, by = "Site", suffix = c("_cond", "_psi")) |>
+  summarise(shared = sum(selected_cond & selected_psi),
+            only_cond_mean = sum(selected_cond & !selected_psi),
+            only_psi_mean = sum(!selected_cond & selected_psi))
+
+# how many species meet their target, counted with cond_mean, in each plan?
+bind_rows(
+  coverage(plan_equal) |> mutate(plan = "Plan 1: cond_mean"),
+  coverage(plan_psi) |> mutate(plan = "Plan 1 with psi_mean")) |>
+  group_by(plan) |>
+  summarise(targets_met = sum(held >= target - 1e-9),
+            of = n(),
+            .groups = "drop")
+```
+
+Use this chunk for your group's own change. Copy the lines you need from the chunks above, and give each new plan its own name, so the plans you already made stay as they are.
+
+```{r exercise-group-own, eval = FALSE}
+# your group's code
+
+
+```
 
 ## Ask the assistant (optional)
 

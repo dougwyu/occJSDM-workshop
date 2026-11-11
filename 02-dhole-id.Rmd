@@ -723,7 +723,7 @@ map_data |>
 
 ## Latihan praktik
 
-Setiap latihan melakukan fitting ulang model dengan satu perubahan dan membandingkan jawabannya dengan hasil fitting di atas. Satu fitting memerlukan kurang dari satu menit. Chunk-chunk di bawah tidak dijalankan ketika halaman ini dibuat, jadi jalankan sendiri, satu per satu.
+Setiap latihan melakukan fitting ulang model dengan satu perubahan dan membandingkan jawabannya dengan hasil fitting di atas. Satu fitting memerlukan kurang dari satu menit. Chunk-chunk di bawah tidak dijalankan ketika halaman ini dibuat, jadi jalankan sendiri, satu per satu. Setelah setiap latihan ada chunk kosong untuk kode Anda sendiri.
 
 Pertama, simpan kovariat dalam dua vektor, agar setiap latihan dapat menggunakannya kembali.
 
@@ -788,6 +788,12 @@ takin |>
 - Periksa hasil fitting dengan `returnConvergenceDiagnostics(fit_takin)`. Apakah ada parameter yang ditandai?
 - Ji et al. (2025) memetakan dua peluang kehadiran takin dalam Gambar Tambahan 12 mereka. Sesi 3 menggambar dua peta yang sama dari model untuk seluruh 108 mamalia.
 
+```{r exercise-takin-own, eval = FALSE}
+# kode Anda untuk Latihan 1
+
+
+```
+
 ### Latihan 2: lebih sedikit sampel lapangan
 
 Bagaimana jika survei hanya mengambil dua sampel lapangan di setiap lokasi, bukan tiga? Pertahankan dua sampel pertama dari setiap lokasi dan lakukan fitting ulang.
@@ -839,6 +845,12 @@ compare_two |>
 - Dengan data yang lebih sedikit, apakah peluang bergeser ke arah 0 dan 1, atau ke arah tengah?
 - Apa yang disampaikan hal ini kepada Anda tentang berapa banyak sampel lapangan yang perlu diambil dalam survei Anda berikutnya?
 
+```{r exercise-two-samples-own, eval = FALSE}
+# kode Anda untuk Latihan 2
+
+
+```
+
 ### Latihan 3: hilangkan satu kovariat pengambilan sampel
 
 Hujan pada hari sebelumnya menurunkan peluang bahwa sampel menangkap DNA ajag. Lakukan fitting ulang tanpa kovariat tersebut.
@@ -879,6 +891,12 @@ compare_rain |>
 - Lokasi mana yang paling banyak berubah? Berapa banyak hujan yang turun sebelum lokasi tersebut disampel, dan berapa PCR yang positif di sana?
 - Mengapa menghilangkan hujan akan mengubah peluang di lokasi yang ajag-nya tidak pernah terdeteksi?
 - Kovariat pengambilan sampel tidak berkaitan dengan di mana ajag hidup. Mengapa kovariat ini tetap penting bagi peta?
+
+```{r exercise-no-rain-own, eval = FALSE}
+# kode Anda untuk Latihan 3
+
+
+```
 
 ## Lakukan dengan asisten (menggunakan perangkat occJSDM)
 

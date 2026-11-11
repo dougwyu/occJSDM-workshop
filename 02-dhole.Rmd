@@ -722,7 +722,7 @@ map_data |>
 
 ## Hands-on exercises
 
-Each exercise refits the model with one change and compares the answer with the fit above. A fit takes under a minute. The chunks below are not run when this page is built, so run them yourself, one at a time.
+Each exercise refits the model with one change and compares the answer with the fit above. A fit takes under a minute. The chunks below are not run when this page is built, so run them yourself, one at a time. After each exercise there is an empty chunk for your own code.
 
 First, store the covariates in two vectors, so each exercise can reuse them.
 
@@ -787,6 +787,12 @@ takin |>
 - Check the fit with `returnConvergenceDiagnostics(fit_takin)`. Are any parameters flagged?
 - Ji et al. (2025) map the takin's two probabilities of presence in their Supplementary Figure 12. Session 3 draws the same two maps from the model of all 108 mammals.
 
+```{r exercise-takin-own, eval = FALSE}
+# your code for Exercise 1
+
+
+```
+
 ### Exercise 2: fewer field samples
 
 What if the survey had taken only two field samples at each site, not three? Keep the first two samples of each site and refit.
@@ -838,6 +844,12 @@ compare_two |>
 - With less data, do the probabilities move towards 0 and 1, or towards the middle?
 - What does this tell you about how many field samples to take in your next survey?
 
+```{r exercise-two-samples-own, eval = FALSE}
+# your code for Exercise 2
+
+
+```
+
 ### Exercise 3: leave out a collection covariate
 
 Rain on the previous day lowered the chance that a sample caught the dhole's DNA. Refit without it.
@@ -879,6 +891,12 @@ compare_rain |>
 - Why would leaving out rain change the probability at a site where the dhole was never detected?
 - A collection covariate is not about where the dhole lives. Why does it still matter for the map?
 
+```{r exercise-no-rain-own, eval = FALSE}
+# your code for Exercise 3
+
+
+```
+
 ## Do it with the assistant (using the occJSDM tools)
 
 Your instructor has connected Posit Assistant to four occJSDM tools: `validate_data`, `fit_model`, `diagnostics` and `summarise_fit`. They do the same steps you just ran. Type each request into the Posit Assistant pane, in your own words.
@@ -896,3 +914,4 @@ If the assistant reports an error, tell your instructor and carry on with the co
 - The probability that the dhole is present at each site is firm for most sites. The reasons behind it are much less firm. Say both, honestly.
 - Check the chains before you report any number. Here they show only small flags.
 - Session 3 does this for all 108 mammals at once, and Session 4 turns the answers into a conservation plan.
+

@@ -651,9 +651,50 @@ Dalam kelompok, pilih satu perubahan dan laporkan bagaimana rencana menanggapiny
 - Naikkan atau turunkan target (`target`) atau anggaran (`budget_frac`), lalu jalankan ulang rencana-rencananya.
 - Beri bobot lebih berat pada sekelompok spesies, misalnya semua karnivora.
 - Gunakan biaya yang berbeda, misalnya tutupan hutan.
-- Rencanakan dengan `psi_mean` alih-alih `cond_mean`. Ubah baris `occ_in` di chunk `planning-units` menjadi `select(Site, species, cond_mean = psi_mean)`, agar sisa kode berjalan tanpa perubahan, lalu bandingkan lokasi yang dipilih dengan Rencana 1.
+- Rencanakan dengan `psi_mean` alih-alih `cond_mean`. Chunk pertama di bawah melakukan perubahan ini untuk Anda, sebagai titik awal.
 
 Untuk masing-masing, sebutkan lokasi mana yang berpindah, dan apakah jawabannya akan mengubah apa yang Anda sampaikan kepada pengelola kawasan.
+
+Chunk-chunk di bawah tidak dijalankan ketika halaman ini dibuat, jadi jalankan sendiri. Chunk pertama membuat ulang Rencana 1 dengan `psi_mean`. `make_plan()` dan `coverage()` sama-sama membaca `occ_in`, sehingga chunk ini mengisi `occ_in` dengan `psi_mean`, membuat rencananya, lalu mengembalikan `cond_mean`.
+
+```{r exercise-psi, eval = FALSE}
+# psi_mean dimasukkan ke kolom bernama cond_mean, agar make_plan() berjalan tanpa perubahan
+occ_in <- occ |> select(Site, species, cond_mean = psi_mean)
+
+plan_psi <- make_plan(w_equal,
+                      cost_equal,
+                      budget = budget_frac * nrow(cost_equal))
+
+# kembali ke cond_mean, untuk perbandingan di bawah dan untuk sisa sesi
+occ_in <- occ |> select(Site, species, cond_mean)
+
+p_psi <- plot_plan(plan_psi, "Rencana 1 dengan psi_mean")
+p1 + p_psi + plot_layout(guides = "collect")
+
+# berapa banyak lokasi yang sama di kedua rencana?
+plan_equal |>
+  left_join(plan_psi, by = "Site", suffix = c("_cond", "_psi")) |>
+  summarise(shared = sum(selected_cond & selected_psi),
+            only_cond_mean = sum(selected_cond & !selected_psi),
+            only_psi_mean = sum(!selected_cond & selected_psi)) |> tampil()
+
+# berapa banyak spesies yang mencapai targetnya, dihitung dengan cond_mean, di setiap rencana?
+bind_rows(
+  coverage(plan_equal) |> mutate(plan = "Rencana 1: cond_mean"),
+  coverage(plan_psi) |> mutate(plan = "Rencana 1 dengan psi_mean")) |>
+  group_by(plan) |>
+  summarise(targets_met = sum(held >= target - 1e-9),
+            of = n(),
+            .groups = "drop") |> tampil()
+```
+
+Gunakan chunk ini untuk perubahan kelompok Anda sendiri. Salin baris-baris yang Anda perlukan dari chunk-chunk di atas, dan beri setiap rencana baru namanya sendiri, agar rencana yang sudah Anda buat tetap seperti semula.
+
+```{r exercise-group-own, eval = FALSE}
+# kode kelompok Anda
+
+
+```
 
 ## Bertanya kepada asisten (opsional)
 

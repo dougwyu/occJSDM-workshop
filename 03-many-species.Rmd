@@ -758,6 +758,130 @@ An association is not an interaction. Two species can co-occur because they shar
 
 > Click on `assoc` in the Environment tab and look for the dhole (*Cuon alpinus*). Which species go with it, and which of the three explanations above seems most likely for each? Hint: you can use the Filter button in the RStudio viewer to search for *Cuon*.
 
+## Hands-on exercises
+
+Both exercises reuse the tables you made above, so nothing is refitted and each chunk takes a few seconds. The chunks are not run when this page is built, so run them yourself. After each exercise there is an empty chunk for your own code.
+
+### Exercise 1: the two probabilities for another species
+
+Draw the takin's table and maps again for the dhole (*Cuon alpinus*), the species you modelled on its own in Session 2. Then change `my_species` to another species and run the chunk again.
+
+```{r exercise-species, eval = FALSE}
+# the species names to choose from
+sort(status$species)
+
+my_species <- "Cuon alpinus"   # change this to another name from the list
+
+my_id <- status |>
+  filter(species == my_species) |>
+  pull(otu_id)
+
+# did its chains settle?
+conv |>
+  filter(otu_id == my_id) |>
+  select(species, sites_detected, rhat_detection, rhat_effects, settled)
+
+# positive PCRs per site, out of 18, and the species' two probabilities, as for the takin
+my_sp <- info |>
+  select(Site) |>
+  mutate(positive = OTU[, my_id]) |>
+  count(Site, wt = positive, name = "positive_pcrs") |>
+  left_join(occ |>
+              filter(otu_id == my_id) |>
+              select(Site, cond_mean, psi_mean),
+            by = "Site") |>
+  left_join(sites, by = "Site")
+
+# the sites with at least one positive PCR, from the most positives to the fewest
+my_sp |>
+  filter(positive_pcrs > 0) |>
+  arrange(desc(positive_pcrs)) |>
+  mutate(across(c(cond_mean, psi_mean), \(x) round(x, 2))) |>
+  select(Site, latitude = Xs.2, positive_pcrs, cond_mean, psi_mean)
+
+# the same two maps as for the takin
+my_sp |>
+  pivot_longer(c(cond_mean, psi_mean),
+               names_to = "probability",
+               values_to = "value") |>
+  mutate(probability = recode(probability,
+                              cond_mean = "cond_mean:\ngiven the\ndetections",
+                              psi_mean = "psi_mean:\nat a site with\nthese characteristics")) |>
+  ggplot(aes(Xs.1, Xs.2)) +
+  geom_point(data = \(d) filter(d, positive_pcrs > 0),
+             size = 5.5,
+             colour = "green3") +
+  geom_point(aes(colour = value),
+             size = 3) +
+  facet_wrap(~ probability) +
+  scale_colour_viridis_c(option = "C",
+                         limits = c(0, 1),
+                         trans = "sqrt",
+                         breaks = c(0, 0.05, 0.25, 0.5, 1),
+                         name = "Probability\nof presence") +
+  coord_quickmap() +
+  labs(x = "Longitude",
+       y = "Latitude",
+       title = paste0(my_species, ": two probabilities of presence")) +
+  theme_minimal()
+```
+
+- Did the dhole's chains settle?
+- At the sites with the most positive PCRs, are both probabilities high?
+- Which weakly detected sites does `cond_mean` set aside as false positives? Do any of them still have a moderate `psi_mean`, which would make them worth surveying again?
+- Are there sites with no positive PCR where `psi_mean` is moderate? Why is `cond_mean` lower there?
+- Session 2 fitted the dhole on its own, and found that most of its weak detections were false positives. Does the joint model agree?
+- Now try one of the species whose chains did not settle, or one detected at only a few sites. How far would you trust its maps?
+
+```{r exercise-species-own, eval = FALSE}
+# your code for Exercise 1
+
+
+```
+
+### Exercise 2: which species respond to forest cover?
+
+The reserve section asked which species respond to reserve status and to human modification. Ask the same of forest cover (`Percent_of_forest_cover_1km`). Then change `my_covariate` to another covariate and run the chunk again.
+
+```{r exercise-covariate, eval = FALSE}
+# the covariate effects in the model
+distinct(fit$effects, covariate)
+
+my_covariate <- "Percent_of_forest_cover_1km"   # change this to another covariate from the list
+
+my_effects <- fit$effects |>
+  filter(covariate == my_covariate) |>
+  # keep only the species whose chains settled
+  left_join(conv |> select(otu_id, settled), by = "otu_id") |>
+  filter(settled) |>
+  left_join(status |> select(otu_id, local_status), by = "otu_id")
+
+# how many species respond credibly, and in which direction?
+my_effects |>
+  summarise(species = n(),
+            credibly_more_likely = sum(lo > 0),
+            credibly_less_likely = sum(hi < 0))
+
+# the species whose interval excludes zero, as in the reserve table
+my_effects |>
+  filter(lo > 0 | hi < 0) |>
+  mutate(odds_multiplier = round(exp(mean), 1),
+         across(c(mean, lo, hi), \(x) round(x, 2))) |>
+  arrange(desc(mean)) |>
+  select(species, local_status, estimate = mean, lower = lo, upper = hi, odds_multiplier)
+```
+
+- How many species respond credibly to forest cover, and in which direction? Look at their `local_status`: what kind of species are they?
+- Is that what you expected in a forested landscape? Remember that an interval that crosses zero is not evidence of no effect.
+- Try `mean_temperature`. Which of the two covariates do more species respond to, and why might that be?
+- For `streamOriginoutsideGLGS` the sign is the other way round: a positive effect means more likely present where the stream rises *outside* a reserve. That is why the reserve section flipped it.
+
+```{r exercise-covariate-own, eval = FALSE}
+# your code for Exercise 2
+
+
+```
+
 ## Ask the assistant (optional)
 
 Posit Assistant can help you write R against the tables in this session. In the Posit Assistant pane, try:

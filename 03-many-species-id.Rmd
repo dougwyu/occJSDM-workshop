@@ -759,6 +759,130 @@ Asosiasi bukanlah interaksi. Dua spesies dapat muncul bersama karena berbagi hab
 
 > Klik `assoc` di tab Environment dan cari ajag (*Cuon alpinus*). Spesies mana yang menyertainya, dan dari tiga penjelasan di atas, mana yang paling mungkin untuk masing-masing? Petunjuk: Anda dapat menggunakan tombol Filter di penampil RStudio untuk mencari *Cuon*.
 
+## Latihan praktik
+
+Kedua latihan menggunakan kembali tabel-tabel yang Anda buat di atas, sehingga tidak ada fitting ulang dan setiap chunk hanya memerlukan beberapa detik. Chunk-chunk di bawah tidak dijalankan ketika halaman ini dibuat, jadi jalankan sendiri. Setelah setiap latihan ada chunk kosong untuk kode Anda sendiri.
+
+### Latihan 1: dua peluang untuk spesies lain
+
+Buat kembali tabel dan peta takin untuk ajag (*Cuon alpinus*), spesies yang Anda modelkan sendirian di Sesi 2. Kemudian ubah `my_species` menjadi spesies lain dan jalankan chunk itu lagi.
+
+```{r exercise-species, eval = FALSE}
+# nama-nama spesies yang dapat dipilih
+sort(status$species)
+
+my_species <- "Cuon alpinus"   # ubah menjadi nama lain dari daftar
+
+my_id <- status |>
+  filter(species == my_species) |>
+  pull(otu_id)
+
+# apakah rantainya sudah stabil?
+conv |>
+  filter(otu_id == my_id) |>
+  select(species, sites_detected, rhat_detection, rhat_effects, settled) |> tampil()
+
+# PCR positif per lokasi, dari 18, dan dua peluang spesies tersebut, seperti untuk takin
+my_sp <- info |>
+  select(Site) |>
+  mutate(positive = OTU[, my_id]) |>
+  count(Site, wt = positive, name = "positive_pcrs") |>
+  left_join(occ |>
+              filter(otu_id == my_id) |>
+              select(Site, cond_mean, psi_mean),
+            by = "Site") |>
+  left_join(sites, by = "Site")
+
+# lokasi dengan setidaknya satu PCR positif, dari yang paling banyak positif hingga yang paling sedikit
+my_sp |>
+  filter(positive_pcrs > 0) |>
+  arrange(desc(positive_pcrs)) |>
+  mutate(across(c(cond_mean, psi_mean), \(x) round(x, 2))) |>
+  select(Site, latitude = Xs.2, positive_pcrs, cond_mean, psi_mean) |> tampil()
+
+# dua peta yang sama seperti untuk takin
+my_sp |>
+  pivot_longer(c(cond_mean, psi_mean),
+               names_to = "probability",
+               values_to = "value") |>
+  mutate(probability = recode(probability,
+                              cond_mean = "cond_mean:\nberdasarkan\ndeteksi",
+                              psi_mean = "psi_mean:\ndi lokasi dengan\nkarakteristik ini")) |>
+  ggplot(aes(Xs.1, Xs.2)) +
+  geom_point(data = \(d) filter(d, positive_pcrs > 0),
+             size = 5.5,
+             colour = "green3") +
+  geom_point(aes(colour = value),
+             size = 3) +
+  facet_wrap(~ probability) +
+  scale_colour_viridis_c(option = "C",
+                         limits = c(0, 1),
+                         trans = "sqrt",
+                         breaks = c(0, 0.05, 0.25, 0.5, 1),
+                         name = "Peluang\nkehadiran") +
+  coord_quickmap() +
+  labs(x = "Bujur",
+       y = "Lintang",
+       title = paste0(my_species, ": dua peluang kehadiran")) +
+  theme_minimal()
+```
+
+- Apakah rantai ajag sudah stabil?
+- Di lokasi dengan PCR positif terbanyak, apakah kedua peluang tinggi?
+- Lokasi dengan deteksi lemah mana yang disisihkan `cond_mean` sebagai positif palsu? Apakah ada di antaranya yang masih memiliki `psi_mean` sedang, sehingga layak disurvei kembali?
+- Apakah ada lokasi tanpa PCR positif yang `psi_mean`-nya sedang? Mengapa `cond_mean` lebih rendah di sana?
+- Sesi 2 melakukan fitting untuk ajag saja, dan mendapati bahwa sebagian besar deteksi lemahnya adalah positif palsu. Apakah model gabungan sependapat?
+- Sekarang cobalah salah satu spesies yang rantainya belum stabil, atau spesies yang hanya terdeteksi di beberapa lokasi. Seberapa jauh Anda akan memercayai petanya?
+
+```{r exercise-species-own, eval = FALSE}
+# kode Anda untuk Latihan 1
+
+
+```
+
+### Latihan 2: spesies mana yang menanggapi tutupan hutan?
+
+Bagian cagar alam menanyakan spesies mana yang menanggapi status cagar alam dan modifikasi manusia. Ajukan pertanyaan yang sama untuk tutupan hutan (`Percent_of_forest_cover_1km`). Kemudian ubah `my_covariate` menjadi kovariat lain dan jalankan chunk itu lagi.
+
+```{r exercise-covariate, eval = FALSE}
+# efek kovariat dalam model
+distinct(fit$effects, covariate) |> tampil()
+
+my_covariate <- "Percent_of_forest_cover_1km"   # ubah menjadi kovariat lain dari daftar
+
+my_effects <- fit$effects |>
+  filter(covariate == my_covariate) |>
+  # pertahankan hanya spesies yang rantainya sudah stabil
+  left_join(conv |> select(otu_id, settled), by = "otu_id") |>
+  filter(settled) |>
+  left_join(status |> select(otu_id, local_status), by = "otu_id")
+
+# berapa banyak spesies yang menanggapi secara kredibel, dan ke arah mana?
+my_effects |>
+  summarise(species = n(),
+            credibly_more_likely = sum(lo > 0),
+            credibly_less_likely = sum(hi < 0)) |> tampil()
+
+# spesies yang intervalnya tidak mencakup nol, seperti pada tabel cagar alam
+my_effects |>
+  filter(lo > 0 | hi < 0) |>
+  mutate(odds_multiplier = round(exp(mean), 1),
+         across(c(mean, lo, hi), \(x) round(x, 2))) |>
+  arrange(desc(mean)) |>
+  select(species, local_status, estimate = mean, lower = lo, upper = hi, odds_multiplier) |> tampil()
+```
+
+- Berapa banyak spesies yang menanggapi tutupan hutan secara kredibel, dan ke arah mana? Lihat `local_status`-nya: spesies seperti apa mereka?
+- Apakah itu yang Anda harapkan di bentang alam berhutan? Ingat bahwa interval yang melintasi nol bukanlah bukti tidak adanya efek.
+- Cobalah `mean_temperature`. Kovariat mana dari keduanya yang ditanggapi oleh lebih banyak spesies, dan mengapa demikian?
+- Untuk `streamOriginoutsideGLGS`, tandanya terbalik: efek positif berarti lebih mungkin hadir di tempat sungai berhulu *di luar* cagar alam. Itulah sebabnya bagian cagar alam membalik tandanya.
+
+```{r exercise-covariate-own, eval = FALSE}
+# kode Anda untuk Latihan 2
+
+
+```
+
 ## Bertanya kepada asisten (opsional)
 
 Asisten menjawab dalam bahasa Inggris. Agar asisten menjawab dalam Bahasa Indonesia, mulailah setiap percakapan dengan mengetik: *Mulai sekarang, jawablah dalam Bahasa Indonesia. Biarkan kode R, nama fungsi, nama kolom dan nama file dalam bahasa Inggris.*
