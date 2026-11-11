@@ -14,6 +14,8 @@ editor_options:
 knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE, fig.width = 8, fig.height = 5.5)
 ```
 
+This session needs more memory than the others, about 3 GB at its peak. Before you start, restart R (Session \> Restart R), so that nothing from Sessions 1 and 2 is still in memory.
+
 As before, the first code chunk is only for the workshop, and the second loads the packages.
 
 ```{r workshop-setup}
@@ -64,8 +66,6 @@ fit_full <- runOccJSDM(inp$data,
                                          nthin = 2,      # keep every second draw
                                          ncores = 2))
 ```
-
-This session needs more memory than the others, about 3 GB at its peak. Before you start, restart R (Session \> Restart R), so that nothing from Sessions 1 and 2 is still in memory.
 
 We load the fit, and the same input data tables as in Session 1.
 

@@ -14,6 +14,8 @@ editor_options:
 knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE, fig.width = 8, fig.height = 5.5)
 ```
 
+Sesi ini membutuhkan lebih banyak memori dibandingkan sesi lainnya, sekitar 3 GB pada puncaknya. Sebelum memulai, mulai ulang R (Session \> Restart R), agar tidak ada sisa dari Sesi 1 dan 2 yang masih tersimpan di memori.
+
 Seperti sebelumnya, chunk kode pertama hanya untuk keperluan lokakarya, dan chunk kedua memuat paket-paket yang diperlukan.
 
 ```{r workshop-setup}
@@ -65,8 +67,6 @@ fit_full <- runOccJSDM(inp$data,
                                          nthin = 2,      # simpan setiap draw kedua
                                          ncores = 2))
 ```
-
-Sesi ini membutuhkan lebih banyak memori dibandingkan sesi lainnya, sekitar 3 GB pada puncaknya. Sebelum memulai, mulai ulang R (Session \> Restart R), agar tidak ada sisa dari Sesi 1 dan 2 yang masih tersimpan di memori.
 
 Kita memuat hasil fit, dan tabel data masukan yang sama seperti di Sesi 1.
 
