@@ -2,6 +2,17 @@
 
 Four hands-on sessions that take a real eDNA survey (Ji et al. 2025, Gaoligongshan, [doi:10.1111/ele.70302](https://doi.org/10.1111/ele.70302)) from raw summaries to occupancy models to a simple systematic conservation plan. They run on Posit Cloud, with the occJSDM MCP agent available through Posit Assistant.
 
+## Outline
+
+Four afternoon or morning slots of about 3 to 4 hours, one session each. Every session is an R Markdown file that students run chunk by chunk, with hands-on exercises and an optional section for the occJSDM MCP agent. Each session also has a Bahasa Indonesia version (`01-why-model-id.Rmd` and so on), with the same code and Indonesian number formatting.
+
+1.  **Why model? What eDNA summaries cannot tell you** (`01-why-model.Rmd`). The survey design, what was detected by taxonomic order, a model-based ordination with ecoCopula, and where the dhole was detected. A simulated survey shows how often a species that is present is missed.
+2.  **Where is the dhole, really?** (`02-dhole.Rmd`). A first occupancy model, fitted live with occJSDM: first on the simulated survey, where the answer is known, then on the dhole. How widespread the dhole is, how well its DNA is collected and detected, which covariates explain where it lives, and whether the chains can be trusted.
+3.  **Many species at once** (`03-many-species.Rmd`). A saved joint model of all 108 mammals: which species' fits can be trusted, how reliable each species' detection is, each species' probability of presence at each site, species richness per site, whether the reserves matter once human modification is accounted for, and which species occur together more often than the covariates explain.
+4.  **Where should we protect?** (`04-scp.Rmd`). Turning occupancy probabilities into a systematic conservation plan with prioritizr: a toy plan first, then four plans for 101 sites, with equal weights, Red List weights, sites that cost different amounts, and domestic species left out. How much of each plan is already protected, and what a plan cannot tell us.
+
+Each session ends with "What you take away" and a short Essay Coach question (`docs/essay-coach-questions.txt`).
+
 The design is in `docs/design.md` and the build plan in `docs/plan.md`. Student setup is in `docs/student-start.md` and teaching notes are in `docs/instructor-notes.md`.
 
 ## Installing the occJSDM MCP agent
