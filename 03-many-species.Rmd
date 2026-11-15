@@ -67,6 +67,8 @@ fit_full <- runOccJSDM(inp$data,
                                          ncores = 2))
 ```
 
+You can run this call yourself on your own computer, for example after the workshop: copy it into a chunk or the Console. It takes about 6 minutes on two cores. Then save the fit with `saveRDS(fit_full, "fits/my_fit.rds")` and load it as below, with your own file name in `readRDS()`. Do not run it on Posit Cloud during class, because it would hold up your session.
+
 We load the fit, and the same input data tables as in Session 1.
 
 ```{r load}

@@ -132,11 +132,15 @@ The agent can only read data files inside the workshop folder, and it writes its
 
 The workshop uses Claude Haiku 5.5 through OpenRouter. On 5 November 2026 a full run of Session 2's MCP steps cost under 1 US cent. `docs/mcp-feasibility.md` records what was tested on Posit Cloud.
 
-The files in `data-derived/` are committed, so the sessions need neither the raw archive nor the full fit. To rebuild them, run these from the project root, in order:
+## How the data files were made
+
+Nobody needs to run anything in this section to teach or take the workshop. Every file the sessions read is committed in `data-derived/`, except the full mammal fit, which the instructor puts in `fits/` (see `docs/instructor-notes.md`). This section records how those files were made, so that they can be rebuilt if the data or the occJSDM version change. `docs/fits.md` has the details of each fit. To fit the mammal model yourself, see the start of Session 3.
+
+To rebuild the files, run these from the project root, in order. The scripts that make or read the mammal fit use `fits/fit_Mammal_d4_community_1b4a2cd_10k.rds` unless `WORKSHOP_FIT` is set to another path. `fits/` is ignored by Git, so the fit cannot be committed by accident.
 
 - `analysis/build-derived.R`, with `WORKSHOP_RAW` set to the unpacked Zenodo archive (`setup/01-download-data.R` fetches it). It writes `mammal_input.rds` and `species_status.rds`.
-- `analysis/fit-mammal.R`, with `WORKSHOP_FIT` set to a new path outside the repo. It fits the 108 mammals at the pinned occJSDM (about 8 minutes on two cores) and saves the full fit, `fit_Mammal_d4_community_1b4a2cd_10k.rds`.
-- `analysis/build-fit-summary.R`, with `WORKSHOP_FIT` set to that fit. It writes `fit_summary.rds`.
-- `analysis/build-session-data.R`. It writes `dhole_input.rds`, `occupancy_long.csv` and `dhole_fit.rds`.
-- `analysis/build-simulated-fit.R`. It writes `simulated_fit.rds`.
-- `analysis/dhole-check.R`, with `WORKSHOP_FIT` set as above. It writes `dhole_check.rds`.
+- `analysis/fit-mammal.R`. It fits the 108 mammals at the pinned occJSDM (about 6 minutes on two cores) and saves the full fit. It stops rather than overwrite a fit that is already there.
+- `analysis/build-fit-summary.R`. It reads the mammal fit and writes `fit_summary.rds`.
+- `analysis/build-session-data.R`. It writes `dhole_input.rds`, `occupancy_long.csv` and `dhole_fit.rds`. Run it on Posit Cloud, not on a Mac: Session 2's saved fits must match what students get on Cloud (see `docs/fits.md`).
+- `analysis/build-simulated-fit.R`. It writes `simulated_fit.rds`. Run it on Posit Cloud too, for the same reason.
+- `analysis/dhole-check.R`. It reads the mammal fit and writes `dhole_check.rds`.

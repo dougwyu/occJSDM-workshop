@@ -68,6 +68,8 @@ fit_full <- runOccJSDM(inp$data,
                                          ncores = 2))
 ```
 
+Anda dapat menjalankan perintah ini sendiri di komputer Anda, misalnya setelah lokakarya: salin ke sebuah chunk atau ke Console. Prosesnya memakan waktu sekitar 6 menit pada dua inti. Lalu simpan hasil fit dengan `saveRDS(fit_full, "fits/my_fit.rds")` dan muat seperti di bawah, dengan nama file Anda sendiri di `readRDS()`. Jangan menjalankannya di Posit Cloud selama kelas, karena sesi Anda akan tertahan.
+
 Kita memuat hasil fit, dan tabel data masukan yang sama seperti di Sesi 1.
 
 ```{r load}

@@ -20,7 +20,7 @@ Notes on the dhole fit:
 
 ## The mammal fit
 
-- **File.** Made by `analysis/fit-mammal.R` and saved outside the repo as `/Users/douglasyu/src/occJSDM_Ecoletts/fit_Mammal_d4_community_1b4a2cd_10k.rds` (235 MB). Session 3's from-a-fit chunk reads it, and the instructor provides it on request. Older fits next to it, kept untouched: `fit_Mammal_d4_fixed.rds` (fixed prior), `fit_Mammal_d4_community.rds` (the 18 Oct PR 36 fit) and `fit_Mammal_d4_community_1b4a2cd.rds` (5,000 + 5,000 at this pin).
+- **File.** Made by `analysis/fit-mammal.R` as `fit_Mammal_d4_community_1b4a2cd_10k.rds` (235 MB). Session 3's `load` chunk reads it from `fits/`, which Git ignores; the instructor puts it there in the Posit Cloud template. The original copy is kept outside the repo in `/Users/douglasyu/src/occJSDM_Ecoletts/`. Older fits next to it, kept untouched: `fit_Mammal_d4_fixed.rds` (fixed prior), `fit_Mammal_d4_community.rds` (the 18 Oct PR 36 fit) and `fit_Mammal_d4_community_1b4a2cd.rds` (5,000 + 5,000 at this pin).
 - **Settings.** The same call and seed (20261018) as `occJSDM_Ecoletts/R/fit_mammal.R`: `n_factors = 4`, two chains, `b0_prior` left at its default, `ncores = 2`, `nburn = 10000`, `niter = 5000`, `nthin = 2`. In occJSDM `niter` counts kept draws, so each chain runs `nburn + niter * nthin` = 20,000 iterations and keeps 5,000.
 - **Why thinned.** Keeping all 10,000 draws per chain would double the file (to about 470 MB) and the memory Session 3's from-a-fit chunk needs. `docs/memory-check.md` measured the fixed fit, which is the same size with the same number of kept draws, so its numbers carry over.
 - **Why 10,000 + 10,000.** The first refit at this pin (5,000 + 5,000) had R-hat 1.04 and ESS 104 for the community mean `mu_b0`.
