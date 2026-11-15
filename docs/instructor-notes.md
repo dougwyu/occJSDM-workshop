@@ -1,9 +1,5 @@
 # Instructor notes
 
-## Timetable
-
-Doug's slots are Tuesday and Wednesday 13.00 to 17.00 (3 h 45 min each) and Thursday and Friday 08.30 to 12.00 (3 h 15 min each). One session per slot. Each is mostly hands-on, with a short framing talk.
-
 ## What each session needs
 
 - Session 1: ecoCopula and ggplot2. The ordination fits in a few seconds.
