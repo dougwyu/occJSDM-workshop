@@ -219,7 +219,7 @@ k <- 0.9 * max(abs(select(site_scores, LV1, LV2))) / max(abs(select(species_scor
 We now use ggplot2 to draw a biplot. Sites are points, and species are arrows from the centre. We start with the plainest version.
 
 ```{r biplot-plain, fig.height = 7}
-ggplot() +
+p0 <- ggplot() +
   geom_point(data = site_scores, 
              aes(LV1, LV2), 
              colour = "grey40", size = 2) +
@@ -231,7 +231,7 @@ ggplot() +
   labs(x = "Latent variable 1", 
        y = "Latent variable 2", 
        title = "Sites (points) and species (arrows)") +
-  theme_minimal()
+  theme_minimal(); p0
 ```
 
 How to read a biplot:
@@ -327,6 +327,12 @@ p1 <- ggplot() +
        colour = "Species",
        title = "Sites coloured by human modification, species arrows by wild or domestic") +
   theme_minimal(); p1
+```
+
+```{r}
+
+
+p1+p0
 ```
 
 Domestic buffalo (*Bubalus bubalis*), goats (*Capra hircus*) and sheep (*Ovis aries*) point toward modified sites (down), with two rats that live alongside people (*Rattus tanezumi* and *Rattus nitidus*) and the common palm civet (*Paradoxurus hermaphroditus*).
