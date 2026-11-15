@@ -51,47 +51,71 @@ The MCP agent lets Posit Assistant check a data file, fit a model and read its d
 
 ### On your own Mac
 
-Install the agent once, in its own folder outside this repository. This repository ignores `mcp/`, `.posit/assistant/settings.json` and `artifacts/`, so nothing here is added to Git. The restore installs 60 R packages and took about 7 minutes on an Apple silicon Mac, so allow 10 to 30 minutes. It follows the restore recorded on macOS 27 (arm64) with R 4.6.1, so you need R 4.6.1, Python 3.11 or later, the Xcode command line tools, a Fortran compiler for R and Homebrew's `gettext`. Keep using the same Terminal tab.
+You only need to do this once. These steps assume that you keep your code in a folder called `~/src`, so that the workshop and the agent sit side by side in it:
 
-1.  Download the bundle and unpack it. The unpacked folder is called `occJSDM-mcp`, and must not exist already.
+- `~/src/occJSDM-workshop`: your clone of this workshop repository;
+- `~/src/occJSDM-mcp`: the agent, which step 1 creates.
+
+The agent is installed in its own folder, **outside the `occJSDM-workshop` folder**. Nothing in the workshop folder changes except one small settings file, `.posit/assistant/settings.json`, which tells Posit Assistant where the agent is. So the agent never becomes part of the workshop repository or its Git history, and one installation can serve any number of projects. (The repository also ignores `mcp/`, `.posit/assistant/settings.json` and `artifacts/`, so none of these can be committed by accident.)
+
+The agent has three parts, and the steps below set up one each:
+
+- a small Python program that Posit Assistant talks to (steps 1 and 2);
+- a private R library, holding occJSDM 0.3.0 and the 60 packages it needs. The agent uses it instead of your own R library, so nothing you install or update later can break the agent (step 3);
+- the settings file in the workshop folder (step 4).
+
+If you keep your code somewhere else, replace `~/src` in every step below. You need R 4.6.1, Python 3.11 or later, the Xcode command line tools, a Fortran compiler for R and Homebrew's `gettext`. Allow 10 to 30 minutes, most of it for step 3. Run every step in the same Terminal tab.
+
+1.  **Get the agent.** Download the bundle and unzip it into `~/src`. This makes the folder `~/src/occJSDM-mcp`, which must not exist already.
 
     ``` bash
     cd ~/Downloads
     curl -fL -O https://github.com/AlexDiana/occJSDM/releases/download/v0.3.0-beta/occJSDM-cloud-pilot-v0.3.0.zip
-    unzip -q occJSDM-cloud-pilot-v0.3.0.zip -d ~
-    cd ~/occJSDM-mcp
+    unzip -q occJSDM-cloud-pilot-v0.3.0.zip -d ~/src
     ```
 
-2.  Create the Python environment.
+2.  **Set up the Python program.** This makes a Python environment inside `~/src/occJSDM-mcp` and installs the packages the program needs.
 
     ``` bash
+    cd ~/src/occJSDM-mcp
     python3 -m venv occJSDM-env && ./occJSDM-env/bin/python -m pip install -r src/requirements.txt
     ```
 
-3.  Restore the R runtime into a new folder. The two exports are the macOS workarounds, and the throwaway Makevars file replaces your own `~/.R/Makevars` for this Terminal session only. After a failed attempt, delete `local-r-runtime` before retrying.
+3.  **Build the private R library.** This installs occJSDM 0.3.0 and its packages into `~/src/occJSDM-mcp/local-r-runtime`, compiling some of them, which took about 7 minutes on an Apple silicon Mac. After the `cd`, the next three lines are settings that macOS needs for compiling. They last only for this Terminal tab and do not change your own R setup.
 
     ``` bash
+    cd ~/src/occJSDM-mcp
     export MACOSX_DEPLOYMENT_TARGET=15.0
     export R_MAKEVARS_USER="$(mktemp)"
     echo 'CPPFLAGS += -I/opt/homebrew/opt/gettext/include' > "$R_MAKEVARS_USER"
     Rscript --vanilla r-runtime/restore-runtime.R "$PWD/local-r-runtime" 2>&1 | tee restore.log
     ```
 
-    The last line should say that the restore and its checks passed.
+    The last line should say that the restore and its checks passed. If it fails, delete `~/src/occJSDM-mcp/local-r-runtime` before trying again.
 
-4.  Print the settings entry for this project. Set `PROJECT` to where you cloned the workshop, then run the block from `~/occJSDM-mcp`.
+4.  **Tell Posit Assistant where the agent is.** This block writes the settings file into the workshop folder. It names two different folders: `AGENT` is the agent's folder from step 1 (`~/src/occJSDM-mcp`), and `WORKSHOP` is your clone of this workshop repository (`~/src/occJSDM-workshop`). Change either line if yours is somewhere else. As the block runs, the shell fills in `$AGENT`, `$WORKSHOP` and `$(which Rscript)` with your real paths. If the settings file already exists, the block leaves it alone and prints the entry instead, and you add its `occJSDM` part to the file's `mcpServers` section by hand.
 
     ``` bash
-    PROJECT="$HOME/src/occJSDM-workshop"
-    cat <<EOF
+    AGENT="$HOME/src/occJSDM-mcp"
+    WORKSHOP="$HOME/src/occJSDM-workshop"
+    SETTINGS="$WORKSHOP/.posit/assistant/settings.json"
+    if [ -e "$SETTINGS" ]; then
+      echo "$SETTINGS already exists, so it was not changed. Add this occJSDM entry to its mcpServers section by hand:"
+      OUT=/dev/stdout
+    else
+      mkdir -p "$WORKSHOP/.posit/assistant"
+      OUT="$SETTINGS"
+      echo "Wrote $SETTINGS"
+    fi
+    cat > "$OUT" <<EOF
     {
       "mcpServers": {
         "occJSDM": {
           "type": "local",
-          "command": ["$PWD/occJSDM-env/bin/python", "$PWD/src/occJSDM_mcp.py"],
+          "command": ["$AGENT/occJSDM-env/bin/python", "$AGENT/src/occJSDM_mcp.py"],
           "environment": {
-            "P2A_PROJECT_ROOT": "$PROJECT",
-            "P2A_R_PROJECT": "$PWD/local-r-runtime",
+            "P2A_PROJECT_ROOT": "$WORKSHOP",
+            "P2A_R_PROJECT": "$AGENT/local-r-runtime",
             "P2A_RSCRIPT": "$(which Rscript)",
             "P2A_TIMEOUT_SECONDS": "600"
           },
@@ -102,9 +126,9 @@ Install the agent once, in its own folder outside this repository. This reposito
     EOF
     ```
 
-5.  Merge the printed `occJSDM` entry into `.posit/assistant/settings.json` in the workshop folder, creating the file if needed and keeping any keys already there. Then restart Posit Assistant, trust the workspace, and check with `/mcp` as in step 5 of the Posit Cloud route. The server can only read data files under the workshop folder, and it writes its results to `artifacts/` there. If the `/mcp` panel has no MCP Servers section, the entry is missing from that file or the workspace is not trusted.
+5.  **Check that it works.** Open the workshop project in RStudio, open Posit Assistant, trust the workspace, and send `/mcp`: occJSDM should show as Connected. Then ask "Which occJSDM tools do you have?". It should name the four tools above. If the `/mcp` panel has no MCP Servers section, the settings file is missing or the workspace is not trusted.
 
-The same installation can serve any other project: print a new entry with a different `PROJECT` and merge it into that project's settings file.
+The agent can only read data files inside the workshop folder, and it writes its results to `artifacts/` there. To use the same installation in another project, run step 4 again with `WORKSHOP` set to that project's folder.
 
 The workshop uses Claude Haiku 5.5 through OpenRouter. On 5 November 2026 a full run of Session 2's MCP steps cost under 1 US cent. `docs/mcp-feasibility.md` records what was tested on Posit Cloud.
 
