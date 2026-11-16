@@ -8,7 +8,7 @@ The occJSDM MCP server, Posit Assistant and an OpenRouter model have already wor
 
 The server offers exactly four operations: `validate_data`, `fit_model`, `diagnostics` and `summarise_fit`. It fits non-spatial models from an input RDS file, and `summarise_fit` reports baseline occupancy, not per-site occupancy. It cannot build an ordination, a map or an SCP. For those, students use Posit Assistant as an ordinary R coding helper, not through the MCP.
 
-Since 5 November 2026 both the MCP and the workshop pin occJSDM 0.3.0 (`v0.3.0-beta`, commit `5cba0db`). The MCP's earlier pin, `b7b7001`, could not fit single-species two-stage data, so Session 2's `fit_model` step would have failed for every student. The two R runtimes are still separate: the MCP has its own in `mcp/paper2agent/cloud-r-runtime`.
+From 5 November 2026 both the MCP and the workshop pinned occJSDM 0.3.0 (`v0.3.0-beta`, commit `5cba0db`), and since 16 November 2026 both pin occJSDM 0.3.2 (`v0.3.2-beta`, commit `d200b76`). The MCP's earlier pin, `b7b7001`, could not fit single-species two-stage data, so Session 2's `fit_model` step would have failed for every student. The two R runtimes are still separate: the MCP has its own in `mcp/paper2agent/cloud-r-runtime`.
 
 ## The workshop template on Posit Cloud (Doug, 5 November 2026)
 

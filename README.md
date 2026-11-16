@@ -17,11 +17,11 @@ The design is in `docs/design.md` and the build plan in `docs/plan.md`. Student 
 
 ## Installing the occJSDM MCP agent
 
-The MCP agent lets Posit Assistant check a data file, fit a model and read its diagnostics through four occJSDM tools: `validate_data`, `fit_model`, `diagnostics` and `summarise_fit`. It is optional: every session runs without it, and each session's assistant section is plain text that students can skip. Its source is in the occJSDM repository under [`mcp/paper2agent`](https://github.com/AlexDiana/occJSDM/tree/main/mcp/paper2agent). Both routes use the same ready-made bundle, which also carries the occJSDM source it needs. It is the same occJSDM version (v0.3.0-beta) as the workshop's own pin.
+The MCP agent lets Posit Assistant check a data file, fit a model and read its diagnostics through four occJSDM tools: `validate_data`, `fit_model`, `diagnostics` and `summarise_fit`. It is optional: every session runs without it, and each session's assistant section is plain text that students can skip. Its source is in the occJSDM repository under [`mcp/paper2agent`](https://github.com/AlexDiana/occJSDM/tree/main/mcp/paper2agent). Both routes use the same ready-made bundle, which also carries the occJSDM source it needs. It is the same occJSDM version (v0.3.2-beta) as the workshop's own pin.
 
 ### On Posit Cloud
 
-1.  Download `occJSDM-cloud-pilot-v0.3.0.zip` from the occJSDM [v0.3.0-beta release](https://github.com/AlexDiana/occJSDM/releases/tag/v0.3.0-beta), and upload it to the root of the Posit Cloud project with the Files pane. Posit Cloud unpacks it into a folder called `occJSDM-mcp`. Delete the zip afterwards, so that it is not copied into every student's project.
+1.  Download `occJSDM-cloud-pilot-v0.3.2.zip` from the occJSDM [v0.3.2-beta release](https://github.com/AlexDiana/occJSDM/releases/tag/v0.3.2-beta), and upload it to the root of the Posit Cloud project with the Files pane. Posit Cloud unpacks it into a folder called `occJSDM-mcp`. Delete the zip afterwards, so that it is not copied into every student's project.
 
 2.  In the Terminal tab, move the folder into place:
 
@@ -61,7 +61,7 @@ The agent is installed in its own folder, **outside the `occJSDM-workshop` folde
 The agent has three parts, and the steps below set up one each:
 
 - a small Python program that Posit Assistant talks to (steps 1 and 2);
-- a private R library, holding occJSDM 0.3.0 and the 60 packages it needs. The agent uses it instead of your own R library, so nothing you install or update later can break the agent (step 3);
+- a private R library, holding occJSDM 0.3.2 and the 60 packages it needs. The agent uses it instead of your own R library, so nothing you install or update later can break the agent (step 3);
 - the settings file in the workshop folder (step 4).
 
 If you keep your code somewhere else, replace `~/src` in every step below. You need R 4.6.1, Python 3.11 or later, the Xcode command line tools, a Fortran compiler for R and Homebrew's `gettext`. Allow 10 to 30 minutes, most of it for step 3. Run every step in the same Terminal tab.
@@ -70,8 +70,8 @@ If you keep your code somewhere else, replace `~/src` in every step below. You n
 
     ``` bash
     cd ~/Downloads
-    curl -fL -O https://github.com/AlexDiana/occJSDM/releases/download/v0.3.0-beta/occJSDM-cloud-pilot-v0.3.0.zip
-    unzip -q occJSDM-cloud-pilot-v0.3.0.zip -d ~/src
+    curl -fL -O https://github.com/AlexDiana/occJSDM/releases/download/v0.3.2-beta/occJSDM-cloud-pilot-v0.3.2.zip
+    unzip -q occJSDM-cloud-pilot-v0.3.2.zip -d ~/src
     ```
 
 2.  **Set up the Python program.** This makes a Python environment inside `~/src/occJSDM-mcp` and installs the packages the program needs.
@@ -81,7 +81,7 @@ If you keep your code somewhere else, replace `~/src` in every step below. You n
     python3 -m venv occJSDM-env && ./occJSDM-env/bin/python -m pip install -r src/requirements.txt
     ```
 
-3.  **Build the private R library.** This installs occJSDM 0.3.0 and its packages into `~/src/occJSDM-mcp/local-r-runtime`, compiling some of them, which took about 7 minutes on an Apple silicon Mac. After the `cd`, the next three lines are settings that macOS needs for compiling. They last only for this Terminal tab and do not change your own R setup.
+3.  **Build the private R library.** This installs occJSDM 0.3.2 and its packages into `~/src/occJSDM-mcp/local-r-runtime`, compiling some of them, which took about 7 minutes on an Apple silicon Mac. After the `cd`, the next three lines are settings that macOS needs for compiling. They last only for this Terminal tab and do not change your own R setup.
 
     ``` bash
     cd ~/src/occJSDM-mcp
