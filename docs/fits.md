@@ -4,7 +4,9 @@ The sessions never fit the mammal model live. They read saved fits and derived f
 
 ## Package version
 
-`setup/pins.R` pins occJSDM `5cba0db` (`v0.3.0-beta`, 5 Nov 2026). The fits and derived files were made at `1b4a2cd`, where `b0_prior` defaults to "community" for multi-species data. The only package-code change between the two commits is the WAIC quadrature fix (4326682), which the sessions do not call. Rendering all four sessions at each pin with `WORKSHOP_NO_MCP=1` gave identical figures and text, apart from temporary file paths and chain timings in Session 2's live fit.
+`setup/pins.R` pins occJSDM `d200b76` (`v0.3.2-beta`, 16 Nov 2026). The fits and derived files were made at `1b4a2cd`, where `b0_prior` defaults to "community" for multi-species data. From `1b4a2cd` to `5cba0db` (`v0.3.0-beta`, the pin from 5 Nov 2026) the only package-code change is the WAIC quadrature fix (4326682), which the sessions do not call. Rendering all four sessions at both commits with `WORKSHOP_NO_MCP=1` gave identical figures and text, apart from temporary file paths and chain timings in Session 2's live fit.
+
+From `5cba0db` to `d200b76` the package changed in two ways. Version 0.3.1 fixed fits with one row per site whose `Site` names are not in sorted order; every workshop fit has 18 rows per site, so the fix does not apply here. Version 0.3.2 made the convergence summary at the end of a fit faster. On 16 Nov 2026, short seeded fits on the laptop (2 chains of 100 + 100, with Session 2's dhole call and with `analysis/fit-mammal.R`'s call for all 108 mammals) gave identical `results_output` at both commits, the same printed convergence summary and the same warnings. Only the run's own details in `infos$execution` differed (worker process IDs, chain timings and the progress file's path). The saved fits were not remade.
 
 ## Session 2's saved fits come from Posit Cloud
 
